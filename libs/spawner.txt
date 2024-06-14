@@ -1,0 +1,41 @@
+--@name Spawner
+--@author shrooblooms
+--@server
+
+
+-- A simple library to enqueue prop-spawning events to avoid hitting the burst limit
+
+
+local Spawner = {}
+Spawner.Queue = {}
+
+function Spawner.Enqueue( Callback )
+    table.insert(Spawner.Queue, Callback)
+    TryEmptyQueue()
+end
+
+function Spawner.Await()
+    if prop.canSpawn() then return end
+    
+    local cr = coroutine.running()
+    
+    table.insert(Spawner.Queue, function()
+        coroutine.resume(cr)
+    end)
+    
+    coroutine.yield(cr)
+end
+
+
+local function TryEmptyQueue()
+    while #Spawner.Queue > 0 and prop.canSpawn() do
+        table.remove(Spawner.Queue, 1)()
+    end
+end
+
+
+timer.create("Spawner_Queue", 1/prop.spawnRate(), 0, TryEmptyQueue)
+
+
+
+return Spawner

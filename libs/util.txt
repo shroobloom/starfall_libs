@@ -1,0 +1,536 @@
+--@name Util Library
+--@author shrooblooms
+--@shared
+
+
+
+local Util = {}
+
+
+
+-- Gets the difference between two angles (shortest path)
+function Util.angDiff( a1, a2 )
+    return (a2 - a1 + 180) % 360 - 180
+end
+
+
+-- Checks if all inputs are connected
+function Util.inputsConnected()
+    local names = wire.getInputs(chip())
+    
+    for i,v in pairs(names) do
+        if type(wire.ports[v]) == "table" then
+            if next(wire.ports[v]) == nil then return false end
+        elseif not wire.ports[v] or (type(wire.ports[v]) == "Entity" and not isValid(wire.ports[v])) then
+            return false
+        end
+    end
+    
+    return true
+end
+
+
+-- A quick way to lock controls when someone connects to your HUD
+function Util.lockControlsInHud( State )
+    
+    local stuff = chip():getLinkedComponents()
+    
+    for i,v in pairs(stuff) do
+        if v:getClass() == "starfall_hud" then
+            v:setComponentLocksControls( State )
+        end
+    end
+end
+
+
+-- Creates a rendertarget with a specified name and modifies it with the given callback
+function Util.createRenderTarget( name, cb )
+    render.createRenderTarget( name )
+    
+    if cb then
+        Util.modifyRenderTarget( name, cb )
+    end
+end
+
+
+-- Modifies a rendertarget while handling all the render hook stuff for you
+function Util.modifyRenderTarget( name, cb )
+    hook.add("renderoffscreen", "Temp_Util_CreateRT_" .. name, function()
+        render.selectRenderTarget( name )
+        render.setMaterial()
+        render.setColor(Color(255,255,255))
+        cb()
+        render.selectRenderTarget( nil )
+        hook.remove("renderoffscreen", "Temp_Util_CreateRT_" .. name)
+    end)
+end
+
+
+-- Gets the first linked screen entity outside of a render hook
+function Util.getScreenEntity()
+    local Components = chip():getLinkedComponents()
+    
+    for i,v in pairs(Components) do
+        if v:getClass() == "starfall_screen" then
+            return v
+        end
+    end
+end
+
+
+-- Adds inputs without modifying the existing inputs
+-- TODO: this may be a terrible idea, what would happen if you respawn the chip?
+function Util.addInputs( Inputs, Types )
+    local ExistingInputs, ExistingTypes = wire.getInputs(chip())
+    
+    for i,v in pairs(Inputs) do
+        table.insert(ExistingInputs, v)
+    end
+    
+    for i,v in pairs(Types) do
+        table.insert(ExistingTypes, v)
+    end
+    
+    wire.adjustInputs(ExistingInputs, ExistingTypes)
+end
+
+
+-- Yields the code for a certain duration
+-- Only works inside a coroutine
+function Util.wait( duration )
+    local cr = coroutine.running()
+    
+    timer.simple(duration, function()
+        coroutine.resume(cr)
+    end)
+    
+    coroutine.yield(cr)
+end
+
+
+-- Plays a self-destruct effect while destroying all constrained props
+function Util.selfDestruct( EffectName )
+    
+    local Center = Vector()
+    local Pool = chip():getAllConstrained()
+    
+    for i,v in pairs(Pool) do
+        if v:isValid() and v:getOwner() == owner() and v ~= chip() then
+            Center = Center + v:getPos()
+            v:remove()
+        end
+    end
+    
+    Center = Center / #Pool
+    
+    
+    if EffectName ~= "" then
+        local expl = effect.create()
+        expl:setOrigin(Center)
+        expl:play(EffectName or "lfs_explosion")
+    end
+    
+    chip():remove()
+    
+end
+
+
+
+
+--[[ TABLE MANIPULATION ]]--
+
+-- Converts t into a lookup table
+function Util.lookup( t )
+    local lookup = {}
+    
+    for i,v in pairs(t) do
+        lookup[v] = true
+    end
+    
+    return lookup
+end
+
+-- Converts lookup table t into an array
+function Util.unlookup( t )
+    local arr = {}
+    
+    for i,v in pairs(t) do
+        arr[#arr+1] = i
+    end
+    
+    return arr
+end
+
+-- Merges two arrays
+function Util.merge( ... )
+    local out = {}
+    
+    for i,v in pairs {...} do
+        table.insert(out, v)
+    end
+    
+    return out
+end
+
+-- Gets the top-most parent prop in its family heirarchy
+function Util.getAncestor( Ent )
+    if not isValid(Ent) then return nil end
+    
+    local Parent = Ent
+    
+    while isValid(Parent:getParent()) do
+        Parent = Parent:getParent()
+    end
+    
+    return Parent
+end
+
+
+
+
+--[[ VECTOR MANIPULATION ]]--
+
+-- Returns the smallest vector between all of v1 and v2's axes
+function Util.vectorMin( v1, v2 )
+    return Vector(
+        math.min(v1.x, v2.x),
+        math.min(v1.y, v2.y),
+        math.min(v1.z, v2.z)
+    )
+end
+
+-- Returns the biggest vector between all of v1 and v2's axes
+function Util.vectorMax( v1, v2 )
+    return Vector(
+        math.max(v1.x, v2.x),
+        math.max(v1.y, v2.y),
+        math.max(v1.z, v2.z)
+    )
+end
+
+
+
+--[[ DATA TABLE WRITING ]]--
+
+-- Util.writeDataTable:
+--    - Writes a dictionary to the current network message
+--    - Accounts for the contained entities not being networked to the client yet
+
+-- Util.readDataTable:
+--    - Reads a dictionary from the current network message
+--    - Supply a callback that will be called when the table is done being read, with the only argument being the table.
+--    - TODO: Allow this function to yield when called inside a coroutine
+
+
+local EntityWaitlist = {}
+
+
+local function AwaitEntity( idx, Callback )
+    
+    if isValid(entity(idx)) then
+        Callback( entity(idx) )
+    end
+    
+    local cr = coroutine.running()
+    
+    if not next(EntityWaitlist) then
+        hook.add("OnEntityCreated", "Util_AwaitEntityNetwork", function( e )
+            if isValid(e) and EntityWaitlist[e:entIndex()] then
+                
+                --coroutine.resume(EntityWaitlist[e:entIndex()])
+                
+                Callback( e )
+                
+                EntityWaitlist[e:entIndex()] = nil
+                
+                if not next(EntityWaitlist) then
+                    hook.remove("OnEntityCreated", "Util_AwaitEntityNetwork")
+                end
+            end
+        end)
+    end
+    
+    EntityWaitlist[idx] = cr
+    
+end
+
+
+local function Sanitize( Subtable )
+    for i,v in pairs(Subtable) do
+        if type(v) == "table" then
+            Sanitize(v)
+        elseif getmetatable(v) ~= nil and isValid(v) then --its an entity
+            Subtable[i] = {
+                _entityId = v:entIndex()
+            }
+        end
+    end
+end
+
+
+function Util.writeDataTable( Table )
+    local Sanitized = table.copy( Table )
+    Sanitize( Sanitized )
+    
+    net.writeTable(Sanitized)
+end
+
+
+local function getDirtyEntityCount( Subtable )
+    local c = 0
+    
+    for i,v in pairs(Subtable) do
+        if type(v) == "table" then
+            if v._entityId then
+                c = c + 1
+            else
+                c = c + getDirtyEntityCount(v)
+            end
+        end
+    end
+    
+    return c
+end
+
+
+local function Desanitize( Subtable, Collector )
+    for i,v in pairs(Subtable) do
+        if type(v) == "table" then
+            if v._entityId then --its an encoded entity
+                AwaitEntity( v._entityId, function(e)
+                    Subtable[i] = e
+                    Collector()
+                end)
+            else
+                Desanitize( v, Collector )
+            end
+        end
+    end
+end
+
+
+function Util.readDataTable( Callback )
+    
+    local Data = net.readTable()
+    
+    local Tracker = {
+        Current = 0,
+        Max = getDirtyEntityCount( Data )
+    }
+    
+    local Collector = function()
+        Tracker.Current = Tracker.Current + 1
+        
+        if Tracker.Current == Tracker.Max then
+            Callback( Data )
+        end
+    end
+    
+    local cr = coroutine.running()
+    
+    
+    if Callback then
+        Desanitize( Data, Collector )
+    else
+        error("Util.readDataTable via coroutine is disabled at the moment. Use a callback instead.")
+        
+        --[[assert(cr, "Util.readDataTable must be called inside a coroutine if a callback is not supplied!")
+        
+        coroutine.wrap(function()
+            Desanitize( Data, Collector )
+            
+            if coroutine.status(cr) == "suspended" then
+                coroutine.resume(cr)
+            end
+        end)()
+        
+        if Collector.Current < Collector.Max then
+            coroutine.yield()
+        end
+        
+        return Data]]
+    end
+    
+    
+    --[[
+    local Collected = {}
+    local Expecting = net.readUInt(32)
+    local cr = coroutine.running()
+    
+    for i=1,Expecting do
+        net.readEntity(function( e )
+            table.insert(Collected, e)
+            
+            if #Collected == Expecting then
+                if Callback then
+                    Callback( Collected )
+                else
+                    if coroutine.status(cr) == "suspended" then
+                        coroutine.resume(cr)
+                    end
+                end
+            end
+        end)
+    end
+    
+    if not Callback then
+        if #Collected < Expecting then
+            coroutine.yield()
+        end
+        
+        return Collected
+    end]]
+end
+
+
+
+-- Splits an entered command into arguments, while accounting for quotations
+-- > Example: '!test "wizard cat" 123' splits to ["!test", "wizard cat", "123"]
+-- > https://stackoverflow.com/questions/28664139/lua-split-string-into-words-unless-quoted
+-- > spaghetti but if it works it works
+
+function Util.splitCommand( Command )
+    local Output = {}
+    
+    local spat, epat, buf, quoted = [=[^(['"])]=], [=[(['"])$]=]
+    for str in Command:gmatch("%S+") do
+        local squoted = str:match(spat)
+        local equoted = str:match(epat)
+        local escaped = str:match([=[(\*)['"]$]=])
+        if squoted and not quoted and not equoted then
+            buf, quoted = str, squoted
+        elseif buf and equoted == quoted and #escaped % 2 == 0 then
+            str, buf, quoted = buf .. ' ' .. str, nil, nil
+        elseif buf then
+            buf = buf .. ' ' .. str
+        end
+        
+        if not buf then
+            local text = str:gsub(spat,""):gsub(epat,"")
+            table.insert(Output, text)
+        end
+    end
+    
+    --if buf then print("Missing matching quote for " .. buf) end
+    
+    return Output
+end
+
+
+-- Formats an integer to have commas.
+-- > Example: 10000 -> "10,000"
+-- > https://stackoverflow.com/questions/10989788/format-integer-in-lua
+
+function Util.formatInt(number)
+    local i, j, minus, int, fraction = tostring(number):find('([-]?)(%d+)([.]?%d*)')
+    
+    -- reverse the int-string and append a comma to all blocks of 3 digits
+    int = int:reverse():gsub("(%d%d%d)", "%1,")
+    
+    -- reverse the int-string back remove an optional comma and put the 
+    -- optional minus and fractional part back
+    return minus .. int:reverse():gsub("^,", "") .. fraction
+end
+
+
+-- Formats a time to a digital clock format
+-- > Example: 123 -> "2:03"
+function Util.formatTimeDigital( seconds )
+    
+    --local hours = math.floor(seconds/3600)
+    --seconds = seconds - hours*3600
+    
+    local minutes = math.floor(seconds/60)
+    seconds = seconds - minutes*60
+    
+    return minutes > 0 and string.format("%d:%02d",minutes,seconds) or ("0:" .. string.format("%02d",seconds))
+    
+end
+
+
+-- Smooths a curve out, similar to a smoothstep function, but uses a sine for some reason
+function Util.smoothCurve( t )
+    t = math.clamp(t, 0, 1)
+    return math.sin((t-0.5)*math.pi)*0.5 + 0.5
+end
+
+
+-- Shorthand method for the "remote" hook
+-- The callback will only be called if one of your own chips sends a remote with a specific name.a
+function Util.bindRemote( RemoteName, Callback )
+    hook.add("remote", RemoteName, function( SendingChip, SendingPlayer, Type, ... )
+        if SendingPlayer ~= owner() then return end
+        if Type ~= RemoteName then return end
+        
+        return Callback( ... )
+    end)
+end
+
+
+-- Shorthand for runRemote
+-- Fires a remote hook to all your chips with the first argument as the remote name
+-- Returns the first response
+function Util.fireRemote( RemoteName, ... )
+    local Response = hook.runRemote(nil, RemoteName, ...)[1]
+    
+    if not Response then
+        return nil
+    end
+    
+    return unpack(Response)
+end
+
+
+
+-- Returns the player with a specific steamID
+function Util.getPlayerFromSteamID( steamID )
+    return find.allPlayers(function(p)
+        return p:getSteamID() == steamID
+    end)[1]
+end
+
+
+-- Returns an array of all players except the specified few (in vararg format)
+function Util.everyoneExcept( ... )
+    local All = find.allPlayers()
+    
+    for i,v in pairs {...} do
+        table.removeByValue(All, v)
+    end
+    
+    return All
+end
+
+
+
+if CLIENT then
+    -- Runs a callback whenever a string key is pressed.
+    -- > Example: Util.bindPress( "a", function() print("the left movement key was pressed!" ) end)
+    function Util.bindPress( key, callback )
+        local id = "Util_bindPress_" .. tostring(callback)
+        
+        hook.add("inputPressed", id, function( button )
+            if input.getKeyName(button) == key then
+                callback()
+            end
+        end)
+    end
+    
+    -- Runs a callback whenever a string key is released.
+    -- > Example: Util.bindRelease( "a", function() print("the left movement key was released!" ) end)
+    -- > TODO: untested
+    function Util.bindRelease( key, callback )
+        local id = "Util_bindRelease_" .. tostring(callback)
+        
+        hook.add("inputReleased", id, function( button )
+            if input.getKeyName(button) == key then
+                callback()
+            end
+        end)
+    end
+end
+
+
+
+return Util
+
