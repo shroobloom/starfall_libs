@@ -1,0 +1,202 @@
+--@name SFMA v5
+--@author Boxtrot
+--@shared
+
+
+
+
+
+
+function ConsoleLog( ... )
+    printConsole( Color(231, 55, 62), "[SFMA v5] ", Color(255,255,255), ... )
+end
+
+function ChatLog( ... )
+    print( Color(231, 55, 62), "[SFMA v5] ", Color(255,255,255), ... )
+end
+
+function getColor( plr )
+    return team.getColor(plr:getTeam())
+end
+
+function getName( plr )
+    return "<" .. plr:getSteamID() .. "> " .. plr:getName()
+end
+
+
+
+
+local lastOffender = nil
+
+function logOffender( plr )
+    lastOffender = plr
+    
+    timer.stop("SFMA_clearLastOffender")
+    timer.create("SFMA_clearLastOffender", 30, 1, function()
+        lastOffender = nil
+    end)
+    
+    
+    if SERVER then
+        net.start("SFMA_logOffender")
+        net.writeEntity(plr)
+        net.send(owner())
+    end
+end
+
+
+
+
+if SERVER then
+    
+    chip():doNotDuplicate()
+    
+    
+    
+    
+    hook.add("OnEntityCreated", "SFMA_informNewChip", function( ent )
+        if not isValid(ent) or (ent:getClass() ~= "wire_expression2" and ent:getClass() ~= "starfall_processor") then return end
+        
+        local chipOwner = ent:getOwner()
+        local isE2 = ent:getClass() == "wire_expression2"
+        
+        timer.simple(0.25, function()
+            ConsoleLog(getColor(chipOwner), getName(chipOwner),
+                Color(255,255,255), " spawned ", isE2 and Color(255,0,0) or Color(0,144,255), isE2 and "Expression 2" or "Starfall", 
+                Color(255,255,255), " chip named ", Color(255,255,144), ent:isValid() and ent:getChipName() or "[deleted]", Color(255,255,255), ".")
+        end)
+        
+    end)
+    
+    
+    
+    
+    local simfphysAlertCooldown = {}
+    
+    local function isSimfphys( ent )
+        return isValid(ent) and ent:getClass() == "gmod_sent_vehicle_fphysics_base"
+    end
+    
+    hook.add("OnEntityCreated", "SFMA_detectSimfphysSpam", function( ent )
+        if isValid(ent) and simfphysAlertCooldown[ent:getOwner()] then return end
+        if not isSimfphys(ent) then return end
+        
+        local Min, Max = ent:worldSpaceAABB()
+        
+        local NearbySimfphys = find.inBox(Min, Max, function(e)
+            return isSimfphys(e)
+        end)
+        
+        if #NearbySimfphys > 1 then
+            local carOwner = ent:getOwner()
+            
+            ChatLog(getColor(carOwner), getName(carOwner), Color(255,255,255), " spawned multiple simfphys cars inside eachother!")
+            logOffender( carOwner )
+            simfphysAlertCooldown[carOwner] = true
+            
+            timer.simple(5, function()
+                simfphysAlertCooldown[carOwner] = nil
+            end)
+        end
+    end)
+    
+    
+    
+    
+    hook.add("PlayerSay", "SFMA_detectMention", function( speaker, msg )
+        if speaker == owner() then return end
+        
+        for i,v in pairs(find.allPlayers()) do
+            if msg:find(v:getName(), nil, true) then
+                logOffender( v )
+                break
+            end
+        end
+    end)
+    
+    
+    
+    
+    --[[
+    local HeldProps = {}
+    
+    hook.add("PhysgunPickup",  "SFMA_logHeldProp", function( plr, ent )
+        HeldProps[plr] = ent
+    end)
+    
+    hook.add("PhysgunDrop",  "SFMA_logHeldProp", function( plr, ent )
+        HeldProps[plr] = nil
+    end)
+    
+    
+    
+    timer.create("SFMA_detectProppush", 0.1, 0, function()
+        for plr,ent in pairs(HeldProps) do
+            local min, max = ent:worldSpaceAABB()
+            
+            
+        end
+    end)
+    ]]
+    
+    
+    
+    
+end
+
+
+
+
+
+if CLIENT then
+    
+    
+    
+    net.receive("SFMA_getFriends", function()
+        
+        local status = {}
+        
+        for i,v in find.allPlayers() do
+            if v == player() then continue end
+            
+            if v:getFriendStatus() == "friend" then
+                table.insert(status, v)
+            end
+        end
+        
+        net.start("SFMA_getFriends_reply")
+        net.writeTable( status )
+        net.send()
+    end)
+    
+    
+    
+    
+    
+    if player() == owner() then
+        
+        net.receive("SFMA_logOffender", function()
+            net.readEntity(logOffender)
+        end)
+        
+        
+        hook.add("inputPressed", "quickFSpec", function( key )
+            if key ~= 35 then return end
+            
+            if not lastOffender then
+                return ChatLog("There is no recent offender to spectate!")
+            end
+            
+            
+            ChatLog("Spectating ", getColor(lastOffender), getName(lastOffender), Color(255,255,255), ".")
+            concmd("fspectate \"" .. lastOffender:getSteamID() .. "\"")
+        end)
+        
+    end
+    
+    
+end
+
+
+
+

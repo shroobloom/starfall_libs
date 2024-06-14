@@ -1,0 +1,26 @@
+--@name
+--@author
+--@client
+--@include libs/util.txt
+
+
+
+if player() ~= owner() then return end
+
+
+
+-- Toggles proximity voice when you press "p", while also alerting players.
+
+
+local Util = require("libs/util.txt")
+
+
+
+local prox = false
+
+Util.bindPress("p", function()
+    prox = not prox
+    
+    concmd("proximity_voice_enabled " .. (prox and 1 or 0))
+    concmd("say /me turns " .. (prox and "on" or "off") .. " proximity voice")
+end)

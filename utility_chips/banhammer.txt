@@ -1,0 +1,400 @@
+--@name BAN HAMMER
+--@author
+--@shared
+--@include libs/util.txt
+
+local Util = require("libs/util.txt")
+
+
+
+--[[ Commands ]]--
+
+-- !bind <command> - Binds a command to this hammer, ex: !bind curse AimSensitivity will curse anyone it hits with AimSensitivity.
+-- !unbind - Clears the hammer's command
+-- !bindsafe <player> <command> - Binds a command to this hammer, but it will only work on <player>. Useful for when you don't wanna ban little jimmy for 32 weeks.
+-- !fakeban - Sets the hammer's text to "BAN", but has no bound command. Useful for memes.
+
+
+
+if SERVER then
+    local Weapon
+    
+    local WEAPON_CLASS = {
+        ["tfa_l4d2mw_sledgehammer"] = {
+            Windup = 0,
+            CantSprint = true
+        }, 
+        ["pac_crowbar"] = {
+            Windup = 0,
+            CantSprint = false
+        }
+    }
+    
+    
+    local REPLACEMENTS = {
+        OWOIFY = {
+            Text = "UwU",
+            Color = Color(255,150,255)
+        },
+        UNOWOIFY = {
+            Text = "-_-",
+            Color = Color(150,150,150)
+        },
+        BALL = {
+            Text = "BALLS"
+        },
+        CHEESE = {
+            Color = Color(255,200,40)
+        }
+    }
+    
+    
+    --[[for i=1, owner():getBoneCount() do
+        print(i, owner():getBoneName(i))
+    end]]
+    
+    -- right hand:  16
+    
+    
+    local BHParts = {}
+    local BHHead = nil
+    local TextHolos = {}
+    
+    local Binding = nil
+    
+    local HammerText = nil
+    local HammerTextColor = Color(255,0,0)
+    
+    local PHX_SIZE = 47.5
+    local LETTER_WIDTH = 12.5
+    
+    
+    function drawText( Offset, SurfaceAng, Width, Text, Color, Parent )
+        
+        local conv = {
+            ["."] = "prd",
+            ["_"] = "underscore"
+        }
+        
+        -- have to fit len letters of width letterWidth each in width
+        local sm = Width / (LETTER_WIDTH*string.len(Text))
+        
+        for i=1, string.len(Text) do
+            local letter = string.sub(Text, i, i)
+            if conv[letter] then letter = conv[letter] end
+            
+            local lower = string.upper(letter) ~= letter
+            
+            local model = "models/sprops/misc/alphanum/alphanum_" .. (lower and "l_" or "") .. string.lower(letter) .. ".mdl"
+            
+            local interp = 2*((i-1-(string.len(Text)-1)/2) / (string.len(Text)+1))
+            local pos = Parent:localToWorld( Offset + Vector(0,-interp*Width*0.5 * ((SurfaceAng[1] > 179 and SurfaceAng[1] < 181) and -1 or 1),0) ) --Origin --+ SurfaceAng:getRight()*interp
+            
+            local holo = hologram.create( pos, Parent:localToWorldAngles( SurfaceAng + Angle(0,90,90) ), model, Vector(sm,0.1,1) )
+            holo:setParent( Parent )
+            holo:setMaterial( "models/debug/debugwhite" )
+            holo:setColor( Color )
+            holo:suppressEngineLighting(true)
+            
+            
+            table.insert(BHParts, holo)
+            table.insert(TextHolos, holo)
+            
+        end
+        
+    end
+    
+    
+    function setBanHammerText( Text )
+        
+        if REPLACEMENTS[Text] and REPLACEMENTS[Text].Color then
+            HammerTextColor = REPLACEMENTS[Text].Color
+        else
+            HammerTextColor = Color(255,0,0)
+        end
+        
+        if REPLACEMENTS[Text] and REPLACEMENTS[Text].Text then
+            Text = REPLACEMENTS[Text].Text
+        end
+        
+        
+        HammerText = Text
+        
+        if Weapon then
+            drawHammerText()
+        end
+    end
+    
+    
+    function drawHammerText()
+        
+        for i,v in pairs(TextHolos) do
+            if isValid(v) then
+                v:remove()
+            end
+            
+            TextHolos[i] = nil
+        end
+        
+        if HammerText then
+            for i=-1, 1, 2 do
+                drawText( Vector(i*PHX_SIZE*0.3*0.5,0,0), Angle(i == -1 and 180 or 0,0,90*i), 25, HammerText, HammerTextColor, BHHead )
+            end
+        end
+    end
+    
+    
+    
+    function setupBanHammer()
+        
+        owner():setWalkSpeed( 250 )
+        owner():setRunSpeed( 600 )
+        
+        pcall(function()
+            Weapon:setColor( Color(0,0,0,0) )
+        end)
+        
+        local HeadPos = Weapon:localToWorld( Vector(3.5,-1,-35) )
+        local HeadAng = Weapon:localToWorldAngles( Angle(0,90,0) )
+        local RHBone = owner():lookupBone("ValveBiped.Bip01_R_Hand")
+        
+        local Head = hologram.create( HeadPos, HeadAng, "models/hunter/blocks/cube05x1x05.mdl", Vector(0.6,0.6,0.6) )
+        Head:setParent( owner(), nil, RHBone )
+        Head:setMaterial( "models/props_combine/metal_combinebridge001" )
+        BHHead = Head
+        
+        local TailPos = Weapon:localToWorld( Vector(3.5,-1,0) + Vector(-(PHX_SIZE*0.5*0.6 + PHX_SIZE*0.5*0.3),0,-35) )
+        
+        local Tail = hologram.create( TailPos, HeadAng + Angle(0,0,-90), "models/hunter/misc/squarecap1x1x1.mdl", Vector(0.3,0.3,0.3) )
+        Tail:setParent( owner(), nil, RHBone )
+        Tail:setMaterial( "models/props_combine/metal_combinebridge001" )
+        
+        
+        local TailPos = Weapon:localToWorld( Vector(3.5,-1,-10) )
+        
+        local Handle = hologram.create( TailPos, HeadAng + Angle(0,90,0), "models/worldmodels/w_mw2019_sledgehammer_wm.mdl", Vector(0.5, 1.5, 1.5) )
+        Handle:setParent( owner(), nil, RHBone )
+        Handle:setMaterial( "models/props_combine/metal_combinebridge001" )
+        
+        
+        local SmasherPos = Weapon:localToWorld( Vector(15 + 3.5, -1, -35) )
+        local Smasher = hologram.create( SmasherPos, HeadAng, "models/hunter/blocks/cube05x05x05.mdl", Vector(0.7,0.3,0.7) )
+        Smasher:setParent( owner(), nil, RHBone )
+        Smasher:setMaterial( "models/props_combine/metal_combinebridge001" )
+        
+        drawHammerText()
+        
+        table.insert(BHParts, Head)
+        table.insert(BHParts, Tail)
+        table.insert(BHParts, Handle)
+        table.insert(BHParts, Smasher)
+    end
+    
+    
+    function deleteBanHammer()
+        
+        owner():setWalkSpeed( 200 )
+        owner():setRunSpeed( 400 )
+        
+        pcall(function()
+            Weapon:setColor(Color(255,255,255,255))
+        end)
+        
+        for i,v in pairs(BHParts) do
+            if isValid(v) then
+                v:remove()
+            end
+            
+            BHParts[i] = nil
+        end
+    end
+    
+    
+    
+    hook.add("PlayerSwitchWeapon", "DetectEquip", function(ply, old, new)
+        if ply ~= owner() then return end
+        
+        if isValid(old) and WEAPON_CLASS[old:getClass()] and Weapon then
+            deleteBanHammer()
+            Weapon = nil
+        end
+        
+        if isValid(new) and WEAPON_CLASS[new:getClass()] and not Weapon then
+            Weapon = new
+            setupBanHammer()
+        end
+    end)
+    
+    
+    
+    hook.add("PlayerSay", "Command", function( ply, msg )
+        if ply ~= owner() then return end
+        
+        local prefix = string.sub(msg, 1, 1)
+        local rest = string.sub(msg, 2)
+        
+        if prefix ~= "!" then return end
+        
+        local terms = Util.splitCommand(rest)
+        local command = table.remove(terms, 1)
+        
+        if command == "bind" or command == "bindsafe" then
+            
+            local ulxCmd = table.remove(terms, 1)
+            
+            local args = terms
+            
+            
+            -- in the case of a targetted (safety-locked) command
+            local Found = nil
+            
+            if args[1] and command == "bindsafe" then
+                
+                for i,v in pairs(find.allPlayers()) do
+                    if string.find(v:getName():lower(), args[1]:lower()) then
+                        Found = v
+                        break
+                    end
+                end
+                
+                if Found then table.remove(args, 1) end
+            end
+            
+            local text = string.upper(ulxCmd)
+            
+            if text == "CURSE" and args[1] then
+                text = string.upper(args[1])
+            end
+            
+            setBanHammerText( text )
+            
+            Binding = {
+                Command = string.lower(ulxCmd),
+                Arguments = table.copy(args),
+                SafetyLock = Found
+            }
+            
+            print("Command \"" .. ulxCmd .. "\" bound to hammer. " .. (Found and "(Safety Lock: " .. Found:getName() .. ")" or ""))
+            
+            net.start("SetTarget")
+                if Found then net.writeEntity( Found ) end
+            net.send(owner())
+            
+        elseif command == "unbind" then
+            setBanHammerText( nil )
+            Binding = nil
+            
+            net.start("SetTarget")
+            net.send(owner())
+        elseif command == "fakeban" then
+            setBanHammerText( "BAN" )
+            Binding = nil
+            
+            net.start("SetTarget")
+            net.send(owner())
+        end
+        
+        return ""
+        
+    end)
+    
+    
+    
+    
+    hook.add("DoAnimationEvent", "ApplyEffect", function( ply, event, data )
+        if ply ~= owner() then return end
+        if event ~= 0 then return end
+        if not isValid(Weapon) then return end
+        
+        local WeaponData = WEAPON_CLASS[Weapon:getClass()]
+        
+        local Victims = find.inRay( owner():getEyePos() + owner():getEyeAngles():getForward()*30, 
+            owner():getEyePos() + owner():getEyeAngles():getForward()*160, 
+            Vector(-30,-30,-30), Vector(30,30,30), 
+            function(e)
+                return isValid(e) and (e:isPlayer() or (e:isVehicle() and e.getDriver and e:getDriver())) and e ~= owner()
+            end
+        )
+        
+        
+        for i,v in pairs(Victims) do
+            if v:isVehicle() and isValid(v:getDriver()) then
+                Victims[i] = v:getDriver()
+            end
+        end
+        
+        for i,v in pairs(Victims) do
+            if not v:isPlayer() then return end
+            
+            owner():emitSound("weapons/l4d2mw_sledgehammer/impactflesh5.wav")
+            owner():emitSound("weapons/l4d2mw_sledgehammer/impactflesh.wav")
+            
+            if Binding and (not Binding.SafetyLock or Binding.SafetyLock == Victim) then
+                local args = ""
+                
+                for i,a in pairs(Binding.Arguments) do
+                    local IsMultiWord = string.find( a, " " )
+                    local Delimiter = (IsMultiWord and "\"" or "")
+                    args = args .. " " .. Delimiter .. a .. Delimiter
+                end
+                
+                concmd("ulx " .. Binding.Command .. " \"$" .. v:getSteamID() .. "\"" .. args)
+                owner():emitSound("the_orb/thunder-1.mp3")
+                
+            end
+        end
+        
+    end)
+
+end
+
+
+
+if CLIENT then
+    
+    local Target
+    
+    net.receive("SetTarget", function()
+        Target = net.readEntity()
+        
+        if Target then
+            enableHud( owner(), true )
+        else
+            enableHud( owner(), false )
+        end
+    end)
+    
+    
+    
+    hook.add("drawhud", "ESP", function()
+        if Target and isValid(Target) then
+            
+            local SS = Target:obbCenterW():toScreen()
+            
+            for i=0, math.pi*2, math.pi/2 do
+                local a = i + math.pi/4
+                
+                local Points = {
+                    {
+                        x = SS.x + math.sin( a )*10,
+                        y = SS.y + math.cos( a )*10
+                    },
+                    {
+                        x = SS.x + math.sin( a+math.pi/16 )*25,
+                        y = SS.y + math.cos( a+math.pi/16 )*25
+                    },
+                    {
+                        x = SS.x + math.sin( a-math.pi/16 )*25,
+                        y = SS.y + math.cos( a-math.pi/16 )*25
+                    }
+                }
+                
+                render.setColor( Color(255,100,100) )
+                render.drawPoly( Points )
+                
+            end
+            
+        end
+    end)
+    
+end

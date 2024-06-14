@@ -1,0 +1,21 @@
+--@name :3
+--@author Snepderg
+--@server
+
+
+
+local debounceTime = 3
+local now = timer.curtime()
+
+hook.add( "PlayerSay", ":3", function( ply, txt )
+    if ply ~= owner() then
+        if timer.curtime() - now < debounceTime then return end
+        
+        now = timer.curtime()
+        
+        for match in txt:gmatch( "([>]?[:;]3[c]?)" ) do
+            concmd( "say " .. match )
+            break
+        end
+    end
+end )
