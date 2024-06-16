@@ -57,6 +57,7 @@ end
 function Util.modifyRenderTarget( name, cb )
     hook.add("renderoffscreen", "Temp_Util_CreateRT_" .. name, function()
         render.selectRenderTarget( name )
+        render.clear()
         render.setMaterial()
         render.setColor(Color(255,255,255))
         cb()

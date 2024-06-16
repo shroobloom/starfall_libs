@@ -276,9 +276,11 @@ if SERVER then
             
             print("Command \"" .. ulxCmd .. "\" bound to hammer. " .. (Found and "(Safety Lock: " .. Found:getName() .. ")" or ""))
             
-            net.start("SetTarget")
-                if Found then net.writeEntity( Found ) end
-            net.send(owner())
+            if isValid( Found ) then
+                net.start("SetTarget")
+                    net.writeEntity( Found )
+                net.send(owner())
+            end
             
         elseif command == "unbind" then
             setBanHammerText( nil )

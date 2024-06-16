@@ -9,6 +9,15 @@
 local Spawner = {}
 Spawner.Queue = {}
 
+
+local function TryEmptyQueue()
+    while #Spawner.Queue > 0 and prop.canSpawn() do
+        table.remove(Spawner.Queue, 1)()
+    end
+end
+
+
+
 function Spawner.Enqueue( Callback )
     table.insert(Spawner.Queue, Callback)
     TryEmptyQueue()
@@ -26,12 +35,6 @@ function Spawner.Await()
     coroutine.yield(cr)
 end
 
-
-local function TryEmptyQueue()
-    while #Spawner.Queue > 0 and prop.canSpawn() do
-        table.remove(Spawner.Queue, 1)()
-    end
-end
 
 
 timer.create("Spawner_Queue", 1/prop.spawnRate(), 0, TryEmptyQueue)
