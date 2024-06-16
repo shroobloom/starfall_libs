@@ -29,9 +29,19 @@ Door.ActuatorType = {
 }
 
 
+
+--[[ Sound Struct ]]--
+-- Interact - Plays when you press E on the door
+-- Locked - Plays when you press E on the door but don't have access
+-- Open - Plays when the door starts opening
+-- OpenFinish - Plays when the door is done opening
+-- Move - Plays while the door is moving
+-- CloseStart - Plays when the door starts closing
+-- Close - Plays when the door is done closing
+
+
 Door.SoundPresets = {
     WOOD = {
-        --Interact = "",
         Locked = "doors/default_locked.wav",
         
         Open = "doors/door_latch3.wav",
@@ -39,12 +49,22 @@ Door.SoundPresets = {
         Move = "doors/door1_move.wav"
     },
     METAL = {
-        --Interact = "",
         Locked = "doors/default_locked.wav",
         
         Open = "doors/door_metal_medium_open1.wav",
         Close = "doors/door_metal_medium_close1.wav",
         Move = "doors/default_move.wav"
+    },
+    GARAGE = {
+        OpenFinish = "doors/garage_stop1.wav",
+        Close = "doors/garage_stop1.wav",
+        Move = "doors/garage_move1.wav"
+    },
+    
+    -- Proxies; see Door::addProxy
+    BUTTON = {
+        Interact = "buttons/button9.wav",
+        Locked = "buttons/button2.wav"
     }
 }
 
@@ -92,14 +112,7 @@ Door.Locks = {
     Clip: boolean?
     
     -- Sound table, you can set this to a Door.SoundPresets value or make your own table.
-    Sounds: {
-        InteractSound: string?,
-        LockedSound: string?,
-        
-        OpenSound: string?,
-        CloseSound: string?,
-        MoveSound: string?
-    }? = Door.SoundPresets.WOOD,
+    Sounds: Sound? = Door.SoundPresets.WOOD,
     
     -- A function that returns a boolean for whether or not a passed Player can open the door.
     -- Preset lock functions exist in Door.Locks.
@@ -192,9 +205,14 @@ end
 
 -- Adds an interaction proxy prop ("button") for this door.
 -- When someone presses E on this prop, it will open/close the door.
-function Door:addProxy( Proxy )
+-- Optionally, supply a struct for sounds:
+--      - Interact: When you press it, and the door opens
+--      - Locked: When you press it, and the door is locked to you
+function Door:addProxy( Proxy, ProxySounds )
     Door.Proxies[Proxy] = self
     table.insert(self.Proxies, Proxy)
+    
+    Proxy.Sounds = ProxySounds
 end
 
 
@@ -216,6 +234,11 @@ function Door:emitSound( ID )
     end
 end
 
+function Door:stopSound( ID )
+    if self.Sounds[ID] then
+        self.Prop:stopSound(self.Sounds[ID])
+    end
+end
 
 --TODO: data table support
 function Door.double( Prop1, Prop2 )
@@ -305,6 +328,7 @@ function Door:setOpen( Open, User )
             self.HoldDistance = (User:getPos() - self.Prop:getPos()):getLength() + 48
         end
     else
+        self:emitSound("CloseStart")
         
         timer.simple(0.1, function()
             self.Prop2:setSolid(false)
@@ -394,10 +418,13 @@ hook.add("Tick", "Door_Tick", function()
             if openGoal == v.OpenLerp then
                 v.Busy = false
                 
+                v:stopSound("Move")
+                
                 if not v.Open then
                     v:emitSound("Close")
                     v.Prop:setSolid(true)
                 else
+                    v:emitSound("OpenFinish")
                     v.Prop2:setSolid(true)
                 end
             end
@@ -442,12 +469,19 @@ end)
 hook.add("PlayerUse", "Door_Interact", function( play, e )
     
     local d = Door.FromProp[e] or Door.Proxies[e]
+    local isProxy = Door.Proxies[e] ~= nil
     
     if d and not d.Busy and d.Initialized then
         if d:isLockedTo( play ) then
-            d.Holo:setAnimation(1)
             
-            d:emitSound("Locked")
+            if isProxy then
+                if e.Sounds and e.Sounds.Locked then
+                    e:emitSound(e.Sounds.Locked)
+                end
+            else
+                d:emitSound("Locked")
+                d.Holo:setAnimation(1)
+            end
             
             d.Busy = true --ill probably regret this tbh
             
@@ -458,7 +492,16 @@ hook.add("PlayerUse", "Door_Interact", function( play, e )
             return
         end
         
-        d:emitSound("Interact")
+        
+        if isProxy then
+            if e.Sounds and e.Sounds.Interact then
+                e:emitSound(e.Sounds.Interact)
+            end
+        else
+            d:emitSound("Interact")
+            d.Holo:setAnimation(1)
+        end
+        
         
         local state = not d.Open
         
