@@ -2,7 +2,7 @@
 --@author Snepderg
 --@server
 
-local debounceTime = 3
+local debounceTime = 60
 local next = timer.curtime()
 
 hook.add( "PlayerSay", ":3", function( ply, txt )

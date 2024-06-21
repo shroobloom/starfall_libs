@@ -1,0 +1,26 @@
+--@name Respawn At Deathpos
+--@author shrooblooms
+--@server
+
+-- Forces your respawn point to be where you died (in buildmode)
+
+local DeathPos = nil
+local DeathAng = nil
+
+hook.add("PlayerDeath", "RAD_Death", function( ply )
+    if ply ~= owner() then return end
+    
+    DeathPos = ply:getPos()
+    DeathAng = ply:getEyeAngles()
+end)
+
+hook.add("PlayerSpawn", "RAD_Spawn", function( ply )
+    if ply ~= owner() then return end
+    if not DeathPos then return end
+    if not owner():isInBuild() then return end
+    
+    ply:setPos(DeathPos)
+    ply:setEyeAngles(DeathAng)
+    DeathPos = nil
+    DeathAng = nil
+end)
