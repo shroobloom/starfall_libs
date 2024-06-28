@@ -1,0 +1,366 @@
+--@name Micromanage
+--@author shroobloom
+--@client
+--@owneronly 
+--@include libs/util.txt
+
+
+
+
+--[[http.get("https://gmod.pages.dev/realms/cfc/cfc3/players/76561199160675071", function(body)
+    print(body)
+end)]]
+
+
+
+local Util = require("libs/util.txt")
+
+
+local Selection = {}
+
+
+
+
+local PADDING = 3
+local FONT_HEIGHT = 22
+
+
+
+local Fonts = {
+    Main = render.createFont("Coolvetica", FONT_HEIGHT, 1200, true)
+}
+
+
+
+local function drawOption( icon, name, buttonX, buttonY )
+    render.setColor( Color( 255,255,255 ) )
+    
+    if icon then
+        render.setMaterial( icon )
+        render.drawTexturedRect( buttonX + 4, buttonY + 4, 20, 20 )
+        render.setMaterial( nil )
+    end
+    
+    render.drawSimpleText( buttonX + PADDING + 28, buttonY + 14, name, 0, 1 )
+end
+
+local function defaultDraw( self, plr, buttonX, buttonY )
+    drawOption( self.Icon, self.Name, buttonX, buttonY )
+end
+
+local function useCommandOn( command, plr, ... )
+    local isULX = command:sub(1,3) == "ulx"
+    concmd(command .. " \"" .. (isULX and "$" or "") .. plr:getSteamID() .. "\" " .. table.concat({...}, " "))
+end
+
+local function useOption( self, plr )
+    if self.Commands then
+        for i,v in pairs(self.Commands) do
+            useCommandOn( v, plr )
+        end
+    end
+end
+
+local function isRagdolled( plr )
+    return plr:getEyePos():isZero()
+end
+
+
+
+local Options = {
+    {
+        Name = "Warns",
+        Icon = "icon16/shield_delete.png",
+        Draw = function( self, plr, buttonX, buttonY )
+            defaultDraw( self, plr, buttonX, buttonY )
+            
+            render.setColor( Color( 255,0,0 ) )
+            render.drawSimpleText( buttonX + 200 - PADDING, buttonY + 14, "0", 2, 1 )
+        end,
+        Commands = {
+            "awarn_menu" --temp
+        }
+    },
+    {
+        Name = "Spectate",
+        Icon = "icon16/monitor.png",
+        Commands = {
+            "fspectate"
+        }
+    },
+    {
+        Name = "Freeze",
+        Icon = "icon16/wand.png",
+        Draw = function( self, plr, buttonX, buttonY )
+            drawOption( self.Icon, plr:isFrozen() and "Unfreeze" or "Freeze", buttonX, buttonY )
+        end,
+        Use = function( self, plr )
+            if plr:isFrozen() then
+                useCommandOn( "freeze", plr )
+                useCommandOn( "freezeprops", plr )
+            else
+                useCommandOn( "unfreeze", plr )
+            end
+        end
+    },
+    {
+        Name = "Goto",
+        Icon = "icon16/user_go.png",
+        Commands = {
+            "ulx goto"
+        }
+    },
+    {
+        Name = "Bring",
+        Icon = "icon16/arrow_down.png",
+        Commands = {
+            "ulx bring"
+        }
+    },
+    {
+        Name = "Send to Brazil",
+        Icon = "flags16/br.png",
+        Commands = {
+            "ulx brazil"
+        }
+    },
+    {
+        Name = "Curse",
+        Icon = "icon16/pill.png",
+        Commands = {
+            "ulx curse"
+        }
+    },
+    {
+        Name = "Ragdoll",
+        Icon = "icon16/vector.png",
+        Draw = function( self, plr, buttonX, buttonY )
+            drawOption( self.Icon, isRagdolled( plr ) and "Unragdoll" or "Ragdoll", buttonX, buttonY )
+        end,
+        Use = function( self, plr )
+            useCommandOn( isRagdolled(plr) and "unragdoll" or "ragdoll", plr )
+        end
+    },
+    {
+        Name = "Kick",
+        Icon = "icon16/user_delete.png"
+    },
+    {
+        Name = "Ban",
+        Icon = "icon16/vcard_delete.png"
+    }
+}
+
+
+
+for i,v in pairs(Options) do
+    v.SelectionLerp = 0
+    
+    if not v.Draw then
+        v.Draw = defaultDraw
+    end
+    
+    if not v.Use then
+        v.Use = useOption
+    end
+    
+    if v.Icon then
+        v.Icon = material.createFromImage(v.Icon, "")
+    end
+end
+
+
+
+
+
+Util.bindPress("MOUSE2", function()
+    if not input.isKeyDown( 13 ) then return end --C
+    
+    local mX, mY = input.getCursorPos()
+    local bestDist = math.huge
+    local bestPlayer = nil
+    
+    for i,v in pairs(find.allPlayers()) do
+        if v == owner() or not v.sX then continue end
+        
+        local maxX = v.sX + v.sW
+        local maxY = v.sY + v.sH
+        
+        if mX > v.sX and mY > v.sY and mX < maxX and mY < maxY then
+            local cX = v.sX + v.sW/2
+            local cY = v.sY + v.sH/2
+            
+            local dist = (mX - cX)^2 + (mY - cY)^2
+            
+            if dist < bestDist then
+                bestDist = dist
+                bestPlayer = v
+            end
+        end
+    end
+    
+    table.empty(Selection)
+    
+    if not bestPlayer then return end
+    
+    table.insert(Selection, bestPlayer)
+    
+end)
+
+
+
+local SelectedOption = nil
+local MouseDown = false
+
+
+local function setOptionSelection( n )
+    if SelectedOption == n then return end
+    
+    SelectedOption = n
+    
+    MouseDown = false
+end
+
+Util.bindRelease("c", function()
+    table.empty(Selection)
+    setOptionSelection( nil )
+end)
+
+
+
+Util.bindPress("MOUSE1", function()
+    
+    local Option = Options[SelectedOption]
+    if not Option then return end
+    
+    MouseDown = true
+    
+end)
+
+Util.bindRelease("MOUSE1", function()
+    
+    if not MouseDown then return end
+    MouseDown = false
+    
+    local Option = Options[SelectedOption]
+    if not Option then return end
+    
+    for i,v in pairs(Selection) do
+        Option:Use( v )
+    end
+    
+end)
+
+
+
+
+
+
+enableHud( player(), true )
+
+hook.add("drawhud", "Micromanage_HUD", function()
+    if owner():isInPvp() then return end
+    if not input.isKeyDown( 13 ) then return end --C
+    
+    local hasSelection = #Selection > 0
+    
+    for i,plr in pairs( find.allPlayers() ) do
+        if plr == owner() then continue end
+        
+        render.setFont(Fonts.Main)
+        
+        local selected = table.hasValue(Selection, plr)
+        
+        if not selected then
+            local screen = (plr:getPos() + Vector(0,0,64)):toScreen()
+            local pX = screen.x
+            local pY = screen.y
+            
+            local nameWidth, nameHeight = render.getTextSize( plr:getName() )
+            local w = nameWidth + 100 + PADDING*2
+            local h = nameHeight + PADDING*2
+            
+            plr.sX = pX
+            plr.sY = pY
+            plr.sW = w
+            plr.sH = h
+        end
+        
+        local bgA = (hasSelection and not selected and 44 or 230)
+        local tA = (hasSelection and not selected and 60 or 255)
+        
+        render.setColor( Color(44,44,44, bgA ) )
+        render.drawRect( plr.sX, plr.sY, plr.sW, plr.sH )
+        
+        render.setColor( team.getColor(plr:getTeam()):setA(tA) )
+        render.drawSimpleText( plr.sX + PADDING, plr.sY + PADDING, plr:getName() )
+        
+        render.setColor( plr:isInPvp() and Color(255,0,0, tA) or Color(0,255,0, tA) )
+        render.drawSimpleText( plr.sX + plr.sW - PADDING, plr.sY + PADDING, plr:isInPvp() and "PvP" or "Build", 2 )
+        
+        
+        if selected then
+            
+            local mX, mY = input.getCursorPos()
+            local localmX = mX - (plr.sX + plr.sW + PADDING)
+            local localmY = mY - plr.sY
+            
+            setOptionSelection( localmX > 0 and localmX < 200 and math.ceil(localmY/(FONT_HEIGHT/0.75)) or -1 )
+            
+            for i,v in pairs(Options) do
+                local Goal = (i == SelectedOption) and 1 or 0
+                v.SelectionLerp = math.lerp( 0.4, v.SelectionLerp, Goal )
+                
+                local buttonX = plr.sX + plr.sW + PADDING
+                local buttonY = plr.sY + FONT_HEIGHT/0.75*(i-1)
+                
+                local shadeGoal = 44
+                
+                if (i == SelectedOption) then
+                    if MouseDown then
+                        shadeGoal = 22
+                    else
+                        shadeGoal = 255
+                    end
+                end
+                
+                local shade = math.lerp( v.SelectionLerp, 44, shadeGoal )
+                
+                render.setColor( Color(shade,shade,shade, bgA ) )
+                render.drawRect( buttonX, buttonY, 200, FONT_HEIGHT/0.75 )
+                
+                v:Draw( plr, buttonX, buttonY )
+                
+                render.setColor( Color(255,255,255) )
+                render.drawLine( buttonX, buttonY + FONT_HEIGHT/0.75 - 1, buttonX + 200, buttonY + FONT_HEIGHT/0.75 - 1)
+                
+            end
+        end
+        
+    end
+    
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+)
