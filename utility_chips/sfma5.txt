@@ -49,10 +49,6 @@ end
 
 if SERVER then
     
-    chip():doNotDuplicate()
-    
-    
-    
     
     hook.add("OnEntityCreated", "SFMA_informNewChip", function( ent )
         if not isValid(ent) or (ent:getClass() ~= "wire_expression2" and ent:getClass() ~= "starfall_processor") then return end
@@ -70,7 +66,7 @@ if SERVER then
     
     
     
-    
+    --TODO: remove, the simfphys limit is only 1 now
     local simfphysAlertCooldown = {}
     
     local function isSimfphys( ent )
@@ -115,6 +111,35 @@ if SERVER then
     end)
     
     
+    
+    
+    
+    local propspamAlertCooldown = {}
+    
+    hook.add("OnEntityCreated", "SFMA_detectPropspam", function( ent )
+        if not isValid(ent) or not ent:isValidPhys() or ent:isFrozen() or ent:getClass() ~= "prop_physics" then return end
+        
+        local propOwner = ent:getOwner()
+        if not isValid(propOwner) then return end
+        
+        if propOwner.LastSpawn and not propspamAlertCooldown[propOwner] then
+            if propOwner.LastSpawn == ent:getModel() and (timer.curtime() - propOwner.LastSpawnTime) < 1 then
+                
+                ChatLog(getColor(propOwner), getName(propOwner), Color(255,255,255), " is propspamming ", Color(255,255,144), ent:getModel(), Color(255,255,255), "!")
+                logOffender( propOwner )
+                propspamAlertCooldown[propOwner] = true
+                
+                timer.simple(5, function()
+                    propspamAlertCooldown[propOwner] = nil
+                end)
+                
+            end
+        end
+        
+        propOwner.LastSpawn = ent:getModel()
+        propOwner.LastSpawnTime = timer.curtime()
+        
+    end)
     
     
     --[[
