@@ -16,7 +16,14 @@ local Subs = {
 -- Replaces certain words that don't pronounce well
 local Replacements = {
     [":3"] = "meow",
-    ["idk"] = "i don't know"
+    ["idk"] = "i don't know",
+    ["im"] = "i'm",
+    [":D"] = "happy face",
+    [";%-;"] = "crying face",
+    [";~;"] = "crying face",
+    [" :c$"] = " sad face ", --TODO: space or start/end
+    [" c:$"] = " happy face ",
+    ["cya"] = "see ya"
 }
 
 -- get code for lang from here:
@@ -42,6 +49,8 @@ hook.add("PlayerChat","ttsvoice",function(ply, msg)
     
     snd = bass.loadURL( url,"3d noblock noplay", function( x )
         snd = x
+        if not snd then return end
+        
         snd:setPitch(pitch)
         snd:setVolume(volume)
         snd:setPos(owner():getPos())
@@ -53,7 +62,7 @@ end)
 hook.add("think","ttsvoice",function()
     if not isValid(snd) then return end
     
-    if player():getPos():getDistanceSqr(owner():getPos()) > 1000*1000 then
+    if not isValid(owner()) or player():getPos():getDistanceSqr(owner():getPos()) > 1000*1000 then
         snd:setVolume(0)
     else
         snd:setVolume(volume)
