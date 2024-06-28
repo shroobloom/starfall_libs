@@ -117,7 +117,7 @@ if SERVER then
     local propspamAlertCooldown = {}
     
     hook.add("OnEntityCreated", "SFMA_detectPropspam", function( ent )
-        if not isValid(ent) or not ent:isValidPhys() or ent:isFrozen() or ent:getClass() ~= "prop_physics" then return end
+        if not isValid(ent) or not ent:isValidPhys() or ent:isFrozen() or ent:getClass() ~= "prop_physics" or ent:getNoDraw() then return end
         
         local propOwner = ent:getOwner()
         if not isValid(propOwner) then return end
