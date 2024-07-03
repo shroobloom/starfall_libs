@@ -11,7 +11,10 @@ local Brick = class("Brick", Weapon)
 Brick.Classes = {}
 Brick:addClass("pac_crowbar")
 
+Brick.MASS = 384
 Brick.SPEED = 4000
+Brick.ANGULAR_SPEED = 80
+Brick.StuffedWithRocks = true --TODO: require they be admin to activate this via command
 
 
 local function stylize( Model )
@@ -40,8 +43,27 @@ function Brick:onAnimationEvent( event, data )
     stylize( BrickProj )
     
     BrickProj:enableDrag( false )
-    BrickProj:setMass( 384 )
+    BrickProj:setMass( Brick.MASS )
     BrickProj:applyForceCenter( self.Owner:getEyeAngles():getForward()*BrickProj:getMass()*Brick.SPEED )
+    BrickProj:applyAngForce( Angle(math.random()-0.5, math.random()-0.5, math.random()-0.5)*BrickProj:getMass()*Brick.ANGULAR_SPEED )
+    
+    BrickProj:addCollisionListener(function( hit )
+        if not isValid(hit.HitEntity) or not hit.HitEntity:isPlayer() or hit.HitEntity.Bricked then return end
+        
+        BrickProj:emitSound("physics/concrete/concrete_break3.wav")
+        
+        if Brick.StuffedWithRocks then
+            concmd("ulx ragdoll \"$" .. hit.HitEntity:getSteamID() .. "\"")
+            hit.HitEntity.Bricked = true
+            
+            timer.simple(3, function()
+                if not isValid(hit.HitEntity) then return end
+                
+                concmd("ulx unragdoll \"$" .. hit.HitEntity:getSteamID() .. "\"")
+                hit.HitEntity.Bricked = nil
+            end)
+        end
+    end)
     
     self.Parts[1]:setNoDraw( true )
     
