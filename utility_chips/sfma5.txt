@@ -23,6 +23,9 @@ function getName( plr )
     return "<" .. plr:getSteamID() .. "> " .. plr:getName()
 end
 
+function isTrusted( plr )
+    return plr:getTeam() <= 26 -- Exalted
+end
 
 
 
@@ -49,7 +52,6 @@ end
 
 if SERVER then
     
-    
     hook.add("OnEntityCreated", "SFMA_informNewChip", function( ent )
         if not isValid(ent) or (ent:getClass() ~= "wire_expression2" and ent:getClass() ~= "starfall_processor") then return end
         
@@ -74,7 +76,8 @@ if SERVER then
     end
     
     hook.add("OnEntityCreated", "SFMA_detectSimfphysSpam", function( ent )
-        if isValid(ent) and simfphysAlertCooldown[ent:getOwner()] then return end
+        if not isValid(ent) or not isValid(ent:getOwner()) or simfphysAlertCooldown[ent:getOwner()] then return end
+        if isTrusted( ent:getOwner() ) then return end
         if not isSimfphys(ent) then return end
         
         local Min, Max = ent:worldSpaceAABB()
@@ -121,6 +124,7 @@ if SERVER then
         
         local propOwner = ent:getOwner()
         if not isValid(propOwner) then return end
+        if isTrusted( propOwner ) then return end
         
         if propOwner.LastSpawn and not propspamAlertCooldown[propOwner] then
             if propOwner.LastSpawn == ent:getModel() and (timer.curtime() - propOwner.LastSpawnTime) < 1 then
