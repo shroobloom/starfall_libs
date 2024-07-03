@@ -2,6 +2,7 @@
 --@author
 --@shared
 --@include libs/util.txt
+--@include libs/custom_weapon.txt
 
 local Util = require("libs/util.txt")
 
@@ -15,8 +16,19 @@ local Util = require("libs/util.txt")
 -- !fakeban - Sets the hammer's text to "BAN", but has no bound command. Useful for memes.
 
 
+--TODO: fix this, also apply some changes to make it non-admin (moderator) usable
+
 
 if SERVER then
+    
+    local CustomWeapon = require("libs/custom_weapon.txt")
+    
+    local BanHammer = class("BanHammer", CustomWeapon)
+    BanHammer.Classes = {}
+    BanHammer:addClass("pac_crowbar")
+    BanHammer.Instance = nil
+    
+    
     local Weapon
     
     local WEAPON_CLASS = {
@@ -56,8 +68,6 @@ if SERVER then
     -- right hand:  16
     
     
-    local BHParts = {}
-    local BHHead = nil
     local TextHolos = {}
     
     local Binding = nil
@@ -69,7 +79,7 @@ if SERVER then
     local LETTER_WIDTH = 12.5
     
     
-    function drawText( Offset, SurfaceAng, Width, Text, Color, Parent )
+    function BanHammer:drawText( Offset, SurfaceAng, Width, Text, Color, Parent )
         
         local conv = {
             ["."] = "prd",
@@ -96,8 +106,7 @@ if SERVER then
             holo:setColor( Color )
             holo:suppressEngineLighting(true)
             
-            
-            table.insert(BHParts, holo)
+            self:addPart( holo )
             table.insert(TextHolos, holo)
             
         end
@@ -120,35 +129,41 @@ if SERVER then
         
         HammerText = Text
         
-        if Weapon then
-            drawHammerText()
+        if BanHammer.Instance.Equipped then
+            BanHammer.Instance:drawHammerText()
         end
     end
     
     
-    function drawHammerText()
+    function BanHammer:drawHammerText()
         
         for i,v in pairs(TextHolos) do
             if isValid(v) then
                 v:remove()
             end
-            
-            TextHolos[i] = nil
         end
+        
+        table.empty(TextHolos)
+        
         
         if HammerText then
             for i=-1, 1, 2 do
-                drawText( Vector(i*PHX_SIZE*0.3*0.5,0,0), Angle(i == -1 and 180 or 0,0,90*i), 25, HammerText, HammerTextColor, BHHead )
+                self:drawText( Vector(i*PHX_SIZE*0.3*0.5,0,0), Angle(i == -1 and 180 or 0,0,90*i), 25, HammerText, HammerTextColor, self.Head )
             end
         end
     end
     
     
     
-    function setupBanHammer()
-        
+    function BanHammer:equip()
         owner():setWalkSpeed( 250 )
         owner():setRunSpeed( 600 )
+        
+        CustomWeapon.equip( self )
+    end
+    
+    --[[
+    function setupBanHammer()
         
         pcall(function()
             Weapon:setColor( Color(0,0,0,0) )
@@ -189,8 +204,48 @@ if SERVER then
         table.insert(BHParts, Handle)
         table.insert(BHParts, Smasher)
     end
+    ]]
+    
+    function BanHammer:createModel()
+        local HeadPos, HeadAng = self:localToWorld( Vector(3.5,-1,-35), Angle(0,90,0) )
+        
+        local Head = hologram.create( HeadPos, HeadAng, "models/hunter/blocks/cube05x1x05.mdl", Vector(0.6,0.6,0.6) )
+        Head:setMaterial( "models/props_combine/metal_combinebridge001" )
+        self:addPart( Head )
+        self.Head = Head
+        
+        local TailPos = self:localToWorld( Vector(3.5,-1,0) + Vector(-(PHX_SIZE*0.5*0.6 + PHX_SIZE*0.5*0.3),0,-35) )
+        
+        local Tail = hologram.create( TailPos, HeadAng + Angle(0,0,-90), "models/hunter/misc/squarecap1x1x1.mdl", Vector(0.3,0.3,0.3) )
+        Tail:setMaterial( "models/props_combine/metal_combinebridge001" )
+        self:addPart( Tail )
+        
+        
+        local TailPos = self:localToWorld( Vector(3.5,-1,-10) )
+        
+        local Handle = hologram.create( TailPos, HeadAng + Angle(0,90,0), "models/worldmodels/w_mw2019_sledgehammer_wm.mdl", Vector(0.5, 1.5, 1.5) )
+        Handle:setMaterial( "models/props_combine/metal_combinebridge001" )
+        self:addPart( Handle )
+        
+        
+        local SmasherPos = self:localToWorld( Vector(15 + 3.5, -1, -35) )
+        local Smasher = hologram.create( SmasherPos, HeadAng, "models/hunter/blocks/cube05x05x05.mdl", Vector(0.7,0.3,0.7) )
+        Smasher:setMaterial( "models/props_combine/metal_combinebridge001" )
+        self:addPart( Smasher )
+        
+        self:drawHammerText()
+        
+    end
     
     
+    function BanHammer:unequip()
+        owner():setWalkSpeed( 200 )
+        owner():setRunSpeed( 400 )
+        
+        CustomWeapon.unequip( self )
+    end
+    
+    --[[
     function deleteBanHammer()
         
         owner():setWalkSpeed( 200 )
@@ -208,9 +263,9 @@ if SERVER then
             BHParts[i] = nil
         end
     end
+    ]]
     
-    
-    
+    --[[
     hook.add("PlayerSwitchWeapon", "DetectEquip", function(ply, old, new)
         if ply ~= owner() then return end
         
@@ -223,7 +278,7 @@ if SERVER then
             Weapon = new
             setupBanHammer()
         end
-    end)
+    end)]]
     
     
     
@@ -347,7 +402,12 @@ if SERVER then
         end
         
     end)
-
+    
+    
+    -- kind of a bad fix ngl
+    BanHammer.Instance = BanHammer:new( owner() )
+    
+    
 end
 
 

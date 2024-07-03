@@ -1,0 +1,59 @@
+--@name Brick
+--@author shroobloom
+--@server
+--@include libs/custom_weapon.txt
+
+
+local Weapon = require("libs/custom_weapon.txt")
+
+
+local Brick = class("Brick", Weapon)
+Brick.Classes = {}
+Brick:addClass("pac_crowbar")
+
+Brick.SPEED = 4000
+
+
+local function stylize( Model )
+    Model:setMaterial("sprops/sprops_plastic")
+    Model:setColor( Color(220, 40, 30) )
+end
+
+
+function Brick:createModel()
+    
+    local BP, BA = self:localToWorld( Vector( 4, -3, 0 ), Angle() )
+    
+    local Brick = hologram.create( BP, BA, "models/props_junk/CinderBlock01a.mdl", Vector( 0.5, 0.5, 0.5 ) )
+    stylize( Brick )
+    self:addPart( Brick )
+    
+end
+
+
+
+function Brick:onAnimationEvent( event, data )
+    if event ~= 0 then return end
+    if not prop.canSpawn() then return end
+    
+    local BrickProj = prop.create( self.Parts[1]:getPos(), self.Parts[1]:getAngles(), "models/props_junk/CinderBlock01a.mdl", false )
+    stylize( BrickProj )
+    
+    BrickProj:enableDrag( false )
+    BrickProj:setMass( 384 )
+    BrickProj:applyForceCenter( self.Owner:getEyeAngles():getForward()*BrickProj:getMass()*Brick.SPEED )
+    
+    self.Parts[1]:setNoDraw( true )
+    
+    timer.simple(0.35, function()
+        self.Parts[1]:setNoDraw( false )
+    end)
+    
+    timer.simple(5, function()
+        BrickProj:remove()
+    end)
+end
+
+
+
+Brick:new( owner() )
