@@ -41,6 +41,8 @@ end
 local lastOffender = nil
 
 function logOffender( plr, ping )
+    if ping == nil then ping = false end
+    
     lastOffender = plr
     
     timer.stop("SFMA_clearLastOffender")
