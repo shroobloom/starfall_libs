@@ -203,29 +203,6 @@ end
 
 if CLIENT then
     
-    
-    
-    net.receive("SFMA_getFriends", function()
-        
-        local status = {}
-        
-        for i,v in find.allPlayers() do
-            if v == player() then continue end
-            
-            if v:getFriendStatus() == "friend" then
-                table.insert(status, v)
-            end
-        end
-        
-        net.start("SFMA_getFriends_reply")
-        net.writeTable( status )
-        net.send()
-    end)
-    
-    
-    
-    
-    
     if player() == owner() then
         
         net.receive("SFMA_logOffender", function()
