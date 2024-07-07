@@ -23,6 +23,7 @@ local Selection = {}
 
 local PADDING = 3
 local FONT_HEIGHT = 22
+local SELECT_HITBOX_PADDING = 30
 
 
 
@@ -194,10 +195,12 @@ Util.bindPress("MOUSE2", function()
     for i,v in pairs(find.allPlayers()) do
         if v == owner() or not v.sX then continue end
         
-        local maxX = v.sX + v.sW
-        local maxY = v.sY + v.sH
+        local minX = v.sX - SELECT_HITBOX_PADDING
+        local minY = v.sY - SELECT_HITBOX_PADDING
+        local maxX = v.sX + v.sW + SELECT_HITBOX_PADDING
+        local maxY = v.sY + v.sH + SELECT_HITBOX_PADDING
         
-        if mX > v.sX and mY > v.sY and mX < maxX and mY < maxY then
+        if mX > minX and mY > minY and mX < maxX and mY < maxY then
             local cX = v.sX + v.sW/2
             local cY = v.sY + v.sH/2
             
