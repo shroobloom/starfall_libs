@@ -95,7 +95,6 @@ end
 
 
 
---TODO
 -- Abstract
 function Weapon:primaryFire()
     
@@ -122,7 +121,6 @@ end)
 
 
 
---TODO
 -- Abstract
 function Weapon:secondaryFire()
     
@@ -210,6 +208,31 @@ hook.add("KeyPress", "CustomWeapon_SwitchVariant", function( ply, key )
     Info.Variants[Info.Variant]:equip()
     
 end)
+
+
+
+hook.add("KeyPress", "CustomWeapon_Fire", function( ply, key )
+    if key ~= 1 and key ~= 2048 then return end
+    
+    if not Weapon.Info[ply] then return end
+    
+    local wep = ply:getActiveWeapon()
+    if not isValid(wep) then return end
+    
+    local Info = Weapon.Info[ply][wep:getClass()]
+    if not Info then return end
+    
+    local Instance = Info.Variants[Info.Variant]
+    
+    --TODO: cooldowns
+    if key == 1 then
+        Instance:primaryFire()
+    elseif key == 2048 then
+        Instance:secondaryFire()
+    end
+    
+end)
+
 
 
 

@@ -1,0 +1,245 @@
+--@name Command Library
+--@author
+--@shared
+
+
+
+
+
+local CommandLib = {}
+CommandLib.Commands = {}
+CommandLib.log = print
+
+
+CommandLib.BULLET = string.char(226) .. string.char(128) .. string.char(162)
+
+
+
+CommandError = class("CommandError")
+
+function CommandError:initialize( Msg )
+    self.Message = Msg
+end
+
+
+
+
+function CommandLib:bindToChat( prefix, onlyFor )
+    if not SERVER and player() ~= onlyFor then return end
+    
+    hook.add("PlayerSay", "CommandLib_bindChat" .. (onlyFor and ("_" .. onlyFor:entIndex()) or ""), function( ply, text )
+        if ply ~= onlyFor then return end
+        if prefix and text:sub(1, prefix:len()) ~= prefix then return end
+        
+        local result = CommandLib:parseCommand( ply, text:sub( prefix:len()+1 ) )
+        
+        if type(result) == "table" then
+            timer.simple(0, function()
+                print(Color(36,36,36), CommandLib.BULLET, Color(234,40,20), " Command Error: " .. result.Message)
+            end)
+        end
+        
+        return ""
+    end)
+end
+
+
+
+-- Data should follow the format of
+--[[
+{
+    string Name,
+    string Description?,
+    Array<string> Aliases?,
+    Table Arguments {
+        string Name,
+        string Type,
+        boolean Optional? = false,
+        Function<(any) -> boolean>? Validator
+    },
+    Function Run
+}
+]]
+
+function CommandLib:registerCommand( data )
+    table.insert(self.Commands, data)
+end
+
+
+
+-- Parses a command, typechecking & validating it and running the command if successful.
+function CommandLib:parseCommand( user, text )
+    
+    local argsIn = text:split(" ")
+    
+    local commandIn = table.remove( argsIn, 1 )
+    local castedArgs = {}
+    
+    local command = self:getCommand( commandIn )
+    
+    if not command then
+        return CommandError( "Unknown command \"" .. commandIn .. "\"." )
+    end
+    
+    
+    -- Join excess arguments into one
+    while #argsIn > #command.Arguments do
+        argsIn[#argsIn - 1] = argsIn[#argsIn - 1] .. " " .. table.remove(argsIn, #argsIn)
+    end
+    
+    
+    for i,v in pairs(command.Arguments) do
+        local inp = argsIn[i] or v.Default
+        
+        if inp == nil and not v.Optional then
+            return CommandError( "Argument \"" .. v.Name .. "\" missing." )
+        end
+        
+        local casted = self:cast( inp, v.Type )
+        
+        if not casted then
+            return CommandError( "Could not cast " .. v.Name .. " to \"" .. v.Type .. "\"." )
+        end
+        
+        if v.Validator then
+            local Error = v.Validator( casted )
+            
+            if Error then
+                return Error
+            end
+        end
+        
+        table.insert(castedArgs, casted)
+    end
+    
+    return command.Run( user, unpack(castedArgs) )
+    
+end
+
+
+
+
+local TRUTHY = {
+    ["y"] = true,
+    ["yes"] = true,
+    ["on"] = true,
+    ["t"] = true,
+    ["true"] = true,
+    ["1"] = true
+}
+
+local FALSY = {
+    ["n"] = true,
+    ["no"] = true,
+    ["off"] = true,
+    ["f"] = true,
+    ["false"] = true,
+    ["0"] = true
+}
+
+
+
+function CommandLib:cast( value, type )
+    local casted = nil
+    
+    if type == "string" then
+        return tostring( value )
+    elseif type == "int" then
+        if not tonumber(value) then return end
+        return math.floor(tonumber( value ))
+    elseif type == "number" then
+        return tonumber( value )
+    elseif type == "any" then
+        return tonumber(value) or tostring(value)
+    elseif type == "bool" then
+        if TRUTHY[value] then return true end
+        if FALSY[value] then return false end
+    end
+    
+    return casted
+end
+
+
+
+function CommandLib:getCommand( commandName )
+    for i,v in pairs(CommandLib.Commands) do
+        if v.Name == commandName then
+            return v
+        end
+        
+        if v.Aliases then
+            for _, alias in pairs(v.Aliases) do
+                if alias == commandName then
+                    return v
+                end
+            end
+        end
+    end
+end
+
+
+
+
+
+CommandLib.Help = {
+    PAGE_SIZE = 10
+}
+
+CommandLib.Validators = {
+    Range = function( min, max )
+        return function(arg)
+            if arg < min then
+                return CommandError( "Value must not be below " .. min .. "." )
+            elseif arg > max then
+                return CommandError( "Value must not exceed " .. max .. "." )
+            end
+        end
+    end,
+    Choice = function( ... )
+        local choices = {...}
+        
+        return function(arg)
+            if not table.hasValue(choices, arg) then
+                return CommandError( "Value must be one of [" .. table.concat(choices, ", ") .. "]." )
+            end
+        end
+    end
+}
+
+
+CommandLib:registerCommand({
+    Name = "help",
+    Description = "Displays all available commands.",
+    Arguments = {
+        {
+            Name = "page",
+            Type = "int",
+            Optional = true,
+            Default = 1,
+            Validator = function( arg )
+                local pc = math.ceil(#CommandLib.Commands/CommandLib.Help.PAGE_SIZE)
+                
+                return CommandLib.Validators.Range( 1, pc )( arg )
+            end
+        }
+    },
+    Run = function( user, page )
+        if SERVER then
+            CommandLib.log( Color(255,255,255), "-------= Help =-------" )
+            CommandLib.log( Color(255,255,255), "Page " .. page .. " of " .. math.ceil(#CommandLib.Commands/CommandLib.Help.PAGE_SIZE) )
+            
+            for i,v in pairs(CommandLib.Commands) do
+                CommandLib.log( Color(36,36,36), CommandLib.BULLET, Color(255,255,255), " " .. v.Name )
+            end
+        end
+    end
+})
+
+
+
+--temp: test
+CommandLib:bindToChat("!", owner())
+
+
+
+return CommandLib

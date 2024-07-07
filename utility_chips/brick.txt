@@ -2,9 +2,12 @@
 --@author shroobloom
 --@server
 --@include libs/custom_weapon.txt
+--@include libs/command.txt
+
 
 
 local Weapon = require("libs/custom_weapon.txt")
+local CommandLib = require("libs/command.txt")
 
 
 local Brick = class("Brick", Weapon)
@@ -14,7 +17,49 @@ Brick:addClass("pac_crowbar")
 Brick.MASS = 384
 Brick.SPEED = 4000
 Brick.ANGULAR_SPEED = 80
-Brick.StuffedWithRocks = true --TODO: require they be admin to activate this via command
+Brick.StuffedWithRocks = true
+
+
+
+
+CommandLib:registerCommand({
+    Name = "brick",
+    Description = "Modifies the brick",
+    Arguments = {
+        {
+            Name = "property",
+            Type = "string",
+            Validator = CommandLib.Validators.Choice( "mass", "speed", "angspeed", "ragdoll" )
+        },
+        {
+            Name = "value",
+            Type = "any"
+        }
+    },
+    Run = function( user, property, value )
+        if property == "ragdoll" then
+            
+            value = CommandLib:cast( value, "bool" )
+        else
+            value = CommandLib:cast( value, "number" )
+        end
+        
+        if property == "mass" then
+            Brick.MASS = value
+        elseif property == "speed" then
+            Brick.SPEED = value
+        elseif property == "angspeed" then
+            Brick.ANGULAR_SPEED = value
+        elseif property == "ragdoll" then
+            Brick.StuffedWithRocks = value
+        end
+        
+        CommandLib.log( Color(120,255,120), "Set brick " .. property .. " to " .. tostring(value) .. "!" )
+    end
+})
+
+
+
 
 
 local function stylize( Model )
@@ -49,6 +94,7 @@ function Brick:onAnimationEvent( event, data )
     
     BrickProj:addCollisionListener(function( hit )
         if not isValid(hit.HitEntity) or not hit.HitEntity:isPlayer() or hit.HitEntity.Bricked then return end
+        if BrickProj:getVelocity():getLengthSqr() < 100*100 then return end
         
         BrickProj:emitSound("physics/concrete/concrete_break3.wav")
         
@@ -68,6 +114,8 @@ function Brick:onAnimationEvent( event, data )
     self.Parts[1]:setNoDraw( true )
     
     timer.simple(0.35, function()
+        if not isValid(self.Parts[1]) then return end
+        
         self.Parts[1]:setNoDraw( false )
     end)
     
