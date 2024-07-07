@@ -24,14 +24,15 @@ function getName( plr )
 end
 
 function isTrusted( plr )
-    return plr:getTeam() <= 26 -- Exalted
+    return plr:getTeam() >= 26 -- Exalted
 end
+
 
 
 
 local lastOffender = nil
 
-function logOffender( plr )
+function logOffender( plr, ping )
     lastOffender = plr
     
     timer.stop("SFMA_clearLastOffender")
@@ -43,6 +44,7 @@ function logOffender( plr )
     if SERVER then
         net.start("SFMA_logOffender")
         net.writeEntity(plr)
+        net.writeBool(ping)
         net.send(owner())
     end
 end
@@ -90,7 +92,7 @@ if SERVER then
             local carOwner = ent:getOwner()
             
             ChatLog(getColor(carOwner), getName(carOwner), Color(255,255,255), " spawned multiple simfphys cars inside eachother!")
-            logOffender( carOwner )
+            logOffender( carOwner, true )
             simfphysAlertCooldown[carOwner] = true
             
             timer.simple(5, function()
@@ -101,14 +103,23 @@ if SERVER then
     
     
     
+    local Keywords = {
+        "proppush",
+        "propspam"
+    }
     
     hook.add("PlayerSay", "SFMA_detectMention", function( speaker, msg )
         if speaker == owner() then return end
         
         for i,v in pairs(find.allPlayers()) do
             if msg:find(v:getName(), nil, true) then
-                logOffender( v )
-                break
+                return logOffender( v )
+            end
+        end
+        
+        for i,v in pairs(Keywords) do
+            if msg:lower():find(v) then
+                return logOffender( speaker, true )
             end
         end
     end)
@@ -120,28 +131,31 @@ if SERVER then
     local propspamAlertCooldown = {}
     
     hook.add("OnEntityCreated", "SFMA_detectPropspam", function( ent )
-        if not isValid(ent) or not ent:isValidPhys() or ent:isFrozen() or ent:getClass() ~= "prop_physics" or ent:getNoDraw() then return end
+        if not isValid(ent) or not ent:isValidPhys() or ent:getClass() ~= "prop_physics" or ent:getNoDraw() then return end
         
         local propOwner = ent:getOwner()
         if not isValid(propOwner) then return end
         if isTrusted( propOwner ) then return end
         
-        if propOwner.LastSpawn and not propspamAlertCooldown[propOwner] then
-            if propOwner.LastSpawn == ent:getModel() and (timer.curtime() - propOwner.LastSpawnTime) < 1 then
-                
-                ChatLog(getColor(propOwner), getName(propOwner), Color(255,255,255), " is propspamming ", Color(255,255,144), ent:getModel(), Color(255,255,255), "!")
-                logOffender( propOwner )
-                propspamAlertCooldown[propOwner] = true
-                
-                timer.simple(5, function()
-                    propspamAlertCooldown[propOwner] = nil
-                end)
-                
-            end
+        if propOwner.PS_LastSpawn == ent:getModel() and (timer.curtime() - propOwner.PS_LastSpawnTime) < 1 then
+            propOwner.PS_SpawnCount = (propOwner.PS_SpawnCount or 0) + 1
+        else
+            propOwner.PS_SpawnCount = 1
         end
         
-        propOwner.LastSpawn = ent:getModel()
-        propOwner.LastSpawnTime = timer.curtime()
+        propOwner.PS_LastSpawn = ent:getModel()
+        propOwner.PS_LastSpawnTime = timer.curtime()
+        
+        
+        if not propspamAlertCooldown[propOwner] and propOwner.PS_SpawnCount >= 5 then
+            ChatLog(getColor(propOwner), getName(propOwner), Color(255,255,255), " is propspamming ", Color(255,255,144), ent:getModel(), Color(255,255,255), "!")
+            logOffender( propOwner, true )
+            propspamAlertCooldown[propOwner] = true
+            
+            timer.simple(15, function()
+                propspamAlertCooldown[propOwner] = nil
+            end)
+        end
         
     end)
     
@@ -206,6 +220,10 @@ if CLIENT then
         
         net.receive("SFMA_logOffender", function()
             net.readEntity(logOffender)
+            
+            if net.readBool() then
+                player():emitSound("npc/overwatch/radiovoice/on1.wav")
+            end
         end)
         
         
