@@ -3,7 +3,7 @@
 --@client
 --@owneronly 
 --@include libs/util.txt
-
+--@include libs/friends.txt
 
 
 
@@ -12,6 +12,8 @@
 end)]]
 
 
+
+dofile "libs/friends.txt"
 
 local Util = require("libs/util.txt")
 
@@ -33,7 +35,7 @@ local Fonts = {
 
 
 
-local function drawOption( icon, name, buttonX, buttonY )
+local function drawOption( icon, name, doDropdown, buttonX, buttonY )
     render.setColor( Color( 255,255,255 ) )
     
     if icon then
@@ -43,10 +45,17 @@ local function drawOption( icon, name, buttonX, buttonY )
     end
     
     render.drawSimpleText( buttonX + PADDING + 28, buttonY + 14, name, 0, 1 )
+    
+    if doDropdown then
+        local tX = buttonX + 196 - PADDING
+        local tY = buttonY + 15
+        
+        render.drawTriangle( tX - 6, tY - 6, tX, tY, tX - 6, tY + 6 )
+    end
 end
 
 local function defaultDraw( self, plr, buttonX, buttonY )
-    drawOption( self.Icon, self.Name, buttonX, buttonY )
+    drawOption( self.Icon, self.Name, self.Dropdown ~= nil, buttonX, buttonY )
 end
 
 local function useCommandOn( command, plr, ... )
@@ -73,21 +82,15 @@ end
 
 local Options = {
     {
-        Name = "Warns",
-        Icon = "icon16/shield_delete.png",
-        Draw = function( self, plr, buttonX, buttonY )
-            defaultDraw( self, plr, buttonX, buttonY )
-            
-            render.setColor( scaleColor( 0, 30 ) )
-            render.drawSimpleText( buttonX + 200 - PADDING, buttonY + 14, "0", 2, 1 )
-        end,
-        Commands = {
-            "awarn_menu" --temp
-        }
+        Name = "Copy SteamID",
+        Icon = "icon16/vcard_edit.png",
+        Use = function( self, plr )
+            setClipboardText( plr:getSteamID() )
+        end
     },
     {
         Name = "Spectate",
-        Icon = "icon16/monitor.png",
+        Icon = "icon16/eye.png",
         Commands = {
             "fspectate"
         }
@@ -96,14 +99,14 @@ local Options = {
         Name = "Freeze",
         Icon = "icon16/wand.png",
         Draw = function( self, plr, buttonX, buttonY )
-            drawOption( self.Icon, plr:isFrozen() and "Unfreeze" or "Freeze", buttonX, buttonY )
+            drawOption( self.Icon, plr:isFrozen() and "Unfreeze" or "Freeze", false, buttonX, buttonY )
         end,
         Use = function( self, plr )
-            if plr:isFrozen() then
-                useCommandOn( "freeze", plr )
-                useCommandOn( "freezeprops", plr )
+            if not plr:isFrozen() then
+                useCommandOn( "ulx freeze", plr )
+                useCommandOn( "ulx freezeprops", plr )
             else
-                useCommandOn( "unfreeze", plr )
+                useCommandOn( "ulx unfreeze", plr )
             end
         end
     },
@@ -157,10 +160,10 @@ local Options = {
         Name = "Ragdoll",
         Icon = "icon16/vector.png",
         Draw = function( self, plr, buttonX, buttonY )
-            drawOption( self.Icon, isRagdolled( plr ) and "Unragdoll" or "Ragdoll", buttonX, buttonY )
+            drawOption( self.Icon, isRagdolled( plr ) and "Unragdoll" or "Ragdoll", false, buttonX, buttonY )
         end,
         Use = function( self, plr )
-            useCommandOn( isRagdolled(plr) and "unragdoll" or "ragdoll", plr )
+            useCommandOn( isRagdolled(plr) and "ulx unragdoll" or "ulx ragdoll", plr )
         end
     }
 }
@@ -282,6 +285,8 @@ hook.add("drawhud", "Micromanage_HUD", function()
     if owner():isInPvp() then return end
     if not input.isKeyDown( 13 ) then return end --C
     
+    render.setFilterMag(2)
+    
     local hasSelection = #Selection > 0
     
     for i,plr in pairs( find.allPlayers() ) do
@@ -354,6 +359,9 @@ hook.add("drawhud", "Micromanage_HUD", function()
                 render.setColor( Color(255,255,255) )
                 render.drawLine( buttonX, buttonY + FONT_HEIGHT/0.75 - 1, buttonX + 200, buttonY + FONT_HEIGHT/0.75 - 1)
                 
+                if v.Dropdown and i == SelectedOption then
+                    
+                end
             end
         end
         
