@@ -23,8 +23,16 @@ function getName( plr )
     return "<" .. plr:getSteamID() .. "> " .. plr:getName()
 end
 
+
+local TRUSTED = {
+    [26] = true, --Exalted
+    [30] = true, --Admin
+    [22] = true, --Moderator
+    [23] = true --Sentinel
+}
+
 function isTrusted( plr )
-    return plr:getTeam() >= 26 -- Exalted
+    return TRUSTED[plr:getTeam()]
 end
 
 
