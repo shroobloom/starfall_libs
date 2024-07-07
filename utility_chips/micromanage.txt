@@ -3,7 +3,6 @@
 --@client
 --@owneronly 
 --@include libs/util.txt
---@include libs/friends.txt
 
 
 
@@ -12,8 +11,6 @@
 end)]]
 
 
-
-dofile "libs/friends.txt"
 
 local Util = require("libs/util.txt")
 
@@ -80,6 +77,14 @@ local function scaleColor( num, max )
 end
 
 
+local function isInJail( plr )
+    local floor = trace.line( plr:getPos(), plr:getPos() + Vector(0,0,1000), find.allPlayers() )
+    return floor.Entity:isValid() and not isValid(floor.Entity:getOwner()) and floor.Entity:getModel() == "models/props_building_details/storefront_template001a_bars.mdl"
+end
+
+
+
+
 local Options = {
     {
         Name = "Copy SteamID",
@@ -136,11 +141,21 @@ local Options = {
         }
     },
     {
-        Name = "Bring",
-        Icon = "icon16/arrow_down.png",
-        Commands = {
-            "ulx bring"
-        }
+        Name = "Sit",
+        Icon = "icon16/report_link.png",
+        Draw = function( self, plr, buttonX, buttonY )
+            drawOption( self.Icon, isInJail(plr) and "Return" or "Sit", false, buttonX, buttonY )
+        end,
+        Use = function( self, plr )
+            if not isInJail(plr) then
+                useCommandOn( "ulx bring", plr )
+                useCommandOn( "ulx jail", plr )
+                useCommandOn( "ulx freezeprops", plr )
+            else
+                useCommandOn( "ulx unjail", plr )
+                useCommandOn( "ulx return", plr )
+            end
+        end
     },
     {
         Name = "Send to Brazil",
