@@ -65,6 +65,9 @@ local function isRagdolled( plr )
     return plr:getEyePos():isZero()
 end
 
+local function scaleColor( num, max )
+    return Color(255,255*math.clamp(1 - num/max, 0, 1),255*math.clamp(1 - num/max, 0, 1))
+end
 
 
 local Options = {
@@ -74,7 +77,7 @@ local Options = {
         Draw = function( self, plr, buttonX, buttonY )
             defaultDraw( self, plr, buttonX, buttonY )
             
-            render.setColor( Color( 255,0,0 ) )
+            render.setColor( scaleColor( 0, 30 ) )
             render.drawSimpleText( buttonX + 200 - PADDING, buttonY + 14, "0", 2, 1 )
         end,
         Commands = {
@@ -102,6 +105,24 @@ local Options = {
                 useCommandOn( "unfreeze", plr )
             end
         end
+    },
+    {
+        Name = "Cleanup",
+        Icon = "icon16/cut_red.png",
+        Initialize = function( self, plr )
+            plr.EntCountCache = #find.all(function(e)
+                return e:getOwner() == plr
+            end)
+        end,
+        Draw = function( self, plr, buttonX, buttonY )
+            defaultDraw( self, plr, buttonX, buttonY )
+            
+            render.setColor( scaleColor(plr.EntCountCache or 0, 100) )
+            render.drawSimpleText( buttonX + 200 - PADDING, buttonY + 14, plr.EntCountCache or "", 2, 1 )
+        end,
+        Commands = {
+            "ulx cleanup"
+        }
     },
     {
         Name = "Goto",
@@ -140,14 +161,6 @@ local Options = {
         Use = function( self, plr )
             useCommandOn( isRagdolled(plr) and "unragdoll" or "ragdoll", plr )
         end
-    },
-    {
-        Name = "Kick",
-        Icon = "icon16/user_delete.png"
-    },
-    {
-        Name = "Ban",
-        Icon = "icon16/vcard_delete.png"
     }
 }
 
@@ -168,8 +181,6 @@ for i,v in pairs(Options) do
         v.Icon = material.createFromImage(v.Icon, "")
     end
 end
-
-
 
 
 
@@ -204,6 +215,12 @@ Util.bindPress("MOUSE2", function()
     if not bestPlayer then return end
     
     table.insert(Selection, bestPlayer)
+    
+    for i,v in pairs(Options) do
+        if v.Initialize then
+            v:Initialize( bestPlayer )
+        end
+    end
     
 end)
 
