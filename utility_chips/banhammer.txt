@@ -351,7 +351,7 @@ if SERVER then
             net.send(owner())
         end
         
-        return ""
+        --return ""
         
     end)
     
