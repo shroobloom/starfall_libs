@@ -115,7 +115,8 @@ if SERVER then
     
     local Keywords = {
         "proppush",
-        "propspam"
+        "propspam",
+        "stop"
     }
     
     hook.add("PlayerSay", "SFMA_detectMention", function( speaker, msg )
@@ -162,7 +163,7 @@ if SERVER then
             logOffender( propOwner, true )
             propspamAlertCooldown[propOwner] = true
             
-            timer.simple(15, function()
+            timer.simple(30, function()
                 propspamAlertCooldown[propOwner] = nil
             end)
         end
