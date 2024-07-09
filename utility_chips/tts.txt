@@ -6,7 +6,6 @@ local snd
 local volume = 2
 local pitch = 1.15
 local lang = "en-GB"
-local SPEED = 15
 
 -- If the message is only this, it will replace it
 local Subs = {
@@ -15,16 +14,24 @@ local Subs = {
 
 -- Replaces certain words that don't pronounce well
 local Replacements = {
+    -- acronyms and stuff it wont pronounce right
     [":3"] = "meow",
     ["idk"] = "i don't know",
+    ["ik"] = "i know",
     ["im"] = "i'm",
-    [":D"] = "happy face",
-    [";%-;"] = "crying face",
-    [";~;"] = "crying face",
-    [" :c$"] = " sad face ", --TODO: space or start/end
-    [" c:$"] = " happy face ",
-    ["cya"] = "see ya"
+    ["cya"] = "see ya",
+    ["tts"] = "text to speech",
+    
+    -- every textface i normally use
+    [":D"] = "",
+    ["D:"] = "",
+    [";[~%-];"] = "",
+    [":c"] = "",
+    ["c:"] = "",
+    [">?:[%)%(]"] = "",
+    ["'[~%-]'"] = ""
 }
+
 
 -- get code for lang from here:
 -- https://cloud.google.com/text-to-speech/docs/voices
@@ -41,7 +48,13 @@ hook.add("PlayerChat","ttsvoice",function(ply, msg)
     end
     
     for i,v in pairs(Replacements) do
-        msg = msg:gsub(i, v)
+        for r1=0, 1 do
+            for r2=0, 1 do
+                local pat = (r1 == 0 and " " or "^") .. i .. (r2 == 0 and " " or "$")
+                local rep = (r1 == 0 and " " or "" ) .. v .. (r2 == 0 and " " or "" )
+                msg = msg:gsub(pat, rep)
+            end
+        end
     end
     
     local url = "http://translate.google.com/translate_tts?&ie=utf-8&client=tw-ob&tl=".. lang .."&q=" .. http.urlEncode(msg) 
