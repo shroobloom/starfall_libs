@@ -12,10 +12,13 @@ end)]]
 
 
 
+local Micromanage = {}
+
+
 local Util = require("libs/util.txt")
 
 
-local Selection = {}
+Micromanage.Selection = nil
 
 
 
@@ -32,7 +35,7 @@ local Fonts = {
 
 
 
-local function drawOption( icon, name, doDropdown, buttonX, buttonY )
+function Micromanage.drawOption( icon, name, doDropdown, buttonX, buttonY )
     render.setColor( Color( 255,255,255 ) )
     
     if icon then
@@ -51,33 +54,33 @@ local function drawOption( icon, name, doDropdown, buttonX, buttonY )
     end
 end
 
-local function defaultDraw( self, plr, buttonX, buttonY )
-    drawOption( self.Icon, self.Name, self.Dropdown ~= nil, buttonX, buttonY )
+function Micromanage.defaultDraw( self, plr, buttonX, buttonY )
+    Micromanage.drawOption( self.Icon, self.Name, self.Dropdown ~= nil, buttonX, buttonY )
 end
 
-local function useCommandOn( command, plr, ... )
+function Micromanage.useCommandOn( command, plr, ... )
     local isULX = command:sub(1,3) == "ulx"
     concmd(command .. " \"" .. (isULX and "$" or "") .. plr:getSteamID() .. "\" " .. table.concat({...}, " "))
 end
 
-local function useOption( self, plr )
+function Micromanage.useOption( self, plr )
     if self.Commands then
         for i,v in pairs(self.Commands) do
-            useCommandOn( v, plr )
+            Micromanage.useCommandOn( v, plr )
         end
     end
 end
 
-local function isRagdolled( plr )
+function Micromanage.isRagdolled( plr )
     return plr:getEyePos():isZero()
 end
 
-local function scaleColor( num, max )
+function Micromanage.scaleColor( num, max )
     return Color(255,255*math.clamp(1 - num/max, 0, 1),255*math.clamp(1 - num/max, 0, 1))
 end
 
 
-local function isInJail( plr )
+function Micromanage.isInJail( plr )
     local floor = trace.line( plr:getPos(), plr:getPos() + Vector(0,0,1000), find.allPlayers() )
     return floor.Entity:isValid() and not isValid(floor.Entity:getOwner()) and floor.Entity:getModel() == "models/props_building_details/storefront_template001a_bars.mdl"
 end
@@ -85,7 +88,8 @@ end
 
 
 
-local Options = {
+Micromanage.Options = {}
+--[[
     {
         Name = "Copy SteamID",
         Icon = "icon16/vcard_edit.png",
@@ -104,14 +108,14 @@ local Options = {
         Name = "Freeze",
         Icon = "icon16/wand.png",
         Draw = function( self, plr, buttonX, buttonY )
-            drawOption( self.Icon, plr:isFrozen() and "Unfreeze" or "Freeze", false, buttonX, buttonY )
+            Micromanage.drawOption( self.Icon, plr:isFrozen() and "Unfreeze" or "Freeze", false, buttonX, buttonY )
         end,
         Use = function( self, plr )
             if not plr:isFrozen() then
-                useCommandOn( "ulx freeze", plr )
-                useCommandOn( "ulx freezeprops", plr )
+                Micromanage.useCommandOn( "ulx freeze", plr )
+                Micromanage.useCommandOn( "ulx freezeprops", plr )
             else
-                useCommandOn( "ulx unfreeze", plr )
+                Micromanage.useCommandOn( "ulx unfreeze", plr )
             end
         end
     },
@@ -124,7 +128,7 @@ local Options = {
             end)
         end,
         Draw = function( self, plr, buttonX, buttonY )
-            defaultDraw( self, plr, buttonX, buttonY )
+            Micromanage.defaultDraw( self, plr, buttonX, buttonY )
             
             render.setColor( scaleColor(plr.EntCountCache or 0, 100) )
             render.drawSimpleText( buttonX + 200 - PADDING, buttonY + 14, plr.EntCountCache or "", 2, 1 )
@@ -144,7 +148,7 @@ local Options = {
         Name = "Sit",
         Icon = "icon16/report_link.png",
         Draw = function( self, plr, buttonX, buttonY )
-            drawOption( self.Icon, isInJail(plr) and "Return" or "Sit", false, buttonX, buttonY )
+            Micromanage.drawOption( self.Icon, Micromanage.isInJail(plr) and "Return" or "Sit", false, buttonX, buttonY )
         end,
         Use = function( self, plr )
             if not isInJail(plr) then
@@ -175,17 +179,17 @@ local Options = {
         Name = "Ragdoll",
         Icon = "icon16/vector.png",
         Draw = function( self, plr, buttonX, buttonY )
-            drawOption( self.Icon, isRagdolled( plr ) and "Unragdoll" or "Ragdoll", false, buttonX, buttonY )
+            Micromanage.drawOption( self.Icon, Micromanage.isRagdolled( plr ) and "Unragdoll" or "Ragdoll", false, buttonX, buttonY )
         end,
         Use = function( self, plr )
-            useCommandOn( isRagdolled(plr) and "ulx unragdoll" or "ulx ragdoll", plr )
+            Micromanage.useCommandOn( Micromanage.isRagdolled(plr) and "ulx unragdoll" or "ulx ragdoll", plr )
         end
     }
-}
+]]
 
 
 
-for i,v in pairs(Options) do
+--[[for i,v in pairs(Micromanage.Options) do
     v.SelectionLerp = 0
     
     if not v.Draw then
@@ -199,7 +203,163 @@ for i,v in pairs(Options) do
     if v.Icon then
         v.Icon = material.createFromImage(v.Icon, "")
     end
+end]]
+
+
+
+
+function Micromanage:addOption( Data, Pos )
+    
+    if Pos then
+        table.insert(Micromanage.Options, Pos, Data)
+    else
+        table.insert(Micromanage.Options, Data)
+    end
+    
+    Data.SelectionLerp = 0
+    
+    if not Data.Draw then
+        Data.Draw = Micromanage.defaultDraw
+    end
+    
+    if not Data.Use then
+        Data.Use = Micromanage.useOption
+    end
+    
+    if Data.Icon then
+        Data.Icon = material.createFromImage(Data.Icon, "")
+    end
 end
+
+
+function Micromanage:removeOption( name )
+    for i,v in pairs(Micromanage.Options) do
+        if v.Name == name then
+            table.remove(Micromanage.Options, i)
+            break
+        end
+    end
+end
+
+
+
+
+--[[ DEFAULT OPTIONS ]]--
+
+Micromanage:addOption({
+    Name = "Copy SteamID",
+    Icon = "icon16/vcard_edit.png",
+    Use = function( self, plr )
+        setClipboardText( plr:getSteamID() )
+    end
+})
+
+   
+Micromanage:addOption({
+    Name = "Spectate",
+    Icon = "icon16/eye.png",
+    Commands = {
+        "fspectate"
+    }
+})
+
+
+Micromanage:addOption({
+    Name = "Freeze",
+    Icon = "icon16/wand.png",
+    Draw = function( self, plr, buttonX, buttonY )
+        Micromanage.drawOption( self.Icon, plr:isFrozen() and "Unfreeze" or "Freeze", false, buttonX, buttonY )
+    end,
+    Use = function( self, plr )
+        if not plr:isFrozen() then
+            Micromanage.useCommandOn( "ulx freeze", plr )
+            Micromanage.useCommandOn( "ulx freezeprops", plr )
+        else
+            Micromanage.useCommandOn( "ulx unfreeze", plr )
+        end
+    end
+})
+
+
+Micromanage:addOption({
+    Name = "Cleanup",
+    Icon = "icon16/cut_red.png",
+    Initialize = function( self, plr )
+        plr.EntCountCache = #find.all(function(e)
+            return e:getOwner() == plr
+        end)
+    end,
+    Draw = function( self, plr, buttonX, buttonY )
+        Micromanage.defaultDraw( self, plr, buttonX, buttonY )
+        
+        render.setColor( Micromanage.scaleColor(plr.EntCountCache or 0, 100) )
+        render.drawSimpleText( buttonX + 200 - PADDING, buttonY + 14, plr.EntCountCache or "", 2, 1 )
+    end,
+    Commands = {
+        "ulx cleanup"
+    }
+})
+
+
+
+Micromanage:addOption({
+    Name = "Goto",
+    Icon = "icon16/user_go.png",
+    Commands = {
+        "ulx goto"
+    }
+})
+
+
+
+Micromanage:addOption({
+    Name = "Sit",
+    Icon = "icon16/report_link.png",
+    Draw = function( self, plr, buttonX, buttonY )
+        Micromanage.drawOption( self.Icon, Micromanage.isInJail(plr) and "Return" or "Sit", false, buttonX, buttonY )
+    end,
+    Use = function( self, plr )
+        if not isInJail(plr) then
+            Micromanage.useCommandOn( "ulx bring", plr )
+            Micromanage.useCommandOn( "ulx jail", plr )
+            Micromanage.useCommandOn( "ulx freezeprops", plr )
+        else
+            Micromanage.useCommandOn( "ulx unjail", plr )
+            Micromanage.useCommandOn( "ulx return", plr )
+        end
+    end
+})
+
+
+Micromanage:addOption({
+    Name = "Send to Brazil",
+    Icon = "flags16/br.png",
+    Commands = {
+        "ulx brazil"
+    }
+})
+
+
+Micromanage:addOption({
+    Name = "Curse",
+    Icon = "icon16/pill.png",
+    Commands = {
+        "ulx curse"
+    }
+})
+
+
+Micromanage:addOption({
+    Name = "Ragdoll",
+    Icon = "icon16/vector.png",
+    Draw = function( self, plr, buttonX, buttonY )
+        Micromanage.drawOption( self.Icon, Micromanage.isRagdolled( plr ) and "Unragdoll" or "Ragdoll", false, buttonX, buttonY )
+    end,
+    Use = function( self, plr )
+        Micromanage.useCommandOn( Micromanage.isRagdolled(plr) and "ulx unragdoll" or "ulx ragdoll", plr )
+    end
+})
+
 
 
 
@@ -231,13 +391,13 @@ Util.bindPress("MOUSE2", function()
         end
     end
     
-    table.empty(Selection)
+    Micromanage.Selection = nil
     
     if not bestPlayer then return end
     
-    table.insert(Selection, bestPlayer)
+    Micromanage.Selection = bestPlayer
     
-    for i,v in pairs(Options) do
+    for i,v in pairs(Micromanage.Options) do
         if v.Initialize then
             v:Initialize( bestPlayer )
         end
@@ -260,7 +420,7 @@ local function setOptionSelection( n )
 end
 
 Util.bindRelease("c", function()
-    table.empty(Selection)
+    Micromanage.Selection = nil
     setOptionSelection( nil )
 end)
 
@@ -268,7 +428,7 @@ end)
 
 Util.bindPress("MOUSE1", function()
     
-    local Option = Options[SelectedOption]
+    local Option = Micromanage.Options[SelectedOption]
     if not Option then return end
     
     MouseDown = true
@@ -280,12 +440,10 @@ Util.bindRelease("MOUSE1", function()
     if not MouseDown then return end
     MouseDown = false
     
-    local Option = Options[SelectedOption]
+    local Option = Micromanage.Options[SelectedOption]
     if not Option then return end
     
-    for i,v in pairs(Selection) do
-        Option:Use( v )
-    end
+    Option:Use( Micromanage.Selection )
     
 end)
 
@@ -302,14 +460,14 @@ hook.add("drawhud", "Micromanage_HUD", function()
     
     render.setFilterMag(2)
     
-    local hasSelection = #Selection > 0
+    local hasSelection = Micromanage.Selection ~= nil
     
     for i,plr in pairs( find.allPlayers() ) do
         if plr == owner() then continue end
         
         render.setFont(Fonts.Main)
         
-        local selected = table.hasValue(Selection, plr)
+        local selected = Micromanage.Selection == plr
         
         if not selected then
             local screen = (plr:getPos() + Vector(0,0,64)):toScreen()
@@ -347,7 +505,7 @@ hook.add("drawhud", "Micromanage_HUD", function()
             
             setOptionSelection( localmX > 0 and localmX < 200 and math.ceil(localmY/(FONT_HEIGHT/0.75)) or -1 )
             
-            for i,v in pairs(Options) do
+            for i,v in pairs(Micromanage.Options) do
                 local Goal = (i == SelectedOption) and 1 or 0
                 v.SelectionLerp = math.lerp( 0.4, v.SelectionLerp, Goal )
                 
@@ -382,28 +540,9 @@ hook.add("drawhud", "Micromanage_HUD", function()
         
     end
     
-end
+end)
 
 
 
+return Micromanage
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-)
