@@ -65,10 +65,10 @@ end
 if SERVER then
     
     hook.add("OnEntityCreated", "SFMA_informNewChip", function( ent )
-        if not isValid(ent) or (ent:getClass() ~= "wire_expression2" and ent:getClass() ~= "starfall_processor") then return end
+        if not isValid(ent) or (ent:getClass() ~= "gmod_wire_expression2" and ent:getClass() ~= "starfall_processor") then return end
         
         local chipOwner = ent:getOwner()
-        local isE2 = ent:getClass() == "wire_expression2"
+        local isE2 = ent:getClass() == "gmod_wire_expression2"
         
         timer.simple(0.25, function()
             ConsoleLog(getColor(chipOwner), getName(chipOwner),
@@ -115,8 +115,7 @@ if SERVER then
     
     local Keywords = {
         "proppush",
-        "propspam",
-        "stop"
+        "propspam"
     }
     
     hook.add("PlayerSay", "SFMA_detectMention", function( speaker, msg )
@@ -163,7 +162,7 @@ if SERVER then
             logOffender( propOwner, true )
             propspamAlertCooldown[propOwner] = true
             
-            timer.simple(30, function()
+            timer.simple(15, function()
                 propspamAlertCooldown[propOwner] = nil
             end)
         end
@@ -171,30 +170,74 @@ if SERVER then
     end)
     
     
-    --[[
-    local HeldProps = {}
     
-    hook.add("PhysgunPickup",  "SFMA_logHeldProp", function( plr, ent )
-        HeldProps[plr] = ent
-    end)
+    local tracked = {}
+    local proppushAlertCooldown = {}
     
-    hook.add("PhysgunDrop",  "SFMA_logHeldProp", function( plr, ent )
-        HeldProps[plr] = nil
-    end)
-    
-    
-    
-    timer.create("SFMA_detectProppush", 0.1, 0, function()
-        for plr,ent in pairs(HeldProps) do
-            local min, max = ent:worldSpaceAABB()
+    local function checkEnt( ent, ply )
+        if not (isValid(ent) and isValid(ply)) then tracked[ent] = nil return end
+        
+        if ent:getCollisionGroup() == COLLISION_GROUP.WORLD then return end
+        if not ply:keyDown(1) then return end
+        if proppushAlertCooldown[ply] then return end
+        if ply:getActiveWeapon() ~= ply:getWeapon("weapon_physgun") then return end
+        if ent:getClass() == "prop_ragdoll" then return end
+        --pickupper chip (TODO: better way of patching)
+        if ent:getModel() == "models/hunter/misc/shell2x2.mdl" then return end
+        
+        local aabb_min, aabb_max = ent:worldSpaceAABB()
+        local vel = ent:getVelocity() * timer.frametime()
+        
+        local pushing = find.inBox( aabb_min + vel, aabb_max + vel, function( e )
+            if not isValid( e ) then return end
+            if e == ent or e == ply then return end
             
+            local owner = e:getOwner()
+            if owner == ply then return end
             
+            if e:isPlayer() then
+                if e:isNoclipped() then return end
+            else
+                if not isValid( e:getPhysicsObject() ) then return end
+                if not isValid( owner ) then return end
+                if e:isFrozen() then return end
+            end
+        end)
+        
+        
+        if pushing > 0 then
+            ChatLog("Detected ", getColor(ply), getName(ply), Color(255,255,255), " prop pushing!")
+            logOffender( ply , true )
+            proppushAlertCooldown[ply] = true
+            
+            timer.simple(10, function()
+                proppushAlertCooldown[ply] = nil
+            end)
+        end
+    end
+    
+    timer.create( "SFMA_proppushDetection", 0.25, 0, function()
+        if table.isEmpty(tracked) then return end
+        
+        for ent, ply in pairs(tracked) do
+            pcall(function() checkEnt( ent, ply ) end)-- gmod continue :vomit:
         end
     end)
-    ]]
     
+    hook.add( "PhysgunPickup", "SFMA_propPickup", function( ply, ent )
+        if not isValid( ent ) then return end
+        if tracked[ent] and tracked[ent] ~= ply then return end
+        if isTrusted( ply ) then return end
+        
+        tracked[ent] = ply
+    end)
     
-    
+    hook.add( "PhysgunDrop", "SFMA_propDrop", function( ply, ent )
+        if not isValid( ent ) then return end
+        if tracked[ent] ~= ply then return end
+        
+        tracked[ent] = nil
+    end)
     
 end
 
@@ -204,34 +247,29 @@ end
 
 if CLIENT then
     
+    
     if player() == owner() then
         
         net.receive("SFMA_logOffender", function()
             net.readEntity(logOffender)
             
             if net.readBool() then
-                player():emitSound("npc/overwatch/radiovoice/on1.wav")
+                player():emitSound("npc/metropolice/vo/on1.wav")
             end
         end)
         
-        
-        hook.add("inputPressed", "quickFSpec", function( key )
-            if key ~= 35 then return end
+        hook.add("inputPressed", "SFMA_quickSpectate", function( key )
+            if input.getKeyName(key) ~= "y" then return end
             
             if not lastOffender then
                 return ChatLog("There is no recent offender to spectate!")
             end
             
-            
             ChatLog("Spectating ", getColor(lastOffender), getName(lastOffender), Color(255,255,255), ".")
             concmd("fspectate \"" .. lastOffender:getSteamID() .. "\"")
         end)
-        
     end
     
-    
 end
-
-
 
 
