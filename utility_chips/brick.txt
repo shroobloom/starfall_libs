@@ -18,7 +18,7 @@ Brick.MASS = 384
 Brick.SPEED = 4000
 Brick.ANGULAR_SPEED = 80
 Brick.StuffedWithRocks = true
-
+Brick.KO_TIME = 3
 
 
 
@@ -38,7 +38,6 @@ CommandLib:registerCommand({
     },
     Run = function( user, property, value )
         if property == "ragdoll" then
-            
             value = CommandLib:cast( value, "bool" )
         else
             value = CommandLib:cast( value, "number" )
@@ -52,6 +51,8 @@ CommandLib:registerCommand({
             Brick.ANGULAR_SPEED = value
         elseif property == "ragdoll" then
             Brick.StuffedWithRocks = value
+        elseif property == "ko" then
+            Brick.KO_TIME = value
         end
         
         CommandLib.log( Color(120,255,120), "Set brick " .. property .. " to " .. tostring(value) .. "!" )
@@ -62,7 +63,7 @@ CommandLib:registerCommand({
 
 
 
-local function stylize( Model )
+function Brick.stylize( Model )
     Model:setMaterial("sprops/sprops_plastic")
     Model:setColor( Color(220, 40, 30) )
 end
@@ -72,37 +73,42 @@ function Brick:createModel()
     
     local BP, BA = self:localToWorld( Vector( 4, -3, 0 ), Angle() )
     
-    local Brick = hologram.create( BP, BA, "models/props_junk/CinderBlock01a.mdl", Vector( 0.5, 0.5, 0.5 ) )
-    stylize( Brick )
-    self:addPart( Brick )
+    local Holo = hologram.create( BP, BA, "models/props_junk/CinderBlock01a.mdl", Vector( 0.5, 0.5, 0.5 ) )
+    Brick.stylize( Holo )
+    self:addPart( Holo )
     
 end
 
 
 
-function Brick:onAnimationEvent( event, data )
-    if event ~= 0 then return end
-    if not prop.canSpawn() then return end
+function Brick.makeProj( shooter, pos, ang, dir, spherical )
+    local Hull = prop.create( pos, ang, spherical and "models/sprops/geometry/sphere_30.mdl" or "models/props_junk/CinderBlock01a.mdl", false )
+    Brick.stylize( Hull )
     
-    local BrickProj = prop.create( self.Parts[1]:getPos(), self.Parts[1]:getAngles(), "models/props_junk/CinderBlock01a.mdl", false )
-    stylize( BrickProj )
-    
-    BrickProj:enableDrag( false )
-    BrickProj:setMass( Brick.MASS )
-    BrickProj:applyForceCenter( self.Owner:getEyeAngles():getForward()*BrickProj:getMass()*Brick.SPEED )
-    BrickProj:applyAngForce( Angle(math.random()-0.5, math.random()-0.5, math.random()-0.5)*BrickProj:getMass()*Brick.ANGULAR_SPEED )
-    
-    BrickProj:addCollisionListener(function( hit )
-        if not isValid(hit.HitEntity) or not hit.HitEntity:isPlayer() or hit.HitEntity.Bricked then return end
-        if BrickProj:getVelocity():getLengthSqr() < 100*100 then return end
+    if spherical then
+        local Holo = hologram.create( pos, ang, "models/props_junk/CinderBlock01a.mdl", Vector( 1, 1, 1 ) )
+        Brick.stylize( Holo )
+        Holo:setParent(Hull)
         
-        BrickProj:emitSound("physics/concrete/concrete_break3.wav")
+        Hull:setColor(Color(255,255,255,0))
+    end
+    
+    Hull:enableDrag( false )
+    Hull:setMass( Brick.MASS )
+    --Hull:applyForceCenter( shooter:getEyeAngles():getForward()*Hull:getMass()*Brick.SPEED )
+    --Hull:applyAngForce( Angle(math.random()-0.5, math.random()-0.5, math.random()-0.5)*Hull:getMass()*Brick.ANGULAR_SPEED )
+    
+    Hull:addCollisionListener(function( hit )
+        if not isValid(hit.HitEntity) or not hit.HitEntity:isPlayer() or hit.HitEntity.Bricked or hit.HitEntity == owner() then return end
+        if Hull:getVelocity():getLengthSqr() < 100*100 then return end
+        
+        Hull:emitSound("physics/concrete/concrete_break3.wav")
         
         if Brick.StuffedWithRocks then
             concmd("ulx ragdoll \"$" .. hit.HitEntity:getSteamID() .. "\"")
             hit.HitEntity.Bricked = true
             
-            timer.simple(3, function()
+            timer.simple(Brick.KO_TIME, function()
                 if not isValid(hit.HitEntity) then return end
                 
                 concmd("ulx unragdoll \"$" .. hit.HitEntity:getSteamID() .. "\"")
@@ -111,19 +117,42 @@ function Brick:onAnimationEvent( event, data )
         end
     end)
     
+    Hull:applyForceCenter( dir*Hull:getMass()*Brick.SPEED )
+    Hull:applyAngForce( Angle(math.random()-0.5, math.random()-0.5, math.random()-0.5)*Hull:getMass()*Brick.ANGULAR_SPEED )
+    
+    return Hull
+    
+end
+
+
+function Brick:onAnimationEvent( event, data )
+    if event ~= 0 then return end
+    if not prop.canSpawn() then return end
+    
+    local BrickProj = Brick.makeProj( self.Owner, self.Parts[1]:getPos(), self.Parts[1]:getAngles(), self.Owner:getEyeAngles():getForward(), false )
+    
     self.Parts[1]:setNoDraw( true )
     
     timer.simple(0.35, function()
         if not isValid(self.Parts[1]) then return end
-        
         self.Parts[1]:setNoDraw( false )
     end)
     
     timer.simple(5, function()
+        if not BrickProj:isValid() then return end
         BrickProj:remove()
     end)
+    
 end
 
 
 
+
+
+
 Brick:new( owner() )
+
+
+
+return Brick
+
