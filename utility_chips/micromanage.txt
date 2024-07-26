@@ -89,123 +89,6 @@ end
 
 
 Micromanage.Options = {}
---[[
-    {
-        Name = "Copy SteamID",
-        Icon = "icon16/vcard_edit.png",
-        Use = function( self, plr )
-            setClipboardText( plr:getSteamID() )
-        end
-    },
-    {
-        Name = "Spectate",
-        Icon = "icon16/eye.png",
-        Commands = {
-            "fspectate"
-        }
-    },
-    {
-        Name = "Freeze",
-        Icon = "icon16/wand.png",
-        Draw = function( self, plr, buttonX, buttonY )
-            Micromanage.drawOption( self.Icon, plr:isFrozen() and "Unfreeze" or "Freeze", false, buttonX, buttonY )
-        end,
-        Use = function( self, plr )
-            if not plr:isFrozen() then
-                Micromanage.useCommandOn( "ulx freeze", plr )
-                Micromanage.useCommandOn( "ulx freezeprops", plr )
-            else
-                Micromanage.useCommandOn( "ulx unfreeze", plr )
-            end
-        end
-    },
-    {
-        Name = "Cleanup",
-        Icon = "icon16/cut_red.png",
-        Initialize = function( self, plr )
-            plr.EntCountCache = #find.all(function(e)
-                return e:getOwner() == plr
-            end)
-        end,
-        Draw = function( self, plr, buttonX, buttonY )
-            Micromanage.defaultDraw( self, plr, buttonX, buttonY )
-            
-            render.setColor( scaleColor(plr.EntCountCache or 0, 100) )
-            render.drawSimpleText( buttonX + 200 - PADDING, buttonY + 14, plr.EntCountCache or "", 2, 1 )
-        end,
-        Commands = {
-            "ulx cleanup"
-        }
-    },
-    {
-        Name = "Goto",
-        Icon = "icon16/user_go.png",
-        Commands = {
-            "ulx goto"
-        }
-    },
-    {
-        Name = "Sit",
-        Icon = "icon16/report_link.png",
-        Draw = function( self, plr, buttonX, buttonY )
-            Micromanage.drawOption( self.Icon, Micromanage.isInJail(plr) and "Return" or "Sit", false, buttonX, buttonY )
-        end,
-        Use = function( self, plr )
-            if not isInJail(plr) then
-                useCommandOn( "ulx bring", plr )
-                useCommandOn( "ulx jail", plr )
-                useCommandOn( "ulx freezeprops", plr )
-            else
-                useCommandOn( "ulx unjail", plr )
-                useCommandOn( "ulx return", plr )
-            end
-        end
-    },
-    {
-        Name = "Send to Brazil",
-        Icon = "flags16/br.png",
-        Commands = {
-            "ulx brazil"
-        }
-    },
-    {
-        Name = "Curse",
-        Icon = "icon16/pill.png",
-        Commands = {
-            "ulx curse"
-        }
-    },
-    {
-        Name = "Ragdoll",
-        Icon = "icon16/vector.png",
-        Draw = function( self, plr, buttonX, buttonY )
-            Micromanage.drawOption( self.Icon, Micromanage.isRagdolled( plr ) and "Unragdoll" or "Ragdoll", false, buttonX, buttonY )
-        end,
-        Use = function( self, plr )
-            Micromanage.useCommandOn( Micromanage.isRagdolled(plr) and "ulx unragdoll" or "ulx ragdoll", plr )
-        end
-    }
-]]
-
-
-
---[[for i,v in pairs(Micromanage.Options) do
-    v.SelectionLerp = 0
-    
-    if not v.Draw then
-        v.Draw = defaultDraw
-    end
-    
-    if not v.Use then
-        v.Use = useOption
-    end
-    
-    if v.Icon then
-        v.Icon = material.createFromImage(v.Icon, "")
-    end
-end]]
-
-
 
 
 function Micromanage:addOption( Data, Pos )
@@ -319,7 +202,7 @@ Micromanage:addOption({
         Micromanage.drawOption( self.Icon, Micromanage.isInJail(plr) and "Return" or "Sit", false, buttonX, buttonY )
     end,
     Use = function( self, plr )
-        if not isInJail(plr) then
+        if not Micromanage.isInJail(plr) then
             Micromanage.useCommandOn( "ulx bring", plr )
             Micromanage.useCommandOn( "ulx jail", plr )
             Micromanage.useCommandOn( "ulx freezeprops", plr )
