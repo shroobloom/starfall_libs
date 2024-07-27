@@ -6,6 +6,15 @@
 
 local Weapon = class("CustomWeapon")
 Weapon.Info = {}
+Weapon.HideWeapon = true
+
+
+-- TODO LIST
+-- [ ] Animations self:playAnimation( ... )
+--      - If used on the client, calls setAnimation
+--      - If used on the server, tells all clients other than the owner to call setAnimation
+--      - Unsure how to make sure weapons are networked properly, can the creation order be trusted so that variants are synced?
+--          - could maybe just Trust:tm:
 
 
 
@@ -156,11 +165,13 @@ hook.add("PlayerSwitchWeapon", "CustomWeapon_SwitchWeapon", function(ply, oldWep
         local Old = Weapon.Info[ply][oldWep:getClass()]
         
         if Old then
-            pcall(function()
-                oldWep:setNoDraw( false )
-            end)
-            
             local OldInstance = Old.Variants[Old.Variant]
+            if OldInstance.class.HideWeapon then
+                pcall(function()
+                    oldWep:setNoDraw( false )
+                end)
+            end
+            
             OldInstance:unequip()
         end
     end
@@ -170,13 +181,16 @@ hook.add("PlayerSwitchWeapon", "CustomWeapon_SwitchWeapon", function(ply, oldWep
         local New = Weapon.Info[ply][newWep:getClass()]
         
         if New then
-            timer.simple(0, function()
-                pcall(function()
-                    newWep:setNoDraw( true )
-                end)
-            end)
-            
             local NewInstance = New.Variants[New.Variant]
+            
+            if NewInstance.class.HideWeapon then
+                timer.simple(0, function()
+                    pcall(function()
+                        newWep:setNoDraw( true )
+                    end)
+                end)
+            end
+            
             NewInstance:equip()
         end
     end
