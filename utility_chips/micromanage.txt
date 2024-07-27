@@ -2,7 +2,7 @@
 --@author shroobloom
 --@client
 --@owneronly 
---@include libs/util.txt
+--@include sb/util.txt
 
 
 
@@ -15,7 +15,7 @@ end)]]
 local Micromanage = {}
 
 
-local Util = require("libs/util.txt")
+local Util = require("sb/util.txt")
 
 
 Micromanage.Selection = nil

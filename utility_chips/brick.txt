@@ -1,13 +1,13 @@
 --@name Brick
 --@author shroobloom
 --@server
---@include libs/custom_weapon.txt
---@include libs/command.txt
+--@include sb/custom_weapon.txt
+--@include sb/command.txt
 
 
 
-local Weapon = require("libs/custom_weapon.txt")
-local CommandLib = require("libs/command.txt")
+local Weapon = require("sb/custom_weapon.txt")
+local CommandLib = require("sb/command.txt")
 
 
 local Brick = class("Brick", Weapon)

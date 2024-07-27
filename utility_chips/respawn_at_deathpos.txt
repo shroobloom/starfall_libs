@@ -7,11 +7,17 @@
 local DeathPos = nil
 local DeathAng = nil
 
-hook.add("PlayerDeath", "RAD_Death", function( ply )
+hook.add("PlayerDeath", "RAD_Death", function( ply, inflictor, attacker )
     if ply ~= owner() then return end
     
     DeathPos = ply:getPos()
     DeathAng = ply:getEyeAngles()
+    
+    if inflictor:isValid() and inflictor:getClass() == "the_orb" then
+        local dir = (inflictor:getPos() - DeathPos)
+        dir:setZ(0)
+        DeathPos = DeathPos - dir:getNormalized()*200
+    end
 end)
 
 hook.add("PlayerSpawn", "RAD_Spawn", function( ply )

@@ -1,10 +1,10 @@
 --@name BAN HAMMER
 --@author
 --@shared
---@include libs/util.txt
---@include libs/custom_weapon.txt
+--@include sb/util.txt
+--@include sb/custom_weapon.txt
 
-local Util = require("libs/util.txt")
+local Util = require("sb/util.txt")
 
 
 
@@ -21,7 +21,7 @@ local Util = require("libs/util.txt")
 
 if SERVER then
     
-    local CustomWeapon = require("libs/custom_weapon.txt")
+    local CustomWeapon = require("sb/custom_weapon.txt")
     
     local BanHammer = class("BanHammer", CustomWeapon)
     BanHammer.Classes = {}
