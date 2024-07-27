@@ -1,5 +1,5 @@
 --@name SFMA v5
---@author Boxtrot
+--@author Shrooblooms
 --@shared
 
 
