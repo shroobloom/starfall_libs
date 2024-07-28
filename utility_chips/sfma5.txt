@@ -1,7 +1,7 @@
 --@name SFMA v5
 --@author Shrooblooms
 --@shared
-
+--@owneronly
 
 
 
@@ -174,14 +174,16 @@ if SERVER then
     local tracked = {}
     local proppushAlertCooldown = {}
     
-    local function checkEnt( ent, ply )
-        if not (isValid(ent) and isValid(ply)) then tracked[ent] = nil return end
+    local function checkHolding( ply )
+        local ent = tracked[ply]
+        if not (isValid(ent) and isValid(ply)) then tracked[ply] = nil return end
         
         if ent:getCollisionGroup() == COLLISION_GROUP.WORLD then return end
         if not ply:keyDown(1) then return end
         if proppushAlertCooldown[ply] then return end
         if ply:getActiveWeapon() ~= ply:getWeapon("weapon_physgun") then return end
         if ent:getClass() == "prop_ragdoll" then return end
+        
         --pickupper chip (TODO: better way of patching)
         if ent:getModel() == "models/hunter/misc/shell2x2.mdl" then return end
         
@@ -221,24 +223,22 @@ if SERVER then
     timer.create( "SFMA_proppushDetection", 0.25, 0, function()
         if table.isEmpty(tracked) then return end
         
-        for ent, ply in pairs(tracked) do
-            pcall(function() checkEnt( ent, ply ) end)-- gmod continue :vomit:
+        for ply, _ in pairs(tracked) do
+            pcall(function() checkHolding( ply ) end)-- gmod continue :vomit:
         end
     end)
     
     hook.add( "PhysgunPickup", "SFMA_propPickup", function( ply, ent )
-        if not isValid( ent ) then return end
-        if tracked[ent] and tracked[ent] ~= ply then return end
+        if tracked[ply] ~= ent then return end
         if isTrusted( ply ) then return end
         
-        tracked[ent] = ply
+        tracked[ply] = ent
     end)
     
     hook.add( "PhysgunDrop", "SFMA_propDrop", function( ply, ent )
-        if not isValid( ent ) then return end
-        if tracked[ent] ~= ply then return end
+        if tracked[ply] ~= ent then return end
         
-        tracked[ent] = nil
+        tracked[ply] = nil
     end)
     
 end
@@ -249,28 +249,25 @@ end
 
 if CLIENT then
     
+    net.receive("SFMA_logOffender", function()
+        net.readEntity(logOffender)
+        
+        if net.readBool() then
+            --concmd("fspectate \"" .. lastOffender:getSteamID() .. "\"")
+            player():emitSound("npc/metropolice/vo/on1.wav")
+        end
+    end)
     
-    if player() == owner() then
+    hook.add("inputPressed", "SFMA_quickSpectate", function( key )
+        if input.getKeyName(key) ~= "y" then return end
         
-        net.receive("SFMA_logOffender", function()
-            net.readEntity(logOffender)
-            
-            if net.readBool() then
-                player():emitSound("npc/metropolice/vo/on1.wav")
-            end
-        end)
+        if not lastOffender then
+            return ChatLog("There is no recent offender to spectate!")
+        end
         
-        hook.add("inputPressed", "SFMA_quickSpectate", function( key )
-            if input.getKeyName(key) ~= "y" then return end
-            
-            if not lastOffender then
-                return ChatLog("There is no recent offender to spectate!")
-            end
-            
-            ChatLog("Spectating ", getColor(lastOffender), getName(lastOffender), Color(255,255,255), ".")
-            concmd("fspectate \"" .. lastOffender:getSteamID() .. "\"")
-        end)
-    end
+        ChatLog("Spectating ", getColor(lastOffender), getName(lastOffender), Color(255,255,255), ".")
+        concmd("fspectate \"" .. lastOffender:getSteamID() .. "\"")
+    end)
     
 end
 
