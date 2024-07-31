@@ -25,14 +25,15 @@ end
 
 
 local TRUSTED = {
-    [26] = true, --Exalted
-    [30] = true, --Admin
-    [22] = true, --Moderator
-    [23] = true --Sentinel
+    ["Exalted"] = true,
+    ["Admin"] = true,
+    ["Moderator"] = true,
+    ["Sentinel"] = true,
+    ["Director"] = true
 }
 
 function isTrusted( plr )
-    return TRUSTED[plr:getTeam()]
+    return TRUSTED[plr:getTeamName()]
 end
 
 
@@ -199,6 +200,7 @@ if SERVER then
             
             if e:isPlayer() then
                 if e:isNoclipped() then return end
+                if isValid(e:getVehicle()) then return end
             else
                 if not isValid( e:getPhysicsObject() ) then return end
                 if not isValid( owner ) then return end
@@ -208,13 +210,12 @@ if SERVER then
             return true
         end)
         
-        
         if #pushing > 0 then
             ChatLog("Detected ", getColor(ply), getName(ply), Color(255,255,255), " prop pushing!")
             logOffender( ply , true )
             proppushAlertCooldown[ply] = true
             
-            timer.simple(10, function()
+            timer.simple(20, function()
                 proppushAlertCooldown[ply] = nil
             end)
         end
@@ -229,7 +230,6 @@ if SERVER then
     end)
     
     hook.add( "PhysgunPickup", "SFMA_propPickup", function( ply, ent )
-        if tracked[ply] ~= ent then return end
         if isTrusted( ply ) then return end
         
         tracked[ply] = ent
