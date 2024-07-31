@@ -28,6 +28,9 @@ local FONT_HEIGHT = 22
 local SELECT_HITBOX_PADDING = 30
 
 
+local PP_COURSE_E2_NAME = "lib/proppush_course"
+
+
 
 local Fonts = {
     Main = render.createFont("Coolvetica", FONT_HEIGHT, 1200, true)
@@ -89,6 +92,7 @@ end
 
 
 Micromanage.Options = {}
+Micromanage.ChoosableOptions = {}
 
 
 function Micromanage:addOption( Data, Pos )
@@ -107,6 +111,10 @@ function Micromanage:addOption( Data, Pos )
     
     if not Data.Use then
         Data.Use = Micromanage.useOption
+    end
+    
+    if not Data.Predicate then
+        Data.Predicate = function() return true end
     end
     
     if Data.Icon then
@@ -245,6 +253,22 @@ Micromanage:addOption({
 
 
 
+-- Proppush course integration
+Micromanage:addOption({
+    Name = "Proppush Course",
+    Icon = "icon16/computer_go.png",
+    Use = function( self, plr )
+        concmd("say_team .course " .. plr:getName())
+    end,
+    Predicate = function()
+        return #find.byClass("gmod_wire_expression2", function(e)
+            return e:getOwner() == owner() and e:getChipName() == PP_COURSE_E2_NAME
+        end) > 0
+    end
+})
+
+
+
 
 Util.bindPress("MOUSE2", function()
     if not input.isKeyDown( 13 ) then return end --C
@@ -275,15 +299,20 @@ Util.bindPress("MOUSE2", function()
     end
     
     Micromanage.Selection = nil
+    table.empty(Micromanage.ChoosableOptions)
     
     if not bestPlayer then return end
     
     Micromanage.Selection = bestPlayer
     
     for i,v in pairs(Micromanage.Options) do
+        if not v.Predicate() then continue end
+        
         if v.Initialize then
             v:Initialize( bestPlayer )
         end
+        
+        table.insert(Micromanage.ChoosableOptions, v)
     end
     
 end)
@@ -311,7 +340,7 @@ end)
 
 Util.bindPress("MOUSE1", function()
     
-    local Option = Micromanage.Options[SelectedOption]
+    local Option = Micromanage.ChoosableOptions[SelectedOption]
     if not Option then return end
     
     MouseDown = true
@@ -323,7 +352,7 @@ Util.bindRelease("MOUSE1", function()
     if not MouseDown then return end
     MouseDown = false
     
-    local Option = Micromanage.Options[SelectedOption]
+    local Option = Micromanage.ChoosableOptions[SelectedOption]
     if not Option then return end
     
     Option:Use( Micromanage.Selection )
@@ -338,7 +367,7 @@ end)
 enableHud( player(), true )
 
 hook.add("drawhud", "Micromanage_HUD", function()
-    if owner():isInPvp() then return end
+    if owner():isInPvp() and not owner():isNoclipped() then return end
     if not input.isKeyDown( 13 ) then return end --C
     
     render.setFilterMag(2)
@@ -388,7 +417,7 @@ hook.add("drawhud", "Micromanage_HUD", function()
             
             setOptionSelection( localmX > 0 and localmX < 200 and math.ceil(localmY/(FONT_HEIGHT/0.75)) or -1 )
             
-            for i,v in pairs(Micromanage.Options) do
+            for i,v in pairs(Micromanage.ChoosableOptions) do
                 local Goal = (i == SelectedOption) and 1 or 0
                 v.SelectionLerp = math.lerp( 0.4, v.SelectionLerp, Goal )
                 
