@@ -23,6 +23,11 @@ function getName( plr )
     return "<" .. plr:getSteamID() .. "> " .. plr:getName()
 end
 
+local entNotify = {
+    ["gmod_wire_soundemitter"] = true,
+    ["sent_streamradio"] = true,
+    ["quad_prop"] = true
+}
 
 local TRUSTED = {
     ["Exalted"] = true,
@@ -78,7 +83,12 @@ if SERVER then
         end)
         
     end)
-    
+    hook.add("OnEntityCreated", "SFMA_informNewEnt", function( ent )
+        if not isValid(ent) or not isValid(ent:getOwner()) or not ent:getOwner():isPlayer() then return end
+        if entNotify[ent:getClass()] then
+            ConsoleLog(getColor(ent:getOwner()), getName(ent:getOwner()), Color(255,255,255), " spawned ", Color(231,220,117), ent:getClass()) 
+        end
+    end)    
     
     
     --TODO: remove, the simfphys limit is only 1 now
