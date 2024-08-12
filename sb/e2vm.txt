@@ -1,0 +1,61 @@
+--@name E2 Virtual Machine
+--@author shrooblooms
+--@server
+
+
+
+
+local E2VM = class("E2VM")
+E2VM.Instances = {}
+
+
+--[[
+    > gmod_wire_expression2
+        string _name = "Generic"
+        string _original = "print("Hello World!")"
+        table inc_files = {}
+        string Model = "models/beer/wiremod/gate_e2.mdl"
+]]--
+
+
+function E2VM:initialize( Code )
+    
+    self.Instance = prop.createSent(Vector(), Angle(), "gmod_wire_expression2", true, {
+        _original = Code
+    })
+    
+    self.Instance:doNotDuplicate()
+    self.Instance:setMass(50000)
+    self.Instance:setSolid(false)
+    self.Instance:setColor(Color(0,0,0,0))
+    
+    self.UID = #E2VM.Instances + 1
+    E2VM.Instances[self.UID] = self
+    
+end
+
+
+function E2VM:remove()
+    table.remove(E2VM.Instances, self.UID)
+    self.Instance:remove()
+end
+
+
+
+
+function E2VM:fireInput( InputName, Value )
+    local wl = self.Instance:getWirelink()
+    wl[InputName] = Value
+end
+
+
+
+function E2VM:getOutput( OutputName )
+    local wl = self.Instance:getWirelink()
+    return wl[OutputName]
+end
+
+
+
+
+return E2VM
