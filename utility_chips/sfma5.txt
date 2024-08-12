@@ -114,7 +114,7 @@ if SERVER then
         local entClass = ent:getClass()
         
         timer.simple(0.25, function()
-            if ENTS_OF_INTEREST[ent:getClass()] then
+            if ENTS_OF_INTEREST[entClass] then
                 local payload = {Color(231,220,117), entClass}
                 
                 if entClass == "gmod_wire_expression2" or entClass == "starfall_processor" then
