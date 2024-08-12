@@ -1,12 +1,12 @@
 --@name Door Library
 --@author shrooblooms
 --@server
---@include libs/spawner.txt
---@include libs/util.txt
+--@include sb/spawner.txt
+--@include sb/util.txt
 
 
-local Spawner = require("libs/spawner.txt")
-local Util = require("libs/util.txt")
+local Spawner = require("sb/spawner.txt")
+local Util = require("sb/util.txt")
 
 
 
@@ -126,6 +126,16 @@ Door.Locks = {
 
 
 
+local function cloneAsHolo( e )
+    local h = hologram.create( e:getPos(), e:getAngles(), e:getModel() )
+    h:setMaterial( e:getMaterial() )
+    h:setColor( e:getColor() )
+    h:setSkin( e:getSkin() )
+    h:setBodygroup(1, e:getBodygroup(1))
+    h:setRenderMode( e:getRenderMode() )
+    
+    return h
+end
 
 
 function Door:initialize( Prop, Data )
@@ -150,6 +160,7 @@ function Door:initialize( Prop, Data )
     
     self.ActuatorType = Data.ActuatorType or Door.ActuatorType.ANGULAR
     self.ActuatorAxis = Data.ActuatorAxis or Vector(0,1,0)
+    self.ActuatorOffset = Data.ActuatorOffset or Vector(0,0,0)
     self.MaxAngle = Data.MaxAngle or 100
     self.LinearMovement = Data.LinearMovement or 0.9
     
@@ -167,10 +178,10 @@ function Door:initialize( Prop, Data )
     
     Spawner.Enqueue(function()
         
-        local openPos, openAng = self:getOpenOffset()
+        local openPos, openAng = self:getHoloLocation( 1 ) --self:getOpenOffset()
         
         --TODO: maybe disable collisions on this since i keep getting STUCK
-        self.Prop2 = prop.create( self.Prop:getPos() + openPos, self.Prop:getAngles() + openAng, Prop:getModel(), true )
+        self.Prop2 = prop.create( openPos, openAng, Prop:getModel(), true )
         --self.Prop2:setParent( Prop ) --? needs collisions (NO IT DOESNT)
         self.Prop2:setNocollideAll( true )
         self.Prop2:doNotDuplicate()
@@ -184,23 +195,31 @@ function Door:initialize( Prop, Data )
         self.Initialized = true
     end)
     
-    --hologram.cr
-    self.Holo = hologram.create( Prop:getPos(), Prop:getAngles(), Prop:getModel() )
-    self.Holo:setMaterial( Prop:getMaterial() )
-    self.Holo:setSkin( Prop:getSkin() )
-    self.Holo:setBodygroup(1, Prop:getBodygroup(1))
     
+    self.Holo = cloneAsHolo( Prop )
+    
+    for i,v in pairs(Prop:getChildren()) do
+        local copy = cloneAsHolo(v)
+        --v:setColor(Color(0,0,0,0))
+        v:setNoDraw(true)
+        copy:setParent(self.Holo)
+        v:setNocollideAll(true)
+    end
+    
+    --TODO: set for all holos
     if self.Clip and self.ActuatorType ~= Door.ActuatorType.ANGULAR then
         self.Holo:setClip(1, true, self.Holo:obbCenterW() + self.Prop:localToWorldVector(self.Holo:obbSize()*self.ActuatorAxis*0.5), self.Prop:localToWorldVector(-self.ActuatorAxis))
     end
     
     --self.Holo:setParent( Prop )
     
-    Prop:setColor(Color(0,0,0,0))
+    --Prop:setColor(Color(0,0,0,0))
+    Prop:setNoDraw(true)
     
     table.insert(Door.Instances, self)
     
 end
+
 
 
 -- Adds an interaction proxy prop ("button") for this door.
@@ -216,15 +235,34 @@ function Door:addProxy( Proxy, ProxySounds )
 end
 
 
+-- Deprecated, use below method
 function Door:getOpenOffset()
     if self.ActuatorType == Door.ActuatorType.ANGULAR then
-        --TODO: account for custom rotational axes (ActuatorAxis)
-        return Vector(), Angle(0, self.MaxAngle*(self.Flipped and -1 or 1), 0)
+        return Vector(), Vector(), Angle(0, self.MaxAngle*(self.Flipped and -1 or 1), 0)
     elseif self.ActuatorType == Door.ActuatorType.LINEAR then
         local OBBSize = self.Prop:obbSize()
         return self.Prop:localToWorldVector( OBBSize * self.ActuatorAxis ) * (self.Flipped and -1 or 1) * self.LinearMovement, Angle()
     end
 end
+
+
+
+
+function Door:getHoloLocation( t )
+    if self.ActuatorType == Door.ActuatorType.ANGULAR then
+        --TODO: account for flipped?
+        local a = self.Prop:getAngles():rotateAroundAxis( self.Prop:localToWorldVector(self.ActuatorAxis), self.MaxAngle*t )
+        local c1 = localToWorld( self.ActuatorOffset*self.Prop:obbSize(), Angle(), Vector(), a )
+        
+        return self.Prop:localToWorld( -self.ActuatorOffset*self.Prop:obbSize() ) + c1, a
+        
+    elseif self.ActuatorType == Door.ActuatorType.LINEAR then
+        --TODO: fix
+        local OBBSize = self.Prop:obbSize()
+        return self.Prop:localToWorld( OBBSize * self.ActuatorAxis * (self.Flipped and -1 or 1) * self.LinearMovement * t ), self.Prop:getAngles()
+    end
+end
+
 
 
 
@@ -310,7 +348,7 @@ function Door:setOpen( Open, User )
     
     self.Open = Open
     self.Busy = true
-    self.Holo:setAnimation(3)
+    --self.Holo:setAnimation(3)
     
     self:emitSound("Move")
     
@@ -319,6 +357,7 @@ function Door:setOpen( Open, User )
         
         timer.simple(0.1, function()
             self.Prop:setSolid(false)
+            self.Prop:setNocollideAll( true )
         end)
         
         if User and self.AutoClose then
@@ -403,17 +442,21 @@ hook.add("Tick", "Door_Tick", function()
             v.OpenLerp = math.clamp(v.OpenLerp + math.sign(openGoal - v.OpenLerp)/v.OpenTime*timer.frametime(), 0, 1)
             local t = Util.smoothCurve( v.OpenLerp )
             
-            local openPos, openAng = v:getOpenOffset()
+            --local openPos, openAng = v:getOpenOffset()
+            local holoPos, holoAng = v:getHoloLocation( t )
             
             --TODO: would OpenDir even like... work? the hitbox isnt in the right position...
             --v.Holo:setAngles( v.Prop:getAngles() + Angle(0,t*v.MaxAngle*(v.Flipped and -1 or 1)*v.OpenDir,0) )
             
             
-            if v.ActuatorType == Door.ActuatorType.ANGULAR then
+            --[[if v.ActuatorType == Door.ActuatorType.ANGULAR then
                 v.Holo:setAngles( v.Prop:getAngles() + openAng*t*v.OpenDir )
             else
                 v.Holo:setPos( v.Prop:getPos() + openPos*t )
-            end
+            end]]
+            
+            v.Holo:setPos(holoPos)
+            v.Holo:setAngles(holoAng)
             
             if openGoal == v.OpenLerp then
                 v.Busy = false
@@ -423,6 +466,7 @@ hook.add("Tick", "Door_Tick", function()
                 if not v.Open then
                     v:emitSound("Close")
                     v.Prop:setSolid(true)
+                    v.Prop:setNocollideAll(false)
                 else
                     v:emitSound("OpenFinish")
                     v.Prop2:setSolid(true)
@@ -452,6 +496,7 @@ end)
 hook.add("Removed", "Door_RevertOnChipRemoved", function()
     for i,v in pairs(Door.Instances) do
         v.Prop:setSolid(true)
+        v.Prop:setNocollideAll(false)
         v.Prop:setColor(Color(255,255,255,255))
     end
 end)
@@ -472,6 +517,7 @@ hook.add("PlayerUse", "Door_Interact", function( play, e )
     local isProxy = Door.Proxies[e] ~= nil
     
     if d and not d.Busy and d.Initialized then
+        
         if d:isLockedTo( play ) then
             
             if isProxy then
@@ -480,7 +526,7 @@ hook.add("PlayerUse", "Door_Interact", function( play, e )
                 end
             else
                 d:emitSound("Locked")
-                d.Holo:setAnimation(1)
+                --d.Holo:setAnimation(1)
             end
             
             d.Busy = true --ill probably regret this tbh
@@ -499,7 +545,7 @@ hook.add("PlayerUse", "Door_Interact", function( play, e )
             end
         else
             d:emitSound("Interact")
-            d.Holo:setAnimation(1)
+            --d.Holo:setAnimation(1)
         end
         
         
@@ -509,13 +555,14 @@ hook.add("PlayerUse", "Door_Interact", function( play, e )
             local diff = e:getPos() - play:getPos()
             local side = diff:getNormalized():dot( d.Flipped and -e:getForward() or e:getForward() )
             
+            --TODO: why is it setting d.Prop2 angles? shouldnt it stay static and alternate prop1/2 depending on state?
             d.OpenDir = -math.sign(side)
-            d.Prop2:setAngles( d.Prop:getAngles() + Angle(0,d.MaxAngle*(d.Flipped and -1 or 1)*d.OpenDir,0) )
+            --d.Prop2:setAngles( d.Prop:getAngles() + Angle(0,d.MaxAngle*(d.Flipped and -1 or 1)*d.OpenDir,0) )
             
             if d.Brother then
                 local d2 = d.Brother
                 d2.OpenDir = d.OpenDir
-                d2.Prop2:setAngles( d2.Prop:getAngles() + Angle(0,d2.MaxAngle*(d2.Flipped and -1 or 1)*d2.OpenDir,0) )
+                --d2.Prop2:setAngles( d2.Prop:getAngles() + Angle(0,d2.MaxAngle*(d2.Flipped and -1 or 1)*d2.OpenDir,0) )
             end
         end
         
