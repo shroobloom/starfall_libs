@@ -1,0 +1,86 @@
+--@name Shared Table
+--@author shroobloom
+--@shared
+--@include sb/util.txt
+
+
+
+--[[
+    shared_table.lua
+    
+    This library allows you to sync a table between multiple chips.
+    Do not use table.insert with this; it internally uses rawset!
+    (i assume table.remove, removeByValue, etc. are the same)
+    Instead use the :insert method.
+]]--
+
+
+local Util = require("sb/util.txt")
+local SharedTable = class("SharedTable")
+SharedTable.Instances = {}
+SharedTable.DEFAULT_KEYS = {
+    ID = true, Contents = true
+}
+
+
+--TODO: metamethod stored sub-tables to auto-sync deep tables?
+
+function SharedTable:initialize( id )
+    self.ID = id
+    self.Contents = Util.fireRemote("sb_st_requestContents", id) or {}
+    
+    SharedTable.Instances[id] = self
+end
+
+
+function SharedTable:__newindex( key, value )
+    if SharedTable.DEFAULT_KEYS[key] then
+        return rawset(self, key, value)
+    end
+    
+    self.Contents[key] = value
+    
+    print("created ", key, value)
+    Util.fireRemote("sb_st_newindex", self.ID, key, value)
+end
+
+
+function SharedTable:__index( key, value )
+    if SharedTable.DEFAULT_KEYS[key] then
+        return rawget(self, key, value)
+    end
+    
+    return self.Contents[key]
+end
+
+
+function SharedTable:insert( keyOrValue, value )
+    if value == nil then
+        value = keyOrValue
+        keyOrValue = #self.Contents + 1
+    end
+    
+    self[keyOrValue] = value
+end
+
+
+
+Util.bindRemote("sb_st_requestContents", function(id)
+    local t = SharedTable.Instances[id]
+    if not t then return end
+    
+    return t.Contents
+end)
+
+
+Util.bindRemote("sb_st_newindex", function(id, key, value)
+    local t = SharedTable.Instances[id]
+    if not t then return end
+    
+    rawset(t.Contents, key, value)
+end)
+
+
+
+
+return SharedTable
