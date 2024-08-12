@@ -2,6 +2,14 @@
 --@author Shrooblooms
 --@shared
 --@owneronly
+--@include sb/command.txt
+
+
+
+local AutoSpectate = false
+
+
+local Command = require("sb/command.txt")
 
 
 
@@ -23,19 +31,16 @@ function getName( plr )
     return "<" .. plr:getSteamID() .. "> " .. plr:getName()
 end
 
-local entNotify = {
-    ["gmod_wire_soundemitter"] = true,
-    ["sent_streamradio"] = true,
-    ["quad_prop"] = true
-}
+
 
 local TRUSTED = {
-    ["Exalted"] = true,
+    ["Director"] = true,
     ["Admin"] = true,
     ["Moderator"] = true,
     ["Sentinel"] = true,
-    ["Director"] = true
+    ["Exalted"] = true
 }
+
 
 function isTrusted( plr )
     return TRUSTED[plr:getTeamName()]
@@ -63,7 +68,30 @@ function logOffender( plr, ping )
         net.writeBool(ping)
         net.send(owner())
     end
+    
+    if SERVER and AutoSpectate and ping then
+        concmd("fspectate \"" .. plr:getName() .. "\"")
+    end
 end
+
+
+
+
+Command:registerCommand({
+    Name = "autospectate",
+    Description = "Automatically spectates when an offender is logged.",
+    Aliases = {"autospec", "as"},
+    Arguments = {},
+    Run = function( user )
+        if user ~= owner() then return end
+        
+        AutoSpectate = not AutoSpectate
+        ChatLog("AutoSpectate is now ", AutoSpectate and Color(50,255,50) or Color(255,50,50), AutoSpectate and "on" or "off", Color(255,255,255), ".")
+    end
+})
+
+
+
 
 
 
@@ -83,12 +111,22 @@ if SERVER then
         end)
         
     end)
+    
+    
+    local ENTS_OF_INTEREST = {
+        ["gmod_wire_soundemitter"] = true,
+        ["sent_streamradio"] = true,
+        ["quad_prop"] = true
+    }
+    
     hook.add("OnEntityCreated", "SFMA_informNewEnt", function( ent )
         if not isValid(ent) or not isValid(ent:getOwner()) or not ent:getOwner():isPlayer() then return end
-        if entNotify[ent:getClass()] then
+        
+        if ENTS_OF_INTEREST[ent:getClass()] then
             ConsoleLog(getColor(ent:getOwner()), getName(ent:getOwner()), Color(255,255,255), " spawned ", Color(231,220,117), ent:getClass()) 
         end
-    end)    
+    end)
+    
     
     
     --TODO: remove, the simfphys limit is only 1 now
@@ -126,7 +164,9 @@ if SERVER then
     
     local Keywords = {
         "proppush",
-        "propspam"
+        "propspam",
+        "stop",
+        "admin"
     }
     
     hook.add("PlayerSay", "SFMA_detectMention", function( speaker, msg )
@@ -185,6 +225,11 @@ if SERVER then
     local tracked = {}
     local proppushAlertCooldown = {}
     
+    local PP_BLACKLIST = {
+        acf_seat_alias = true,
+        prop_ragdoll = true
+    }
+    
     local function checkHolding( ply )
         local ent = tracked[ply]
         if not (isValid(ent) and isValid(ply)) then tracked[ply] = nil return end
@@ -193,7 +238,6 @@ if SERVER then
         if not ply:keyDown(1) then return end
         if proppushAlertCooldown[ply] then return end
         if ply:getActiveWeapon() ~= ply:getWeapon("weapon_physgun") then return end
-        if ent:getClass() == "prop_ragdoll" then return end
         
         --pickupper chip (TODO: better way of patching)
         if ent:getModel() == "models/hunter/misc/shell2x2.mdl" then return end
@@ -215,6 +259,7 @@ if SERVER then
                 if not isValid( e:getPhysicsObject() ) then return end
                 if not isValid( owner ) then return end
                 if e:isFrozen() then return end
+                if PP_BLACKLIST[e:getClass()] then return end
             end
             
             return true
@@ -224,6 +269,15 @@ if SERVER then
             ChatLog("Detected ", getColor(ply), getName(ply), Color(255,255,255), " prop pushing!")
             logOffender( ply , true )
             proppushAlertCooldown[ply] = true
+            
+            printConsole("wp: ", ply:getActiveWeapon())
+            printConsole("tracked: ", tracked[ply])
+            printConsole("src ent: ", ent)
+            printConsole("src held?: ", ent:isPlayerHolding())
+            printConsole("pped ent: ")
+            for i,v in pairs(pushing) do
+                printConsole(tostring(i) .. ". " .. tostring(v) .. " - ", v:getOwner(), " - " .. (v:getPos():getDistance(ent:getPos()) .. "u"))
+            end
             
             timer.simple(20, function()
                 proppushAlertCooldown[ply] = nil
@@ -241,12 +295,12 @@ if SERVER then
     
     hook.add( "PhysgunPickup", "SFMA_propPickup", function( ply, ent )
         if isTrusted( ply ) then return end
-        
+        if ent:isPlayer() then return end --idfk
         tracked[ply] = ent
     end)
     
     hook.add( "PhysgunDrop", "SFMA_propDrop", function( ply, ent )
-        if tracked[ply] ~= ent then return end
+        --if tracked[ply] ~= ent then return end
         
         tracked[ply] = nil
     end)
