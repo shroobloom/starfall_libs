@@ -98,33 +98,54 @@ Command:registerCommand({
 
 if SERVER then
     
-    hook.add("OnEntityCreated", "SFMA_informNewChip", function( ent )
-        if not isValid(ent) or (ent:getClass() ~= "gmod_wire_expression2" and ent:getClass() ~= "starfall_processor") then return end
-        
-        local chipOwner = ent:getOwner()
-        local isE2 = ent:getClass() == "gmod_wire_expression2"
-        
-        timer.simple(0.25, function()
-            ConsoleLog(getColor(chipOwner), getName(chipOwner),
-                Color(255,255,255), " spawned ", isE2 and Color(255,0,0) or Color(0,144,255), isE2 and "Expression 2" or "Starfall", 
-                Color(255,255,255), " chip named ", Color(255,255,144), ent:isValid() and ent:getChipName() or "[deleted]", Color(255,255,255), ".")
-        end)
-        
-    end)
-    
     
     local ENTS_OF_INTEREST = {
         ["gmod_wire_soundemitter"] = true,
         ["sent_streamradio"] = true,
-        ["quad_prop"] = true
+        ["quad_prop"] = true,
+        ["gmod_wire_expression2"] = true,
+        ["starfall_processor"] = true
     }
     
     hook.add("OnEntityCreated", "SFMA_informNewEnt", function( ent )
-        if not isValid(ent) or not isValid(ent:getOwner()) or not ent:getOwner():isPlayer() then return end
+        if not isValid(ent) or not isValid(ent:getOwner()) then return end
         
-        if ENTS_OF_INTEREST[ent:getClass()] then
-            ConsoleLog(getColor(ent:getOwner()), getName(ent:getOwner()), Color(255,255,255), " spawned ", Color(231,220,117), ent:getClass()) 
-        end
+        local entOwner = ent:getOwner()
+        local entClass = ent:getClass()
+        
+        timer.simple(0.25, function()
+            if ENTS_OF_INTEREST[ent:getClass()] then
+                local payload = {Color(231,220,117), entClass}
+                
+                if entClass == "gmod_wire_expression2" or entClass == "starfall_processor" then
+                    local isE2 = entClass == "gmod_wire_expression2"
+                    
+                    payload = {
+                        isE2 and Color(255,0,0) or Color(0,144,255), isE2 and "Expression 2" or "Starfall", 
+                        Color(255,255,255), " chip named ", Color(255,255,144), ent:isValid() and ent:getChipName() or "[deleted]", Color(255,255,255)
+                    }
+                elseif ent:getClass() == "quad_prop" then
+                    if not isValid(ent) then return end
+                    
+                    local mat = ent:getMaterial()
+                    
+                    payload = {
+                        Color(231,220,117), "QuadProp (" .. math.round(ent:getWidth()) .. "x" .. math.round(ent:getHeight()) .. ")", Color(255,255,255)
+                    }
+                    
+                    if mat ~= "" then
+                        table.insert(payload, " with material ")
+                        table.insert(payload, Color(255,255,144))
+                        table.insert(payload, mat)
+                    end
+                end
+                
+                table.insert(payload, Color(255,255,255))
+                table.insert(payload, ".")
+                
+                ConsoleLog(getColor(ent:getOwner()), getName(ent:getOwner()), Color(255,255,255), " spawned ", unpack(payload))
+            end
+        end)
     end)
     
     
