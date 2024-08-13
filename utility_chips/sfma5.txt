@@ -104,7 +104,8 @@ if SERVER then
         ["sent_streamradio"] = true,
         ["quad_prop"] = true,
         ["gmod_wire_expression2"] = true,
-        ["starfall_processor"] = true
+        ["starfall_processor"] = true,
+        ["gmod_emitter"] = true
     }
     
     hook.add("OnEntityCreated", "SFMA_informNewEnt", function( ent )
@@ -114,6 +115,8 @@ if SERVER then
         local entClass = ent:getClass()
         
         timer.simple(0.25, function()
+            if not isValid(entOwner) then return end
+            
             if ENTS_OF_INTEREST[entClass] then
                 local payload = {Color(231,220,117), entClass}
                 
