@@ -93,10 +93,46 @@ Command:registerCommand({
 
 
 
+local AFKWatch = {}
+
+
+Command:registerCommand({
+    Name = "await",
+    Description = "Waits for someone to get back from being AFK, and notifies you when they do.",
+    Aliases = {"a"},
+    Arguments = {
+        {
+            Name = "Target",
+            Type = "player"
+        }
+    },
+    Run = function( user, Target )
+        if user ~= owner() then return end
+        
+        if SERVER then
+            AFKWatch[Target] = true
+        end
+        
+        ChatLog("Awaiting the return of ", getColor(Target), getName(Target), Color(255,255,255), "...")
+    end
+})
+
+
+
 
 
 
 if SERVER then
+    
+    
+    hook.add("KeyPress", "", function( plr, key )
+        if not AFKWatch[plr] then return end
+        
+        AFKWatch[plr] = nil
+        ChatLog(getColor(plr), getName(plr), Color(255,255,255), " is back!")
+        logOffender( plr, true )
+    end)
+    
     
     
     local ENTS_OF_INTEREST = {

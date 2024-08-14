@@ -25,7 +25,7 @@ end
 
 
 function CommandLib:bindToChat( prefix, onlyFor )
-    if not SERVER and player() ~= onlyFor then return end
+    if not SERVER or player() ~= onlyFor then return end
     
     hook.add("PlayerSay", "CommandLib_bindChat" .. (onlyFor and ("_" .. onlyFor:entIndex()) or ""), function( ply, text )
         if ply ~= onlyFor then return end
@@ -156,6 +156,8 @@ function CommandLib:cast( value, type )
     elseif type == "bool" then
         if TRUTHY[value] then return true end
         if FALSY[value] then return false end
+    elseif type == "player" then
+        return find.playersByName(value)[1]
     end
     
     return casted
