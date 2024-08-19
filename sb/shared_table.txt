@@ -15,19 +15,30 @@
 ]]--
 
 
+
 local Util = require("sb/util.txt")
 local SharedTable = class("SharedTable")
 SharedTable.Instances = {}
 SharedTable.DEFAULT_KEYS = {
-    ID = true, Contents = true
+    ID = true, Contents = true, Networked = true, Crosschip = true
 }
 
 
 --TODO: metamethod stored sub-tables to auto-sync deep tables?
 
-function SharedTable:initialize( id )
+function SharedTable:initialize( id, Networked, Crosschip )
+    
+    -- Modes
+    self.Networked = Networked
+    
+    if Crosschip ~= nil then
+        self.Crosschip = Crosschip
+    else
+        self.Crosschip = true
+    end
+    
     self.ID = id
-    self.Contents = Util.fireRemote("sb_st_requestContents", id) or {}
+    self.Contents = self.Crosschip and Util.fireRemote("sb_st_requestContents", id) or {}
     
     SharedTable.Instances[id] = self
 end
@@ -40,8 +51,17 @@ function SharedTable:__newindex( key, value )
     
     self.Contents[key] = value
     
-    print("created ", key, value)
-    Util.fireRemote("sb_st_newindex", self.ID, key, value)
+    if self.Crosschip then
+        Util.fireRemote("sb_st_newindex", self.ID, key, value)
+    end
+    
+    if self.Networked then
+        net.start("sb_st_newindex")
+        net.writeString(self.ID)
+        net.writeType(key)
+        net.writeType(value)
+        net.send()
+    end
 end
 
 
@@ -67,19 +87,56 @@ end
 
 Util.bindRemote("sb_st_requestContents", function(id)
     local t = SharedTable.Instances[id]
-    if not t then return end
+    if not t or not t.Crosschip then return end
     
     return t.Contents
 end)
 
 
+if SERVER then
+    hook.add("ClientInitialized", "sb_st_sendContents", function( ply )
+        for i,v in pairs(SharedTable.Instances) do
+            if not v.Networked then continue end
+            
+            net.start("sb_st_sendContents")
+            net.writeString( v.ID )
+            net.writeTable( v.Contents )
+            net.send( ply )
+        end
+    end)
+end
+
+
+
 Util.bindRemote("sb_st_newindex", function(id, key, value)
     local t = SharedTable.Instances[id]
-    if not t then return end
+    if not t or not t.Crosschip then return end
     
     rawset(t.Contents, key, value)
 end)
 
+
+
+if CLIENT then
+    net.receive("sb_st_newindex", function()
+        local id = net.readString()
+        local t = SharedTable.Instances[id]
+        if not t or not t.Networked then return end
+        
+        local key = net.readType()
+        local value = net.readType()
+        
+        rawset(t.Contents, key, value)
+    end)
+    
+    net.receive("sb_st_sendContents", function()
+        local id = net.readString()
+        local t = SharedTable.Instances[id]
+        if not t or not t.Networked then return end
+        
+        t.Contents = net.readTable()
+    end)
+end
 
 
 
