@@ -182,7 +182,7 @@ if SERVER then
                 table.insert(payload, Color(255,255,255))
                 table.insert(payload, ".")
                 
-                ConsoleLog(getColor(ent:getOwner()), getName(ent:getOwner()), Color(255,255,255), " spawned ", unpack(payload))
+                ConsoleLog(getColor(entOwner), getName(entOwner), Color(255,255,255), " spawned ", unpack(payload))
             end
         end)
     end)
@@ -363,6 +363,29 @@ if SERVER then
         --if tracked[ply] ~= ent then return end
         
         tracked[ply] = nil
+    end)
+    
+    
+    
+    
+    hook.add("OnPhysgunReload", "SFMA_detectUnfreeze", function( _, ply )
+        if isTrusted(ply) then return end
+        
+        local ent = ply:getEyeTrace().Entity
+        local allEnts = ent:getAllConstrained()
+        
+        for i=#allEnts, 1, -1 do
+            local v = allEnts[i]
+            
+            if v:getParent():isValid() or not v:isFrozen() then
+                table.remove(allEnts, i)
+            end
+        end
+        
+        if #allEnts == 0 then return end
+        
+        ConsoleLog( getColor(ply), getName(ply), Color(255,255,255), " unfroze ", Color(255,255,144), #allEnts, Color(255,255,255), " entities!" )
+        logOffender( ply )
     end)
     
 end
