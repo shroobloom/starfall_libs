@@ -30,6 +30,17 @@ function Util.inputsConnected()
 end
 
 
+-- Applies values from Struct into DataTable
+-- Useful for when a function accepts a data table and you want to enforce defaults.
+function Util.applyDefaults( DataTable, Struct )
+    for i,v in pairs(Struct) do
+        if DataTable[i] == nil then
+            DataTable[i] = v
+        end
+    end
+end
+
+
 -- A quick way to lock controls when someone connects to your HUD
 function Util.lockControlsInHud( State )
     
@@ -101,7 +112,7 @@ end
 function Util.wait( duration )
     local cr = coroutine.running()
     
-    timer.simple(duration, function()
+    timer.simple(duration or 0, function()
         coroutine.resume(cr)
     end)
     
@@ -434,6 +445,42 @@ function Util.formatInt(number)
 end
 
 
+
+
+--[[ TIME FORMATTING ]]--
+
+local times = {
+    {
+        suffix = "y",
+        seconds = 60*60*24*365
+    },
+    {
+        suffix = "mo",
+        seconds = 60*60*24*7*4
+    },
+    {
+        suffix = "w",
+        seconds = 60*60*24*7
+    },
+    {
+        suffix = "d",
+        seconds = 60*60*24
+    },
+    {
+        suffix = "h",
+        seconds = 60*60
+    },
+    {
+        suffix = "m",
+        seconds = 60
+    },
+    {
+        suffix = "s",
+        seconds = 1
+    }
+}
+
+
 -- Formats a time to a digital clock format
 -- > Example: 123 -> "2:03"
 function Util.formatTimeDigital( seconds )
@@ -449,6 +496,36 @@ function Util.formatTimeDigital( seconds )
 end
 
 
+-- Formats a time to a duration format
+-- > Example: 123 -> "2m 3s"
+function Util.formatTime( seconds )
+    
+    local places = {}
+    
+    for i,data in pairs(times) do
+        local count = math.floor( seconds / data.seconds )
+        
+        if count > 0 then
+            seconds = seconds - count*data.seconds
+            places[i] = count
+        end
+    end
+    
+    local out = ""
+    
+    for i,v in pairs(places) do
+        out = tostring(v) .. times[i].suffix .. " " .. out
+    end
+    
+    if out == "" then
+        out = "0s"
+    end
+    
+    return out
+end
+
+
+
 -- Smooths a curve out, similar to a smoothstep function, but uses a sine for some reason
 function Util.smoothCurve( t )
     t = math.clamp(t, 0, 1)
@@ -461,6 +538,7 @@ end
 function Util.bindRemote( RemoteName, Callback )
     hook.add("remote", RemoteName, function( SendingChip, SendingPlayer, Type, ... )
         if SendingPlayer ~= owner() then return end
+        if SendingChip == chip() then return end -- no loopback
         if Type ~= RemoteName then return end
         
         return Callback( ... )
@@ -509,9 +587,14 @@ if CLIENT then
     -- > Example: Util.bindPress( "a", function() print("the left movement key was pressed!" ) end)
     function Util.bindPress( key, callback )
         local id = "Util_bindPress_" .. tostring(callback)
+        local allowed = {}
+        
+        for i,v in pairs(type(key) == "table" and key or {key}) do
+            allowed[v] = true
+        end
         
         hook.add("inputPressed", id, function( button )
-            if input.getKeyName(button) == key then
+            if allowed[input.getKeyName(button)] then
                 callback()
             end
         end)
@@ -522,9 +605,14 @@ if CLIENT then
     -- > TODO: untested
     function Util.bindRelease( key, callback )
         local id = "Util_bindRelease_" .. tostring(callback)
+        local allowed = {}
+        
+        for i,v in pairs(type(key) == "table" and key or {key}) do
+            allowed[v] = true
+        end
         
         hook.add("inputReleased", id, function( button )
-            if input.getKeyName(button) == key then
+            if allowed[input.getKeyName(button)] then
                 callback()
             end
         end)
