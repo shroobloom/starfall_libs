@@ -1,0 +1,145 @@
+--@name Zone Lib
+--@author shrooblooms
+--@shared
+
+
+
+
+
+local Zone = class( "Zone" )
+Zone.Instances = {}
+
+
+function Zone:initialize( Min, Max )
+    
+    local FixedMin = Vector(
+        math.min( Min.x, Max.x ),
+        math.min( Min.y, Max.y ),
+        math.min( Min.z, Max.z )
+    )
+    
+    local FixedMax = Vector(
+        math.max( Min.x, Max.x ),
+        math.max( Min.y, Max.y ),
+        math.max( Min.z, Max.z )
+    )
+    
+    self.Min = FixedMin
+    self.Max = FixedMax
+    self.Inside = {}
+    self.Enabled = true
+    self.Visualized = false
+    
+    self.ID = table.insert(Zone.Instances, self)
+    
+    self:setFilter(function(ply) return true end)
+end
+
+
+function Zone:setFilter( filter )
+    self.Filter = filter
+end
+
+
+function Zone:getPos()
+    return (self.Min + self.Max)/2
+end
+
+function Zone:getSize()
+    return self.Max - self.Min
+end
+
+
+
+function Zone:onPlayerEntered( Player )
+end
+
+function Zone:onPlayerExited( Player )
+end
+
+
+function Zone:setVisualization( State )
+    
+    if self.Visualized == State then return end
+    
+    self.Visualized = State
+    
+    if State then
+        local Holo = holograms.create(self:getPos(), Angle(), "models/hunter/blocks/cube1x1x1.mdl", self:getSize()/47.5)
+        Holo:setMaterial("models/debug/debugwhite")
+        
+        local Holo2 = holograms.create(self:getPos(), Angle(), "models/hunter/blocks/cube1x1x1.mdl", -self:getSize()/47.5)
+        Holo2:setMaterial("models/debug/debugwhite")
+        Holo2:setParent(Holo1)
+        
+        local Col = self.TargetTeam and self.TargetTeam.Color:clone() or Color(255,255,255)
+        Col.a = 100
+        
+        Holo:setColor(Col)
+        Holo2:setColor(Col)
+        
+        self.DebugOuter = Holo
+        self.DebugNoCull = Holo2
+        
+        return Holo, Holo2
+    else
+        self.DebugOuter:remove()
+        self.DebugNoCull:remove()
+    end
+end
+
+
+function Zone:visualize()
+    self:setVisualization( true )
+end
+
+
+function Zone:setPos( Pos )
+    self.Position = Pos
+    
+    if self.Visualized then
+        self.DebugOuter:setPos(Pos)
+        self.DebugNoCull:setPos(Pos)
+    end
+end
+
+
+function Zone:remove()
+    
+    self:setVisualization(false)
+    
+    for i,v in pairs(self.Inside) do
+        self:onPlayerExited( v )
+    end
+    
+    table.remove(Zone.Instances, self.ID)
+end
+
+
+timer.create("Zone_Tick", 0.1, 0, function()
+    for _,self in pairs(Zone.Instances) do
+        if self.Enabled then
+            for _,ply in pairs(find.allPlayers()) do
+                
+                local Pos = ply:obbCenterW()
+                --TODO: maybe dont make being dead disqualify you for being inside a zone, or youll get booted when you die
+                local Inside = self.Filter(ply) and Pos.x > self.Min.x and Pos.y > self.Min.y and Pos.z > self.Min.z and Pos.x < self.Max.x and Pos.y < self.Max.y and Pos.z < self.Max.z
+                local InsideOld = table.keyFromValue(self.Inside, ply)
+                
+                if not InsideOld and Inside then
+                    table.insert(self.Inside, ply)
+                    self:onPlayerEntered(ply)
+                elseif InsideOld and not Inside then
+                    table.remove(self.Inside, InsideOld)
+                    self:onPlayerExited(ply)
+                end
+                
+                if not self.Enabled then break end
+            end
+        end
+    end
+end)
+
+
+
+return Zone
