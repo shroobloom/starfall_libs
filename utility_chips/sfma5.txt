@@ -163,7 +163,7 @@ if SERVER then
                         isE2 and Color(255,0,0) or Color(0,144,255), isE2 and "Expression 2" or "Starfall", 
                         Color(255,255,255), " chip named ", Color(255,255,144), ent:isValid() and ent:getChipName() or "[deleted]", Color(255,255,255)
                     }
-                elseif ent:getClass() == "quad_prop" then
+                elseif entClass == "quad_prop" then
                     if not isValid(ent) then return end
                     
                     local mat = ent:getMaterial()
@@ -377,7 +377,7 @@ if SERVER then
         for i=#allEnts, 1, -1 do
             local v = allEnts[i]
             
-            if v:getParent():isValid() or not v:isFrozen() then
+            if not v:isValidPhys() or v:getParent():isValid() or not v:isFrozen() then
                 table.remove(allEnts, i)
             end
         end
