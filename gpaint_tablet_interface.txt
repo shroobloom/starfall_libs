@@ -1,0 +1,94 @@
+--@name drawing tablet interface
+--@author shroobloom
+--@shared
+--@owneronly
+
+
+local Screen = SERVER and chip():isWeldedTo() or nil
+
+
+
+if SERVER then
+    
+    hook.add("ClientInitialized", "", function(plr)
+        if plr ~= owner() then return end
+        
+        net.start("SetScreen")
+        net.writeEntity(Screen)
+        net.send(plr)
+        
+        owner():setPos( Screen:localToWorld( Vector(0,0,-100) ) - Vector(0,0,owner():obbSize().z*0.8) )
+        if not owner():isNoclipped() then concmd("noclip") end
+        owner():give("none")
+        
+    end)
+    
+end
+
+
+if CLIENT then
+    
+    local PrevWeapon = owner():getActiveWeapon()
+    
+    net.receive("SetScreen", function()
+        net.readEntity(function(e)
+            Screen = e
+            input.selectWeapon(owner():getWeapon("none"))
+            concmd("+right")
+            concmd("+lookup")
+        end)
+    end)
+    
+    
+    local h = hologram.create(Vector(), Angle(), "models/hunter/blocks/cube025x025x025.mdl")
+    local h2 = hologram.create(Vector(), Angle(), "models/hunter/blocks/cube025x025x025.mdl", Vector(0.5,2,0.5))
+    h2:setColor(Color(255,0,0))
+    
+    hook.add("drawhud", "", function()
+        if not isValid(Screen) then return end
+        
+        local ratio = Screen:obbSize().x / Screen:obbSize().y
+        local x, y = input.getCursorPos()
+        local sX, sY = render.getResolution()
+        
+        local xN, yN = x/sX - 0.5, y/sY - 0.5
+        xN = xN * (sX/sY) * ratio
+        local targetPos = Screen:localToWorld(Vector( yN, -xN, -1 ) * Screen:obbSize())
+        
+        local targetAng = (targetPos - player():getEyePos()):getAngle()
+        local _, diff = worldToLocal( Vector(), player():getEyeAngles(), Vector(), targetAng )
+        
+        concmd("cl_yawspeed " .. math.clamp(diff.y, -20, 20) * 8)
+        concmd("cl_pitchspeed " .. math.clamp(diff.p, -20, 20) * 8)
+        
+    end)
+    
+    
+    hook.add("renderscene", "", function()
+        input.enableCursor(false)
+    end)
+    
+    hook.add("postdrawhud", "", function()
+        input.enableCursor(true)
+    end)
+    
+    
+    hook.add("Removed", "", function()
+        concmd("-right")
+        concmd("-lookup")
+        input.selectWeapon(PrevWeapon)
+    end)
+    
+    hook.add("calcview", "", function( pos, ang )
+        if not isValid(Screen) then return end
+        
+        return {
+            origin = Screen:localToWorld( Vector(0,0,-300) ),
+            angles = Screen:getAngles() + Angle(90,0,0),
+            fov = 36
+        }
+    end)
+    
+    
+    enableHud(owner(), true)
+end
