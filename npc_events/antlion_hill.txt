@@ -1,0 +1,95 @@
+--@name Antlion Hill
+--@author shroobloom
+--@server
+--@include sb/npc/main.txt
+--@include sb/spawner.txt
+--@include sb/command.txt
+
+
+
+--TODO: exempt beacons from this (preferably without just setting their ward dist to 0)
+
+--TODO: also maybe add a notification for beacons to the combine event
+
+
+local CommandLib = require("sb/command.txt")
+
+
+local NPC = require("sb/npc/main.txt")
+local Spawner = require("sb/spawner.txt")
+
+
+local ScoutSpawns = {
+    {
+        ID = "Antlion",
+        Weight = 2
+    },
+    {
+        ID = "AntlionSwarmer",
+        Weight = 1
+    }
+}
+
+
+
+
+NPC.BeaconWardDistance = 0
+
+
+
+
+
+
+
+
+table.insert(NPC.Participants, owner())
+--NPC.SpawnCap = 1
+
+
+-- in case the chip dies, dont magically poof all the combine, that would be a wtf moment for the entire server
+--prop.setPropClean(false)
+--TODO: this messes up e2vm on removal
+
+NPC.Debug = true
+NPC.AutoRegisterParticipants = false
+
+
+
+
+
+local Nest = NPC.spawn( chip():getPos(), "AntlionNest" )
+
+
+
+timer.create("spawnAmbush", 5, 0, function()
+    if #NPC.Participants == 0 or not isValid(Nest) then return end
+    
+    local spawner = table.random(NPC.Participants)
+    NPC.attemptSpawns( spawner:getPos(), ScoutSpawns, {200,600}, 3 )
+end)
+
+
+
+
+
+
+
+CommandLib:registerCommand({
+    Name = "limit",
+    Description = "Modifies the spawn limit multiplier.",
+    Arguments = {
+        {
+            Name = "mul",
+            Type = "number"
+        }
+    },
+    Run = function(user, mul)
+        NPC.SpawnCap = 20 * mul
+        print(Color(80,255,40), "Set spawn cap multiplier to " .. mul .. "x! (" .. math.round(NPC.SpawnCap) .. ")")
+    end
+})
+
+
+
+
+
