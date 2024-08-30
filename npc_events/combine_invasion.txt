@@ -1,0 +1,87 @@
+--@name Combine Invasion
+--@author shroobloom
+--@server
+--@include sb/npc/main.txt
+--@include sb/spawner.txt
+--@include sb/command.txt
+
+
+
+
+-- Bugs:
+-- - Combine not spawning indoors and gunships are spawning indoors? wtf? (noticed on boreas, gunship spawned in the missile silo)
+-- - Strider ragdolls and helicopter gibs are not cleaned up
+-- - Striders have trouble moving (they need custom nodes?)
+-- - Gunships/Helicopters do not move (they need custom nodes)
+
+-- Ideas:
+-- - Flamethrower troop (manhack?)
+
+
+local CommandLib = require("sb/command.txt")
+
+
+local NPC = require("sb/npc/main.txt")
+local Spawner = require("sb/spawner.txt")
+
+
+local Spawns = {
+    {
+        ID = "Captain",
+        Weight = 2
+    },
+    {
+        ID = "Elite",
+        Weight = 8
+    },
+    {
+        ID = "Soldier",
+        Weight = 36
+    },
+    {
+        ID = "Strider",
+        Weight = 1
+    },
+    {
+        ID = "HunterChopper",
+        Weight = 1
+    },
+    {
+        ID = "Gunship",
+        Weight = 1
+    },
+    {
+        ID = "Manhack",
+        Weight = 1
+    }
+}
+
+
+
+
+NPC.Debug = true
+
+timer.create("spawn", 1, 0, function()
+    if #NPC.Participants == 0 then return end
+    
+    local spawner = table.random(NPC.Participants)
+    NPC.attemptSpawns( spawner:getPos(), Spawns )
+end)
+
+
+
+
+CommandLib:registerCommand({
+    Name = "limit",
+    Description = "Modifies the spawn limit multiplier.",
+    Arguments = {
+        {
+            Name = "mul",
+            Type = "number"
+        }
+    },
+    Run = function(user, mul)
+        NPC.SpawnCap = 20 * mul
+        print(Color(80,255,40), "Set spawn cap multiplier to " .. mul .. "x! (" .. math.round(NPC.SpawnCap) .. ")")
+    end
+})
