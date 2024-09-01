@@ -4,12 +4,13 @@
 --@include sb/e2vm.txt
 
 
-local E2VM = require("sb/e2vm.txt")
 
-
-
-
-local BullseyeMaker = E2VM:new([[
+if SERVER then
+    
+    local E2VM = require("sb/e2vm.txt")
+    
+    
+    local BullseyeMaker = E2VM:new([[
 @name [VM] Bullseye Maker
 @inputs Pos:vector
 @outputs Bullseye:entity
@@ -20,189 +21,191 @@ propSpawnUndo(0)
 if (Pos) {
     Bullseye = entSpawn( "npc_bullseye", Pos )
 }
-]])
-
-
-
-local function makeBullseye( pos )
-    BullseyeMaker:fireInput("Pos", pos)
-    local bullseye = BullseyeMaker:getOutput("Bullseye")
-    bullseye:setNocollideAll(true)
+    ]])
     
-    return bullseye
-end
-
-
-
-
-
-
-return function( NPC )
     
-    NPC:register("Soldier", {
-        Name = "Combine Soldier",
-        Class = "npc_combine_s",
-        Weapons = {"smg1", "ar2"},
-        Health = 50,
+    
+    local function makeBullseye( pos )
+        BullseyeMaker:fireInput("Pos", pos)
+        local bullseye = BullseyeMaker:getOutput("Bullseye")
+        bullseye:setNocollideAll(true)
         
-        Squad = {
-            {"Soldier", 2, 3}
-        }
-    })
+        return bullseye
+    end
     
-    NPC:register("Elite", {
-        Name = "Combine Elite",
-        Class = "CombineElite",
-        Weapons = {"ar2"},
-        Health = 150,
+    
+    
+    
+    
+    
+    return function( NPC )
         
-        Squad = {
-            {"Soldier", 0, 3},
-            {"Elite", 0, 2}
-        }
-    })
-    
-    NPC:register("Shotgunner", {
-        Name = "Combine Shotgunner",
-        Class = "ShotgunSoldier",
-        Weapons = {"shotgun"},
-        Health = 65,
-        Damage = 3
-    })
-    
-    
-    NPC:register("RoofTurret", {
-        Name = "Combine Roof Turret",
-        Class = "npc_turret_ceiling",
-        Health = 300,
-        Ceiling = true
-    })
-    
-    NPC:register("Strider", {
-        Name = "Combine Strider",
-        Class = "npc_strider",
-        Damage = 1,
-        BoxSize = Vector(150, 150, 550),
-        Offset = Vector(0,0,16),
+        NPC:register("Soldier", {
+            Name = "Combine Soldier",
+            Class = "npc_combine_s",
+            Weapons = {"smg1", "ar2"},
+            Health = 50,
+            
+            Squad = {
+                {"Soldier", 2, 3}
+            }
+        })
         
-        Indoors = false,
+        NPC:register("Elite", {
+            Name = "Combine Elite",
+            Class = "CombineElite",
+            Weapons = {"ar2"},
+            Health = 150,
+            
+            Squad = {
+                {"Soldier", 0, 3},
+                {"Elite", 0, 2}
+            }
+        })
         
-        Abilities = {
-            {
-                Cooldown = 20,
-                Use = function( npc )
-                    local Target = npc:getEnemy()
-                    if not Target then return end
-                    
-                    local Bullseye = makeBullseye( Target:getPos() )
-                    local LastPos = Bullseye:getPos()
-                    
-                    Bullseye:setMappingName("Target" .. Bullseye:entIndex())
-                    npc:fireInput("SetCannonTarget", Bullseye:getMappingName())
-                    
-                    while true do
-                        Util.wait()
+        NPC:register("Shotgunner", {
+            Name = "Combine Shotgunner",
+            Class = "ShotgunSoldier",
+            Weapons = {"shotgun"},
+            Health = 65,
+            Damage = 3
+        })
+        
+        
+        NPC:register("RoofTurret", {
+            Name = "Combine Roof Turret",
+            Class = "npc_turret_ceiling",
+            Health = 300,
+            Ceiling = true
+        })
+        
+        NPC:register("Strider", {
+            Name = "Combine Strider",
+            Class = "npc_strider",
+            Damage = 1,
+            BoxSize = Vector(150, 150, 550),
+            Offset = Vector(0,0,16),
+            
+            Indoors = false,
+            
+            Abilities = {
+                {
+                    Cooldown = 20,
+                    Use = function( npc )
+                        local Target = npc:getEnemy()
+                        if not Target then return end
                         
-                        if not Bullseye:isValid() then
-                            if effect.canCreate() and npc:isValid() then
-                                local hit = trace.line( npc:getEyePos(), LastPos, npc )
+                        local Bullseye = makeBullseye( Target:getPos() )
+                        local LastPos = Bullseye:getPos()
+                        
+                        Bullseye:setMappingName("Target" .. Bullseye:entIndex())
+                        npc:fireInput("SetCannonTarget", Bullseye:getMappingName())
+                        
+                        while true do
+                            Util.wait()
+                            
+                            if not Bullseye:isValid() then
+                                if effect.canCreate() and npc:isValid() then
+                                    local hit = trace.line( npc:getEyePos(), LastPos, npc )
+                                    
+                                    local boom = effect.create()
+                                    boom:setOrigin(hit.HitPos)
+                                    boom:play("lfs_explosion")
+                                end
                                 
-                                local boom = effect.create()
-                                boom:setOrigin(hit.HitPos)
-                                boom:play("lfs_explosion")
+                                break
                             end
                             
-                            break
+                            if not Target:isValid() or not Target:isAlive() then
+                                Bullseye:remove() --interruption
+                            else
+                                Bullseye:setPos( Target:getPos() + Vector( math.sin(timer.curtime()*3.25), math.sin(timer.curtime()*2.425), (math.sin(timer.curtime()*1.06) + 1)*0.5 )*200 )
+                                LastPos = Bullseye:getPos()
+                            end
                         end
                         
-                        if not Target:isValid() or not Target:isAlive() then
-                            Bullseye:remove() --interruption
-                        else
-                            Bullseye:setPos( Target:getPos() + Vector( math.sin(timer.curtime()*3.25), math.sin(timer.curtime()*2.425), (math.sin(timer.curtime()*1.06) + 1)*0.5 )*200 )
-                            LastPos = Bullseye:getPos()
-                        end
                     end
-                    
-                end
+                }
             }
-        }
-    })
-    
-    
-    NPC:register("HunterChopper", {
-        Name = "Hunter Chopper",
-        Class = "npc_helicopter",
-        Damage = 1,
-        BoxSize = Vector(80, 80, 80),
-        Offset = Vector(0,0,192),
+        })
         
-        Indoors = false
-    })
-    
-    
-    NPC:register("Gunship", {
-        Name = "Combine Gunship",
-        Class = "npc_combinegunship",
-        Damage = 1,
-        BoxSize = Vector(80, 80, 80),
-        Offset = Vector(0,0,192),
         
-        Indoors = false
-    })
-    
-    
-    NPC:register("Manhack", {
-        Name = "Manhack",
-        Class = "npc_manhack",
-        Damage = 2,
-        BoxSize = Vector(24, 24, 24),
-        Offset = Vector(0,0,16),
+        NPC:register("HunterChopper", {
+            Name = "Hunter Chopper",
+            Class = "npc_helicopter",
+            Damage = 1,
+            BoxSize = Vector(80, 80, 80),
+            Offset = Vector(0,0,192),
+            
+            Indoors = false
+        })
         
-        Squad = {
-            {"Manhack", 0, 5}
-        }
-    })
-    
-    
-    NPC:register("Captain", {
-        Name = "Combine Captain",
-        Class = "CombineElite",
-        Material = "models/combine_soldier/combinesoldiersheet_shotgun",
-        Weapons = {"ar2"},
-        Health = 600,
-        Damage = 3,
-        Scale = 1.25,
         
-        Squad = {
-            {"Soldier", 2, 3},
-            {"Shotgunner", 0, 2}
-        }
-    })
-    
-    
-    NPC:register("Firefly", {
-        Name = "Firefly Manhack",
-        Class = "npc_manhack",
-        Weapons = {"rpg"},
-        Damage = 1,
-        Proficiency = 4,
-        Scale = 2,
-        BoxSize = Vector(24, 24, 24),
-        Offset = Vector(0,0,16)
-    })
-    
-    
-    NPC:register("Mosquito", {
-        Name = "Mosquito Manhack",
-        Class = "npc_manhack",
-        Weapons = {"ar2"},
-        Damage = 0.25,
-        BoxSize = Vector(24, 24, 24),
-        Offset = Vector(0,0,16),
+        NPC:register("Gunship", {
+            Name = "Combine Gunship",
+            Class = "npc_combinegunship",
+            Damage = 1,
+            BoxSize = Vector(80, 80, 80),
+            Offset = Vector(0,0,192),
+            
+            Indoors = false
+        })
         
-        Squad = {
-            {"Mosquito", 3, 6}
-        }
-    })
-    
+        
+        NPC:register("Manhack", {
+            Name = "Manhack",
+            Class = "npc_manhack",
+            Damage = 2,
+            BoxSize = Vector(24, 24, 24),
+            Offset = Vector(0,0,16),
+            
+            Squad = {
+                {"Manhack", 0, 5}
+            }
+        })
+        
+        
+        NPC:register("Captain", {
+            Name = "Combine Captain",
+            Class = "CombineElite",
+            Material = "models/combine_soldier/combinesoldiersheet_shotgun",
+            Weapons = {"ar2"},
+            Health = 600,
+            Damage = 3,
+            Scale = 1.25,
+            
+            Squad = {
+                {"Soldier", 2, 3},
+                {"Shotgunner", 0, 2}
+            }
+        })
+        
+        
+        NPC:register("Firefly", {
+            Name = "Firefly Manhack",
+            Class = "npc_manhack",
+            Weapons = {"rpg"},
+            Damage = 1,
+            Proficiency = 4,
+            Scale = 2,
+            BoxSize = Vector(24, 24, 24),
+            Offset = Vector(0,0,16)
+        })
+        
+        
+        NPC:register("Mosquito", {
+            Name = "Mosquito Manhack",
+            Class = "npc_manhack",
+            Weapons = {"ar2"},
+            Damage = 0.25,
+            BoxSize = Vector(24, 24, 24),
+            Offset = Vector(0,0,16),
+            
+            Squad = {
+                {"Mosquito", 3, 6}
+            }
+        })
+        
+    end
+
 end

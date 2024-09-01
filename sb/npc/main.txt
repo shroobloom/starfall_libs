@@ -1,596 +1,637 @@
 --@name NPC Utils
 --@author shroobloom
---@server
+--@shared
 --@include sb/spawner.txt
 --@include sb/e2vm.txt
 --@include sb/util.txt
+--@include sb/health_bar.txt
+--@include sb/npc/prop_npc.txt
 --@includedir registry
 
 
 
-
-local Spawner = require("sb/spawner.txt")
-local E2VM = require("sb/e2vm.txt")
-local Util = require("sb/util.txt")
-
-
-local NPC = {}
-
-
-
---[[ CONFIG ]]--
-
--- Base Spawn Cap
--- Example: SpawnCap = 20
--- At 1 participant, the cap will be 20
--- At 2 participants, the cap would be 20*log2(2+1) = 31
--- At 3 participants, the cap would be 40
--- At 7, the cap is 80, and so on.
-NPC.SpawnCap = 20
-
--- Range: How far away NPCs can spawn from the player
-NPC.SpawnDistance = {800, 3000}
-
--- How many seconds of inactivity (not having a target) before NPCs despawn
-NPC.DespawnTime = 60
-
--- Enables certain debug features
-NPC.Debug = false
-
--- How far mobile spawnpoints ("beacons") protect in a radius
-NPC.BeaconWardDistance = 2000
-
--- Self-explanatory
-NPC.DamageMultiplier = 1
-NPC.WeaponProficiency = 3
-
--- Whether or not to automatically register new participants using the builtin timer and NPC.shouldParticipate(plr)
-NPC.AutoRegisterParticipants = true
+dofile "sb/npc/prop_npc.txt"
 
 
 
 
-
-
-
-
-
--- Anything that can prevent spawning
-local Beacons = find.byClass("sent_spawnpoint")
-
-
-hook.add("OnEntityCreated", "RegisterBeacon", function( e )
-    if not isValid(e) or e:getClass() ~= "sent_spawnpoint" then return end
-    table.insert(Beacons, e)
-end)
-
-hook.add("EntityRemoved", "RemoveBeacon", function( e )
-    if e:getClass() ~= "sent_spawnpoint" then return end
-    table.removeByValue(Beacons, e)
-end)
-
-
-
-
-NPC.Participants = {}
-NPC.Instances = {}
-
-
-
-hook.add("PlayerDisconnected", "RemoveParticipant", function(e)
-    table.removeByValue(NPC.Participants, e)
-end)
-
-
-
-
-local Defaults = {
-    BoxSize = Vector(32,32,72),
-    Offset = Vector(),
-    SpawnObscured = true,
-    Create = function( pos, data )
-        return prop.createSent( pos + (data.Offset or Vector(0,0,8)), Angle(0,math.random()*360,0), data.Class, false )
-    end,
-    Spawn = function( npc )
-    end,
-    Death = function( npc )
-    end
-}
-
-
-
-NPC.Types = {}
-
-
-function NPC:register( id, data )
-    data.ID = id
-    Util.applyDefaults( data, Defaults )
+if SERVER then
+    local Spawner = require("sb/spawner.txt")
+    local E2VM = require("sb/e2vm.txt")
+    local Util = require("sb/util.txt")
     
-    NPC.Types[id] = data
-end
-
-
-
-
-
-
-
--- Gets a random NPC ID to spawn.
--- List should be formatted as an array of objects.
-
-function NPC.pickSpawn( WeightedList )
-    local MaxWeight = 0
     
-    for i,v in pairs(WeightedList) do
-        MaxWeight = MaxWeight + v.Weight
-    end
+    local NPC = {}
     
-    local c = math.random() * MaxWeight
     
-    for i,v in pairs(WeightedList) do
-        c = c - v.Weight
+    
+    --[[ CONFIG ]]--
+    
+    -- Base Spawn Cap
+    -- Example: SpawnCap = 20
+    -- At 1 participant, the cap will be 20
+    -- At 2 participants, the cap would be 20*log2(2+1) = 31
+    -- At 3 participants, the cap would be 40
+    -- At 7, the cap is 80, and so on.
+    NPC.SpawnCap = 20
+    
+    -- Range: How far away NPCs can spawn from the player
+    NPC.SpawnDistance = {800, 3000}
+    
+    -- How many seconds of inactivity (not having a target) before NPCs despawn
+    NPC.DespawnTime = 60
+    
+    -- Enables certain debug features
+    NPC.Debug = false
+    
+    -- How far mobile spawnpoints ("beacons") protect in a radius
+    NPC.BeaconWardDistance = 2000
+    
+    -- Self-explanatory
+    NPC.DamageMultiplier = 1
+    NPC.WeaponProficiency = 3
+    
+    -- Whether or not to automatically register new participants using the builtin timer and NPC.shouldParticipate(plr)
+    NPC.AutoRegisterParticipants = true
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    -- Anything that can prevent spawning
+    local Beacons = find.byClass("sent_spawnpoint")
+    
+    
+    hook.add("OnEntityCreated", "RegisterBeacon", function( e )
+        if not isValid(e) or e:getClass() ~= "sent_spawnpoint" then return end
+        table.insert(Beacons, e)
+    end)
+    
+    hook.add("EntityRemoved", "RemoveBeacon", function( e )
+        if e:getClass() ~= "sent_spawnpoint" then return end
+        table.removeByValue(Beacons, e)
+    end)
+    
+    
+    
+    
+    NPC.Participants = {}
+    NPC.Instances = {}
+    
+    
+    
+    hook.add("PlayerDisconnected", "RemoveParticipant", function(e)
+        table.removeByValue(NPC.Participants, e)
+    end)
+    
+    
+    
+    
+    local Defaults = {
+        BoxSize = Vector(32,32,72),
+        Offset = Vector(),
+        SpawnObscured = true,
+        Create = function( pos, data )
+            return prop.createSent( pos + (data.Offset or Vector(0,0,8)), Angle(0,math.random()*360,0), data.Class, false )
+        end,
+        Spawn = function( npc )
+        end,
+        Death = function( npc )
+        end
+    }
+    
+    
+    
+    NPC.Types = {}
+    
+    
+    function NPC:register( id, data )
+        data.ID = id
+        Util.applyDefaults( data, Defaults )
         
-        if c <= 0 then
-            return v.ID
-        end
-    end
-end
-
-
-
-function NPC.getMax()
-    return math.round(NPC.SpawnCap*(math.log( #NPC.Participants, 2 ) + 1))
-end
-
-
-
-function NPC.isSomeoneNearby( origin, radius )
-    local r2 = radius*radius
-    
-    for i,v in pairs( NPC.Participants ) do
-        if v:getPos():getDistanceSqr(origin) < r2 then
-            return true
-        end
+        NPC.Types[id] = data
     end
     
-    return false
-end
-
-
--- Gets a spawn location for the NPC
--- If a boolean is supplied, it will require the indoors value to be that.
--- For example, if you pass true, the NPC MUST spawn indoors. If you pass false, the NPC MUST spawn outdoors. If you pass nil, it'll spawn anywhere
--- There's not a 100% chance it'll succeed tho
-function NPC.pickSpawnLocation( ID, SpawnPos, Spread )
-    
-    local data = NPC.Types[ID]
     
     
-    --local radiusPos = spawner:getPos() + Vector(math.random()-0.5, math.random()-0.5, math.random()*0.25 - 0.125) * r * 2
     
-    --[[ Sphere find ]]--
-    Spread = Spread or NPC.SpawnDistance
     
-    local r = math.random(Spread[1], Spread[2])
-    local lon = math.random()*2*math.pi
-    local lat = (math.random()-0.5)*0.5*math.pi
     
-    local radiusPos = SpawnPos + Vector(math.cos(lon)*math.cos(lat), math.sin(lon)*math.cos(lat), math.sin(lat)*0.5) * r * 2
-    if not radiusPos:isInWorld() then return end
     
-    local zmul = data.Ceiling and -1 or 1
+    -- Gets a random NPC ID to spawn.
+    -- List should be formatted as an array of objects.
     
-    -- Find the ground position
-    -- TODO: dont count water as valid ground somehow
-    local big = data.BoxSize:getLengthSqr() > Defaults.BoxSize:getLengthSqr()*2
-    
-    local ground = big and 
-        trace.hull( 
-            radiusPos, 
-            radiusPos - Vector(0,0,3000*zmul), 
-            -data.BoxSize*Vector(0.5,0.5,0)*(data.Scale or 1), 
-            data.BoxSize*Vector(0.5,0.5,0)*(data.Scale or 1)
-        ) or trace.line( 
-            radiusPos, 
-            radiusPos - Vector(0,0,3000*zmul)
-        )
-    
-    if not ground.Hit or ground.HitNonWorld or ground.HitNoDraw then return --[[print("no ground")]] end
-    
-    -- Make sure noone is too close
-    local nearby = {}
-    
-    for i,v in pairs(NPC.Participants) do
-        local d = v:getPos():getDistanceSqr( ground.HitPos )
+    function NPC.pickSpawn( WeightedList )
+        local MaxWeight = 0
         
-        if d < Spread[1]^2 then
-            return --print("too close")
-        elseif d < (Spread[2]*1.5)^2 then
-            table.insert(nearby, v)
-        end
-    end
-    
-    -- Make sure no beacons are too close
-    for i,v in pairs(Beacons) do
-        if v:getPos():getDistanceSqr( ground.HitPos ) < NPC.BeaconWardDistance^2 then
-            return
-        end
-    end
-    
-    -- Make sure if there's an indoor/outdoor preference, it follows that
-    if data.Indoors ~= nil and not data.Ceiling then
-        local roof = trace.line( ground.HitPos, ground.HitPos + Vector(0,0,2000) )
-        if roof.Hit ~= data.Indoors then return --[[print("its indoors")]] end
-    end
-    
-    -- Make sure nothing is inside the NPC's bounding box
-    if not data.Ceiling then
-        local boundBoxHit = trace.hull( 
-            ground.HitPos + (data.Offset or Vector()) + Vector(0,0,data.BoxSize.z*(data.Scale or 1)), 
-            ground.HitPos + (data.Offset or Vector()) + Vector(0,0,8), 
-            -data.BoxSize*Vector(0.5,0.5,0)*(data.Scale or 1), 
-            data.BoxSize*Vector(0.5,0.5,0)*(data.Scale or 1)
-        )
-        
-        if boundBoxHit.Hit then
-            --[[local h = hologram.create( ground.HitPos + (data.Offset or Vector())/2 + Vector(0,0,data.BoxSize.z*(data.Scale or 1) + 8)/2, Angle(), "models/hunter/blocks/cube1x1x1.mdl" )
-            h:setSize( data.BoxSize*(data.Scale or 1) )
-            h:setMaterial("models/debug/debugwhite")
-            h:suppressEngineLighting(true)
-            h:setColor(Color(255,0,0,144))]]
-            return --print("bounds")
-        end
-    end
-    
-    -- Make sure theres no line of sight to anyone
-    if data.SpawnObscured then
-        for i,v in pairs(nearby) do
-            local losBlock = trace.line( v:getEyePos(), ground.HitPos + (Vector(0,0,data.BoxSize.z * 0.9) + (data.Offset or Vector())), v, MASK.NPCWORLDSTATIC )
-            if not losBlock.Hit then return --[[print("los")]] end
-        end
-    end
-    
-    return ground.HitPos
-    
-end
-
-
-
-
---[[
-table.insert(NPC.Participants, owner())
-local amt = 50
-local success = 0
-
-for i=1, amt do
-    local p = NPC.pickSpawnLocation( "Strider" )
-    
-    if not p then
-        continue
-    end
-    
-    local p = hologram.create(p, Angle(), "models/hunter/blocks/cube05x05x05.mdl", Vector(1,1,1))
-    
-    success = success + 1
-end
-
-
-print("Generated " .. success .. " / " .. amt .. " spawns.")
-]]
-
-
-
-
-function NPC.shouldParticipate( plr )
-    return plr:isInPvp() and not plr:isNoclipped() and not plr:hasGodMode() and plr:isAlive()
-end
-
-
-
-
-
-
-function NPC.spawn( pos, ID, squadLeader )
-    local data = NPC.Types[ID]
-    
-    local ent = data.Create( pos, data )
-    table.insert(NPC.Instances, ent)
-    
-    ent.LastSighted = timer.curtime()
-    ent.IsChipNPC = true
-    ent.ID = ID
-    
-    if ent:isNPC() then
-        if data.Weapons and #data.Weapons > 0 then
-            ent:giveWeapon( table.random(data.Weapons) )
+        for i,v in pairs(WeightedList) do
+            MaxWeight = MaxWeight + v.Weight
         end
         
-        ent:setMaxHealth( data.Health or 50 )
-        ent:setHealth( data.Health or 50 )
+        local c = math.random() * MaxWeight
         
-        ent:setDamageMultiplier( NPC.DamageMultiplier * (data.Damage or 1) )
-        ent:setWeaponProficiency( data.Proficiency or NPC.WeaponProficiency )
-        
-        if data.Scale then
-            timer.simple(0, function()
-                ent:setScale( data.Scale )
-            end)
-        end
-    end
-    
-    
-    if data.Color then
-        ent:setMaterial(data.Color)
-    end
-    
-    if data.Material then
-        ent:setMaterial(data.Material)
-    end
-    
-    
-    if data.Abilities then
-        for i,v in pairs(data.Abilities) do
-            timer.simple(math.random()*v.Cooldown, function()
-                timer.create("Entity" .. ent:entIndex() .. "_Ability" .. i, v.Cooldown, 0, function()
-                    coroutine.wrap(v.Use)( ent )
-                end)
-            end)
-        end
-    end
-    
-    
-    if ent:isNPC() then
-        for i,v in pairs(find.allPlayers()) do
-            local isParticipant = table.hasValue( NPC.Participants, v )
-            ent:addEntityRelationship( v, isParticipant and "hate" or "like", 0 )
-        end
-    end
-    
-    -- Debug ESP
-    
-    if NPC.Debug then
-        local s,e = pcall(function()
-            local mk = hologram.create( ent:getPos(), Angle(), "models/props_c17/canister01a.mdl" )
-            mk:setParent(ent)
-            mk:setColor(Color(0,0,0,0))
-        end)
-    end
-    
-    if data.Spawn then
-        coroutine.wrap(data.Spawn)( ent )
-    end
-    
-    if squadLeader then
-        ent:setGlobalSquad( "sb_squad_" .. tostring(squadLeader:entIndex()) )
-    elseif data.Squad then
-        ent:setGlobalSquad( "sb_squad_" .. tostring(ent:entIndex()) )
-        
-        local queue = {}
-        
-        for i,v in pairs( data.Squad ) do
-            local count = v[3] and math.random(v[2], v[3]) or v[2]
-            local id = v[1]
+        for i,v in pairs(WeightedList) do
+            c = c - v.Weight
             
-            for i=1, count do
-                table.insert(queue, math.random(#queue), id)
+            if c <= 0 then
+                return v.ID
+            end
+        end
+    end
+    
+    
+    
+    function NPC.getMax()
+        return math.round(NPC.SpawnCap*(math.log( #NPC.Participants, 2 ) + 1))
+    end
+    
+    
+    
+    function NPC.isSomeoneNearby( origin, radius )
+        local r2 = radius*radius
+        
+        for i,v in pairs( NPC.Participants ) do
+            if v:getPos():getDistanceSqr(origin) < r2 then
+                return true
             end
         end
         
-        local r = data.BoxSize.x * (data.Scale or 1) * 1.5 * (#queue*0.2 + 1)
+        return false
+    end
+    
+    
+    -- Gets a spawn location for the NPC
+    -- If a boolean is supplied, it will require the indoors value to be that.
+    -- For example, if you pass true, the NPC MUST spawn indoors. If you pass false, the NPC MUST spawn outdoors. If you pass nil, it'll spawn anywhere
+    -- There's not a 100% chance it'll succeed tho
+    function NPC.pickSpawnLocation( ID, SpawnPos, Spread )
         
-        for i,v in pairs(queue) do
-            local a = i/#queue * 2 * math.pi
-            local pos = ent:getPos() + Vector( math.cos(a)*r, math.sin(a)*r, 0 )
+        local data = NPC.Types[ID]
+        
+        
+        --local radiusPos = spawner:getPos() + Vector(math.random()-0.5, math.random()-0.5, math.random()*0.25 - 0.125) * r * 2
+        
+        --[[ Sphere find ]]--
+        Spread = Spread or NPC.SpawnDistance
+        
+        local r = math.random(Spread[1], Spread[2])
+        local lon = math.random()*2*math.pi
+        local lat = (math.random()-0.5)*0.5*math.pi
+        
+        local radiusPos = SpawnPos + Vector(math.cos(lon)*math.cos(lat), math.sin(lon)*math.cos(lat), math.sin(lat)*0.5) * r * 2
+        if not radiusPos:isInWorld() then return end
+        
+        local zmul = data.Ceiling and -1 or 1
+        
+        -- Find the ground position
+        -- TODO: dont count water as valid ground somehow
+        local big = data.BoxSize:getLengthSqr() > Defaults.BoxSize:getLengthSqr()*2
+        
+        local ground = big and 
+            trace.hull( 
+                radiusPos, 
+                radiusPos - Vector(0,0,3000*zmul), 
+                -data.BoxSize*Vector(0.5,0.5,0)*(data.Scale or 1), 
+                data.BoxSize*Vector(0.5,0.5,0)*(data.Scale or 1)
+            ) or trace.line( 
+                radiusPos, 
+                radiusPos - Vector(0,0,3000*zmul)
+            )
+        
+        if not ground.Hit or ground.HitNonWorld or ground.HitNoDraw then return --[[print("no ground")]] end
+        
+        -- Make sure noone is too close
+        local nearby = {}
+        
+        for i,v in pairs(NPC.Participants) do
+            local d = v:getPos():getDistanceSqr( ground.HitPos )
             
-            Spawner.Enqueue(function()
-                if not ent:isValid() then return end
-                
-                local ground = trace.line( pos + Vector(0,0,72), pos - Vector(0,0,72) )
-                if not ground.Hit or ground.HitNonWorld or ground.HitNoDraw then return end
-                
-                NPC.spawn( ground.HitPos + Vector(0,0,8), v, ent )
+            if d < Spread[1]^2 then
+                return --print("too close")
+            elseif d < (Spread[2]*1.5)^2 then
+                table.insert(nearby, v)
+            end
+        end
+        
+        -- Make sure no beacons are too close
+        for i,v in pairs(Beacons) do
+            if v:getPos():getDistanceSqr( ground.HitPos ) < NPC.BeaconWardDistance^2 then
+                return
+            end
+        end
+        
+        -- Make sure if there's an indoor/outdoor preference, it follows that
+        if data.Indoors ~= nil and not data.Ceiling then
+            local roof = trace.line( ground.HitPos, ground.HitPos + Vector(0,0,2000) )
+            if roof.Hit ~= data.Indoors then return --[[print("its indoors")]] end
+        end
+        
+        -- Make sure nothing is inside the NPC's bounding box
+        if not data.Ceiling then
+            local boundBoxHit = trace.hull( 
+                ground.HitPos + (data.Offset or Vector()) + Vector(0,0,data.BoxSize.z*(data.Scale or 1)), 
+                ground.HitPos + (data.Offset or Vector()) + Vector(0,0,8), 
+                -data.BoxSize*Vector(0.5,0.5,0)*(data.Scale or 1), 
+                data.BoxSize*Vector(0.5,0.5,0)*(data.Scale or 1)
+            )
+            
+            if boundBoxHit.Hit then
+                --[[local h = hologram.create( ground.HitPos + (data.Offset or Vector())/2 + Vector(0,0,data.BoxSize.z*(data.Scale or 1) + 8)/2, Angle(), "models/hunter/blocks/cube1x1x1.mdl" )
+                h:setSize( data.BoxSize*(data.Scale or 1) )
+                h:setMaterial("models/debug/debugwhite")
+                h:suppressEngineLighting(true)
+                h:setColor(Color(255,0,0,144))]]
+                return --print("bounds")
+            end
+        end
+        
+        -- Make sure theres no line of sight to anyone
+        if data.SpawnObscured then
+            for i,v in pairs(nearby) do
+                local losBlock = trace.line( v:getEyePos(), ground.HitPos + (Vector(0,0,data.BoxSize.z * 0.9) + (data.Offset or Vector())), v, MASK.NPCWORLDSTATIC )
+                if not losBlock.Hit then return --[[print("los")]] end
+            end
+        end
+        
+        return ground.HitPos
+        
+    end
+    
+    
+    
+    
+    --[[
+    table.insert(NPC.Participants, owner())
+    local amt = 50
+    local success = 0
+    
+    for i=1, amt do
+        local p = NPC.pickSpawnLocation( "Strider" )
+        
+        if not p then
+            continue
+        end
+        
+        local p = hologram.create(p, Angle(), "models/hunter/blocks/cube05x05x05.mdl", Vector(1,1,1))
+        
+        success = success + 1
+    end
+    
+    
+    print("Generated " .. success .. " / " .. amt .. " spawns.")
+    ]]
+    
+    
+    
+    
+    function NPC.shouldParticipate( plr )
+        return plr:isInPvp() and not plr:isNoclipped() and not plr:hasGodMode() and plr:isAlive()
+    end
+    
+    
+    
+    
+    
+    
+    function NPC.spawn( pos, ID, squadLeader )
+        local data = NPC.Types[ID]
+        
+        local ent = data.Create( pos, data )
+        table.insert(NPC.Instances, ent)
+        
+        ent.LastSighted = timer.curtime()
+        ent.IsChipNPC = true
+        ent.ID = ID
+        
+        if ent:isNPC() then
+            if data.Weapons and #data.Weapons > 0 then
+                ent:giveWeapon( table.random(data.Weapons) )
+            end
+            
+            ent:setMaxHealth( data.Health or 50 )
+            ent:setHealth( data.Health or 50 )
+            
+            ent:setDamageMultiplier( NPC.DamageMultiplier * (data.Damage or 1) )
+            ent:setWeaponProficiency( data.Proficiency or NPC.WeaponProficiency )
+            
+            if data.Scale then
+                timer.simple(0, function()
+                    ent:setScale( data.Scale )
+                end)
+            end
+        end
+        
+        
+        if data.Color then
+            ent:setMaterial(data.Color)
+        end
+        
+        if data.Material then
+            ent:setMaterial(data.Material)
+        end
+        
+        if data.Boss then
+            net.start("addBossbar")
+            net.writeEntity(ent)
+            net.writeString(data.Name)
+            net.send()
+        end
+        
+        if data.Abilities then
+            for i,v in pairs(data.Abilities) do
+                timer.simple(math.random()*v.Cooldown, function()
+                    timer.create("Entity" .. ent:entIndex() .. "_Ability" .. i, v.Cooldown, 0, function()
+                        coroutine.wrap(v.Use)( ent )
+                    end)
+                end)
+            end
+        end
+        
+        
+        if ent:isNPC() then
+            for i,v in pairs(find.allPlayers()) do
+                local isParticipant = table.hasValue( NPC.Participants, v )
+                ent:addEntityRelationship( v, isParticipant and "hate" or "like", 0 )
+            end
+        end
+        
+        -- Debug ESP
+        
+        if NPC.Debug then
+            local s,e = pcall(function()
+                local mk = hologram.create( ent:getPos(), Angle(), "models/props_c17/canister01a.mdl" )
+                mk:setParent(ent)
+                mk:setColor(Color(0,0,0,0))
             end)
         end
-    end
-    
-    return ent
-end
-
-
-
--- Announces a message to everyone
-function NPC.announceGlobal( ... )
-    for i,v in pairs(NPC.Debug and {owner()} or find.allPlayers()) do
-        v:chatPrint(Color(255,255,255), ...)
-    end
-end
-
-
--- Announces a message to every participant
-function NPC.announce( ... )
-    for i,v in pairs(NPC.Participants) do
-        v:chatPrint(Color(255,255,255), ...)
-    end
-end
-
-
-
-
-
--- Attempts to spawn NPCs around pos, with a given spawning pool.
--- Optionally, supply a spawning range (number[2]) for the distance, otherwise it'll use NPC.SpawnDistance
--- Optionally, supply a max number of spawns to limit how many NPCs are created
--- Optionally, supply a max number of attempts, default 25
-function NPC.attemptSpawns( pos, spawnPool, spawnRange, maxSpawns, attempts )
-    spawnRange = spawnRange or NPC.SpawnDistance
-    attempts = attempts or 25
-    
-    local spawnsLeft = maxSpawns or math.huge
-    local max = NPC.getMax()
-    local id = NPC.pickSpawn( spawnPool )
-    
-    while attempts > 0 and spawnsLeft > 0 and (#NPC.Instances + #Spawner.Queue) < max do
-        attempts = attempts - 1
         
-        local sp = NPC.pickSpawnLocation( id, pos, spawnRange )
-        
-        if sp then
-            -- reroll id
-            id = NPC.pickSpawn( spawnPool )
-            
-            Spawner.Enqueue(function()
-                local npc = NPC.spawn( sp, id )
-            end)
-            
-            spawnsLeft = spawnsLeft - 1
+        if data.Spawn then
+            coroutine.wrap(data.Spawn)( ent )
         end
+        
+        if squadLeader then
+            ent:setGlobalSquad( "sb_squad_" .. tostring(squadLeader:entIndex()) )
+        elseif data.Squad then
+            ent:setGlobalSquad( "sb_squad_" .. tostring(ent:entIndex()) )
+            
+            local queue = {}
+            
+            for i,v in pairs( data.Squad ) do
+                local count = v[3] and math.random(v[2], v[3]) or v[2]
+                local id = v[1]
+                
+                for i=1, count do
+                    table.insert(queue, math.random(#queue), id)
+                end
+            end
+            
+            local r = data.BoxSize.x * (data.Scale or 1) * 1.5 * (#queue*0.2 + 1)
+            
+            for i,v in pairs(queue) do
+                local a = i/#queue * 2 * math.pi
+                local pos = ent:getPos() + Vector( math.cos(a)*r, math.sin(a)*r, 0 )
+                
+                Spawner.Enqueue(function()
+                    if not ent:isValid() then return end
+                    
+                    local ground = trace.line( pos + Vector(0,0,72), pos - Vector(0,0,72) )
+                    if not ground.Hit or ground.HitNonWorld or ground.HitNoDraw then return end
+                    
+                    NPC.spawn( ground.HitPos + Vector(0,0,8), v, ent )
+                end)
+            end
+        end
+        
+        return ent
     end
-end
-
-
-
-
-
--- Interact with doors
-
-local DoorInteractables = {}
-local DoorLookup = {}
-
-do
-    local WorldEnts = find.all(function(e)
-        return not isValid(e:getOwner())
+    
+    
+    hook.add("ClientInitialized", "setupBossbar", function( plr )
+        for i,v in pairs(NPC.Instances) do
+            local data = NPC.Types[v.ID]
+            
+            if data.Boss then
+                net.start("addBossbar")
+                net.writeEntity(v)
+                net.writeString(data.Name)
+                net.send( plr )
+            end
+        end
     end)
     
-    for i,v in pairs(WorldEnts) do
-        if v:getClass() == "func_button" or v:getClass() == "func_door" then
-            table.insert(DoorInteractables, v)
-            DoorLookup[v] = true
+    
+    -- Announces a message to everyone
+    function NPC.announceGlobal( ... )
+        for i,v in pairs(NPC.Debug and {owner()} or find.allPlayers()) do
+            v:chatPrint(Color(255,255,255), ...)
         end
     end
-end
-
-
-
-timer.create("Interact", 3, 0, function()
-    if #NPC.Instances == 0 then return end
     
-    local interacted = {}
     
-    for i=1, math.ceil(#NPC.Instances*0.6) do
-        local v = table.random(NPC.Instances)
-        if not v:isNPC() or not v:getEnemy() then continue end
+    -- Announces a message to every participant
+    function NPC.announce( ... )
+        for i,v in pairs(NPC.Participants) do
+            v:chatPrint(Color(255,255,255), ...)
+        end
+    end
+    
+    
+    
+    
+    
+    -- Attempts to spawn NPCs around pos, with a given spawning pool.
+    -- Optionally, supply a spawning range (number[2]) for the distance, otherwise it'll use NPC.SpawnDistance
+    -- Optionally, supply a max number of spawns to limit how many NPCs are created
+    -- Optionally, supply a max number of attempts, default 25
+    function NPC.attemptSpawns( pos, spawnPool, spawnRange, maxSpawns, attempts )
+        spawnRange = spawnRange or NPC.SpawnDistance
+        attempts = attempts or 25
         
-        local interactables = find.inSphere( v:getEyePos(), 200, function(e)
-            return DoorLookup[e]
+        local spawnsLeft = maxSpawns or math.huge
+        local max = NPC.getMax()
+        local id = NPC.pickSpawn( spawnPool )
+        
+        while attempts > 0 and spawnsLeft > 0 and (#NPC.Instances + #Spawner.Queue) < max do
+            attempts = attempts - 1
+            
+            local sp = NPC.pickSpawnLocation( id, pos, spawnRange )
+            
+            if sp then
+                -- reroll id
+                id = NPC.pickSpawn( spawnPool )
+                
+                Spawner.Enqueue(function()
+                    local npc = NPC.spawn( sp, id )
+                end)
+                
+                spawnsLeft = spawnsLeft - 1
+            end
+        end
+    end
+    
+    
+    
+    
+    -- Interact with doors
+    
+    local DoorInteractables = {}
+    local DoorLookup = {}
+    
+    do
+        local WorldEnts = find.all(function(e)
+            return not isValid(e:getOwner())
         end)
         
-        for i,v in pairs(interactables) do
-            if interacted[v] then continue end
-            
-            interacted[v] = true
-            v:use()
+        for i,v in pairs(WorldEnts) do
+            if v:getClass() == "func_button" or v:getClass() == "func_door" then
+                table.insert(DoorInteractables, v)
+                DoorLookup[v] = true
+            end
         end
     end
-end)
-
-
-timer.create("Despawn", 1, 0, function()
-    for i,v in pairs(NPC.Instances) do
-        if not v:isNPC() then continue end
+    
+    
+    
+    timer.create("Interact", 3, 0, function()
+        if #NPC.Instances == 0 then return end
         
-        if v:getEnemy() then
-            v.LastSighted = timer.curtime()
-        elseif timer.curtime() - v.LastSighted > NPC.DespawnTime then
-            v:remove()
-        end
-    end
-end)
-
-
--- idk why these dont get cleaned up automatically
-hook.add("EntityTakeDamage", "CeilingTurretCleanup", function( victim, attacker, inflictor, amount )
-    if not victim:isNPC() then return end
-    if not victim.IsChipNPC then return end
-    
-    if victim:getHealth() - amount <= 0 then
-        if victim:getClass() == "npc_turret_ceiling" then
-            timer.simple(1, function()
-                if not isValid(victim) then return end
-                
-                victim:remove()
+        local interacted = {}
+        
+        for i=1, math.ceil(#NPC.Instances*0.6) do
+            local v = table.random(NPC.Instances)
+            if not v:isNPC() or not v:getEnemy() then continue end
+            
+            local interactables = find.inSphere( v:getEyePos(), 200, function(e)
+                return DoorLookup[e]
             end)
+            
+            for i,v in pairs(interactables) do
+                if interacted[v] then continue end
+                
+                interacted[v] = true
+                v:use()
+            end
+        end
+    end)
+    
+    
+    timer.create("Despawn", 1, 0, function()
+        for i,v in pairs(NPC.Instances) do
+            if not v:isNPC() then continue end
+            
+            if v:getEnemy() then
+                v.LastSighted = timer.curtime()
+            elseif timer.curtime() - v.LastSighted > NPC.DespawnTime then
+                v:remove()
+            end
+        end
+    end)
+    
+    
+    -- idk why these dont get cleaned up automatically
+    hook.add("EntityTakeDamage", "CeilingTurretCleanup", function( victim, attacker, inflictor, amount )
+        if not victim:isNPC() then return end
+        if not victim.IsChipNPC then return end
+        
+        if victim:getHealth() - amount <= 0 then
+            if victim:getClass() == "npc_turret_ceiling" then
+                timer.simple(1, function()
+                    if not isValid(victim) then return end
+                    
+                    victim:remove()
+                end)
+            end
+        end
+    end)
+    
+    
+    
+    
+    
+    hook.add("EntityRemoved", "deleteCombine", function(e)
+        if not e.IsChipNPC then return end
+        
+        table.removeByValue(NPC.Instances, e)
+        
+        local data = NPC.Types[e.ID]
+        
+        if data.Abilities then
+            for i,v in pairs(data.Abilities) do
+                timer.stop("Entity" .. e:entIndex() .. "_Ability" .. i)
+            end
+        end
+        
+        coroutine.wrap(data.Death)( e )
+    end)
+    
+    
+    
+    
+    
+    --[[ Relationship manager ]]--
+    
+    function updatePlayingStatus(plr)
+        if not NPC.AutoRegisterParticipants then return end
+        
+        local playing = NPC.shouldParticipate( plr )
+        local wasPlaying = table.hasValue( NPC.Participants, plr )
+        if playing == wasPlaying then return end
+        
+        if playing then
+            table.insert(NPC.Participants, plr)
+        else
+            table.removeByValue(NPC.Participants, plr)
+        end
+        
+        for i,v in pairs(NPC.Instances) do
+            if v:isNPC() then
+                v:addEntityRelationship( plr, playing and "hate" or "like", 0 )
+            end
         end
     end
-end)
-
-
-
-
-
-hook.add("EntityRemoved", "deleteCombine", function(e)
-    if not e.IsChipNPC then return end
     
-    table.removeByValue(NPC.Instances, e)
     
-    local data = NPC.Types[e.ID]
     
-    if data.Abilities then
-        for i,v in pairs(data.Abilities) do
-            timer.stop("Entity" .. e:entIndex() .. "_Ability" .. i)
+    
+    timer.create("UpdateParticipants", 0.5, 0, function()
+        for i,v in pairs(find.allPlayers()) do
+            updatePlayingStatus(v)
         end
+    end)
+    
+    
+    hook.add("PlayerEnterPvp", "", updatePlayingStatus)
+    hook.add("PlayerExitPvp", "", updatePlayingStatus)
+    
+    
+    for i,run in pairs(requiredir("registry")) do
+        run( NPC )
     end
     
-    coroutine.wrap(data.Death)( e )
-end)
-
-
-
-
-
---[[ Relationship manager ]]--
-
-function updatePlayingStatus(plr)
-    if not NPC.AutoRegisterParticipants then return end
     
-    local playing = NPC.shouldParticipate( plr )
-    local wasPlaying = table.hasValue( NPC.Participants, plr )
-    if playing == wasPlaying then return end
+    return NPC
     
-    if playing then
-        table.insert(NPC.Participants, plr)
-    else
-        table.removeByValue(NPC.Participants, plr)
-    end
-    
-    for i,v in pairs(NPC.Instances) do
-        if v:isNPC() then
-            v:addEntityRelationship( plr, playing and "hate" or "like", 0 )
-        end
-    end
 end
 
 
 
 
-timer.create("UpdateParticipants", 0.5, 0, function()
-    for i,v in pairs(find.allPlayers()) do
-        updatePlayingStatus(v)
-    end
-end)
-
-
-hook.add("PlayerEnterPvp", "", updatePlayingStatus)
-hook.add("PlayerExitPvp", "", updatePlayingStatus)
-
-
-
-
-for i,run in pairs(requiredir("registry")) do
-    run( NPC )
+if CLIENT then
+    
+    local HealthBar = require("sb/health_bar.txt")
+    
+    net.receive("addBossbar", function()
+        net.readEntity(function(e)
+            local bar = HealthBar:new( e, net.readString() )
+            bar:setOffset( Vector(0,0,e:obbSize().z)*0.6 )
+            bar:setParent(e)
+            bar:setRotationMode( HealthBar.RotationMode.HYBRID )
+            bar:setScale( e:obbSize():getLength() * 0.02 )
+        end)
+    end)
+    
 end
-
-
-
-
-
-return NPC
