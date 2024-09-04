@@ -2,12 +2,14 @@
 --@author shroobloom
 --@shared
 --@include sb/e2vm.txt
+--@include sb/util.txt
 
 
 
 if SERVER then
     
     local E2VM = require("sb/e2vm.txt")
+    local Util = require("sb/util.txt")
     
     
     local BullseyeMaker = E2VM:new([[
