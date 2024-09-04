@@ -38,29 +38,18 @@ if SERVER then
     NPC.BeaconWardDistance = 0
     
     
-    
-    
-    
-    
-    
-    
-    --table.insert(NPC.Participants, owner())
-    --NPC.SpawnCap = 1
-    
-    
-    -- in case the chip dies, dont magically poof all the combine, that would be a wtf moment for the entire server
-    --prop.setPropClean(false)
-    --TODO: this messes up e2vm on removal
-    
-    --NPC.Debug = true
-    --NPC.AutoRegisterParticipants = false
-    
+    --[[ DEBUG BLOCK ]]--
+    --[[NPC.Debug = true
+    NPC.AutoRegisterParticipants = false
+    table.insert(NPC.Participants, owner())]]
     
     
     
     
     local Nest = NPC.spawn( chip():getPos(), "AntlionNest" )
-    
+    chip():setPos(Vector())
+    chip():setMass(50000)
+    chip():setSolid(false)
     
     
     timer.create("spawnAmbush", 5, 0, function()
