@@ -5,7 +5,6 @@
 --@include sb/util.txt
 
 
-
 --[[http.get("https://gmod.pages.dev/realms/cfc/cfc3/players/76561199160675071", function(body)
     print(body)
 end)]]
@@ -120,6 +119,8 @@ function Micromanage:addOption( Data, Pos )
     if Data.Icon then
         Data.Icon = material.createFromImage(Data.Icon, "")
     end
+    
+    return Data
 end
 
 
@@ -231,13 +232,39 @@ Micromanage:addOption({
 })
 
 
-Micromanage:addOption({
-    Name = "Curse",
-    Icon = "icon16/pill.png",
-    Commands = {
-        "ulx curse"
-    }
+
+
+local HELLCURSE = {
+    "Drunk",
+    "Blindness",
+    "NoJump",
+    "Crouch",
+    "WeaponIndecision",
+    "TextScramble",
+    "RandomSounds",
+    "Schizophrenia",
+    "DisableNoclip",
+    "MotionSight",
+    "CantStopWontStop",
+    "Clumsy",
+    "SanFransisco"
+}
+
+local hc = Micromanage:addOption({
+    Name = "Hellcurse",
+    Icon = "icon16/user_red.png",
+    Use = function( self, plr )
+        for i,c in pairs(HELLCURSE) do
+            Micromanage.useCommandOn( "ulx scurse", plr, c )
+        end
+    end
 })
+
+--[[
+timer.simple(2, function()
+    hc.Use( hc, owner() )
+end)]]
+
 
 
 Micromanage:addOption({
