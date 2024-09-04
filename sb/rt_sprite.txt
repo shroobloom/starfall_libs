@@ -1,0 +1,182 @@
+--@name RT Sprite
+--@author shroobloom
+--@client
+--@include sb/util.txt
+
+
+local Util = require("sb/util.txt")
+
+
+local RTSprite = class("RTSprite")
+RTSprite.Instances = {}
+
+RTSprite.ScalingMode = {
+    -- Scales relative to the world (3d sprite appearance, appears smaller as you get farther away)
+    WORLD = 1,
+    
+    -- Scales relative to your screen (2d HUD element appearance, constant size on your screen)
+    SCREEN = 2
+}
+
+
+RTSprite.RotationMode = {
+    -- Always looks at your camera
+    NORMAL = 1,
+    
+    -- Stays upright
+    YAW = 2,
+    
+    -- Average of the two previous ones
+    HYBRID = 3,
+}
+
+
+
+
+function RTSprite:initialize()
+    self.Parent = nil
+    self.Position = Vector()
+    self.Offset = Vector()
+    
+    self.ID = table.insert(RTSprite.Instances, self)
+    
+    render.createRenderTarget(self:getRenderTargetName())
+    
+    self.Material = material.create("VertexLitGeneric")
+    self.Material:setTextureRenderTarget("$basetexture", self:getRenderTargetName())
+    self.Material:setInt("$flags", 2097152 + 32768 )
+    
+    self.Holo = hologram.create( Vector(), Angle(), "models/holograms/plane.mdl" )
+    self.Holo:suppressEngineLighting(true)
+    self.Holo:setColor(Color(255,255,255,254))
+    self:setScale(1)
+    
+    self.Holo:setMaterial("!" .. self.Material:getName())
+    self.Holo:setFilterMag(1)
+    
+    self.ScalingMode = RTSprite.ScalingMode.WORLD
+    self.RotationMode = RTSprite.RotationMode.NORMAL
+end
+
+
+function RTSprite:getRenderTargetName()
+    return "sb_rtsprite_" .. self.ID
+end
+
+
+function RTSprite:setParent( ent )
+    self.Parent = ent
+    self.Holo:setParent(ent)
+end
+
+function RTSprite:getPos()
+    return (isValid(self.Parent) and self.Parent:localToWorld(self.Offset) or self.Offset) + self.Position
+end
+
+function RTSprite:setPos( vec )
+    self.Position = vec
+end
+
+function RTSprite:setOffset( vec )
+    self.Offset = vec
+end
+
+
+function RTSprite:setScale( s )
+    self.Scale = s
+end
+
+
+function RTSprite:setScalingMode( mode )
+    self.ScalingMode = mode
+end
+
+function RTSprite:setRotationMode( mode )
+    self.RotationMode = mode
+end
+
+function RTSprite:update( cb )
+    Util.modifyRenderTarget( self:getRenderTargetName(), function()
+        render.clear( Color(0,0,0,0) )
+        cb()
+    end)
+end
+
+function RTSprite:render()
+end
+
+
+function RTSprite:remove()
+    self.Holo:remove()
+    self.Material:destroy()
+    render.destroyRenderTarget(self:getRenderTargetName())
+    
+    RTSprite.Instances[self.ID] = nil
+end
+
+
+
+hook.add("renderoffscreen", "sb_rtsprite_render", function()
+    for i,self in pairs(RTSprite.Instances) do
+        
+        --[[ ANGLE ]]--
+        local a = (self:getPos() - render.getEyePos()):getAngle()
+        
+        if self.RotationMode == RTSprite.RotationMode.YAW then
+            a:setP(0)
+        elseif self.RotationMode == RTSprite.RotationMode.HYBRID then
+            -- no you cant just divide it by 2, yes i tried
+            a = math.lerpAngle( 0.5, a, Angle(0, a.y, a.r) )
+        end
+        
+        self.Holo:setAngles( a + Angle( 90,0,180 ) )
+        
+        --[[ POSITION ]]--
+        self.Holo:setPos( self:getPos() )
+        
+        --[[ SCALE ]]--
+        local s = Vector()
+        
+        --TODO: screenscaling is a bit delayed
+        if self.ScalingMode == RTSprite.ScalingMode.WORLD then
+            s = self.Scale * 4
+        elseif self.ScalingMode == RTSprite.ScalingMode.SCREEN then
+            local dist = self:getPos():getDistance(render.getEyePos())
+            s = self.Scale * dist * 0.01
+        end
+        
+        if self.Holo:getScale().x ~= s then
+            self.Holo:setScale( Vector(s) )
+        end
+        
+        render.selectRenderTarget( self:getRenderTargetName() )
+        self:render()
+    end
+    
+    render.selectRenderTarget( nil )
+end)
+
+
+-- test
+--[[
+local test = RTSprite:new()
+test:setParent(chip())
+test:setPos(Vector(0,0,50))
+test:setOffset(Vector(0,0,25))
+--test:setScalingMode( RTSprite.ScalingMode.SCREEN )
+test:setRotationMode( RTSprite.RotationMode.HYBRID )
+
+
+test:update(function()
+    
+    render.drawRect(0,0,512,512)
+    render.drawRect(512,512,512,512)
+    
+    render.setColor(Color(0,255,0))
+    render.drawRect(0,512,512,512)
+    
+end)]]
+
+
+return RTSprite
+

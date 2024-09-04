@@ -36,7 +36,7 @@ function PropNPC.setup( ent, name, maxHealth, damageCallback )
         hook.add("EntityTakeDamage", "NPC_DamageDetector_" .. ent:entIndex(), function( victim, attacker, inflictor, amount, dmgType, position )
             if victim ~= ent then return end
             if ent.Invincible then return end
-            
+            if ent.Health <= 0 then return end
             if not isValid(attacker) or not attacker:isPlayer() then return end
             
             
@@ -63,11 +63,11 @@ function PropNPC.setup( ent, name, maxHealth, damageCallback )
             net.send()
         end)
         
-        local hax = false
+        --[[local hax = false
         timer.create("PropNPC_healthExploit", 0, 0, function()
             hax = not hax
             ent:setMass( hax and 50000 or 49000 )
-        end)
+        end)]]
     end
     
     table.insert(PropNPC.Instances, ent)

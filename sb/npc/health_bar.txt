@@ -1,0 +1,101 @@
+--@name Health Bar
+--@author shroobloom
+--@client
+--@include sb/rt_sprite.txt
+
+
+
+local RTSprite = require("sb/rt_sprite.txt")
+
+local HealthBar = class("HealthBar", RTSprite)
+HealthBar.HealthFont = render.createFont("Coolvetica", 48, 700)
+HealthBar.HEIGHT = 64
+
+
+function HealthBar:initialize( Subject, Name )
+    RTSprite.initialize( self )
+    self.Subject = Subject
+    self.Name = Name
+    
+    self.DecayLevel = 0
+    
+    self.LastPercent = 1
+    
+    self.LastDamage = timer.curtime()
+    
+    self:setScale(16)
+end
+
+
+
+
+
+function HealthBar:render()
+    
+    local Health = self.Subject.Health or self.Subject:getHealth()
+    local MaxHealth = self.Subject.MaxHealth or self.Subject:getMaxHealth()
+    if not Health then return end
+    
+    local pc = Health/MaxHealth
+    
+    --if pc == self.DecayLevel then return end
+    
+    if pc ~= self.LastPercent then
+        self.LastDamage = timer.curtime()
+        self.LastPercent = pc
+    end
+    
+    -- this shouldnt happen, but just in case it heals or something
+    if self.DecayLevel < pc then
+        self.DecayLevel = pc
+    end
+    
+    render.clear(Color(0,0,0,0))
+    
+    render.setColor(Color(255,255,255))
+    render.setFont(HealthBar.HealthFont)
+    render.drawSimpleText( 512, 512 - HealthBar.HEIGHT - 32, self.Name:upper(), 1 )
+    
+    render.setColor(Color(20,20,20,128))
+    render.drawRoundedBox( 4, 0, 512 - HealthBar.HEIGHT/2, 1024, HealthBar.HEIGHT)
+    
+    if pc ~= self.DecayLevel or pc == 0 then
+        render.setColor(self.Subject.Invincible and Color(6,139,206) or Color(255,156,3,255))
+        render.drawRoundedBox( 4, 8, 512 - HealthBar.HEIGHT/2 + 8, (1024 - 16) * self.DecayLevel, HealthBar.HEIGHT - 16)
+        
+        local shake = pc == 0 and 1 or math.clamp((self.DecayLevel - pc)*25, 0, 1)
+        
+        self:setPos(Vector(math.random()-0.5, math.random()-0.5, math.random()-0.5) * 12 * shake)
+        
+        if timer.curtime() - self.LastDamage > 0.25 then
+            self.DecayLevel = math.lerp(0.035, self.DecayLevel, pc)
+            
+            if math.abs(self.DecayLevel - pc) < 0.0001 then
+                self.DecayLevel = pc
+            end
+        end
+    end
+    
+    render.setColor(self.Subject.Invincible and Color(64,191,255) or Color(255,0,0,255))
+    render.drawRoundedBox( 4, 8, 512 - HealthBar.HEIGHT/2 + 8, (1024 - 16) * pc, HealthBar.HEIGHT - 16)
+    
+end
+
+
+
+--[[
+chip().Health = 100
+chip().MaxHealth = 100
+
+local test = HealthBar:new( chip(), "Starfall, The Fallen" )
+test:setParent(chip())
+test:setPos(Vector(0,0,50))
+
+
+timer.simple(2, function()
+    chip().Health = 20
+end)]]
+
+
+
+return HealthBar

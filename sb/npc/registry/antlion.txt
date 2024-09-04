@@ -4,7 +4,6 @@
 --@include sb/e2vm.txt
 --@include sb/util.txt
 --@include sb/spawner.txt
---@include sb/health_bar.txt
 --@include sb/npc/prop_npc.txt
 
 
@@ -82,7 +81,7 @@ if (Antlion) {
             Class = "npc_antlionguard",
             BoxSize = Vector(80, 80, 100),
             
-            Health = 500,
+            Health = 350,
             
             SpawnObscured = false,
             Spawn = antlionUnburrow,

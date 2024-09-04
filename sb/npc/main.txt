@@ -4,7 +4,7 @@
 --@include sb/spawner.txt
 --@include sb/e2vm.txt
 --@include sb/util.txt
---@include sb/health_bar.txt
+--@include sb/npc/health_bar.txt
 --@include sb/npc/prop_npc.txt
 --@includedir registry
 
@@ -622,7 +622,7 @@ end
 
 if CLIENT then
     
-    local HealthBar = require("sb/health_bar.txt")
+    local HealthBar = require("sb/npc/health_bar.txt")
     
     net.receive("addBossbar", function()
         net.readEntity(function(e)
@@ -631,7 +631,15 @@ if CLIENT then
             bar:setParent(e)
             bar:setRotationMode( HealthBar.RotationMode.HYBRID )
             bar:setScale( e:obbSize():getLength() * 0.02 )
+            
+            e.HealthBar = bar
         end)
+    end)
+    
+    -- TODO: band-aid fix
+    hook.add("OnEntityRemoved", "npc_health_bar_removal", function( e )
+        if not e.HealthBar then return end
+        e.HealthBar:remove()
     end)
     
 end
