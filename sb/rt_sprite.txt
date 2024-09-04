@@ -44,7 +44,7 @@ function RTSprite:initialize()
     
     self.Material = material.create("VertexLitGeneric")
     self.Material:setTextureRenderTarget("$basetexture", self:getRenderTargetName())
-    self.Material:setInt("$flags", 2097152 + 32768 )
+    self:setIgnoreZ(false)
     
     self.Holo = hologram.create( Vector(), Angle(), "models/holograms/plane.mdl" )
     self.Holo:suppressEngineLighting(true)
@@ -103,6 +103,10 @@ function RTSprite:update( cb )
 end
 
 function RTSprite:render()
+end
+
+function RTSprite:setIgnoreZ( state )
+    self.Material:setInt("$flags", state and 2097152 + 32768 or 0 )
 end
 
 
@@ -165,6 +169,7 @@ test:setPos(Vector(0,0,50))
 test:setOffset(Vector(0,0,25))
 --test:setScalingMode( RTSprite.ScalingMode.SCREEN )
 test:setRotationMode( RTSprite.RotationMode.HYBRID )
+test:setIgnoreZ( true )
 
 
 test:update(function()
