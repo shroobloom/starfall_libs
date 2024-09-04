@@ -25,6 +25,8 @@ function PropNPC.setup( ent, name, maxHealth, damageCallback )
     ent.Name = name
     
     if SERVER then
+        ent:setMass(50000)
+        
         net.start("PropNPC_setup")
         net.writeEntity(ent)
         net.writeString(name)
@@ -33,7 +35,7 @@ function PropNPC.setup( ent, name, maxHealth, damageCallback )
         net.writeBool(ent.Invincible)
         net.send()
         
-        hook.add("EntityTakeDamage", "NPC_DamageDetector_" .. ent:entIndex(), function( victim, attacker, inflictor, amount, dmgType, position )
+        hook.add("EntityTakeDamage", "PropNPC_DamageDetector_" .. ent:entIndex(), function( victim, attacker, inflictor, amount, dmgType, position )
             if victim ~= ent then return end
             if ent.Invincible then return end
             if ent.Health <= 0 then return end
@@ -88,7 +90,7 @@ end
 
 
 if SERVER then
-    hook.add("ClientInitialized", "", function( plr )
+    hook.add("ClientInitialized", "prop_npc_initiali_network", function( plr )
         for i,ent in pairs(PropNPC.Instances) do
             net.start("PropNPC_setup")
             net.writeEntity(ent)
@@ -99,12 +101,31 @@ if SERVER then
             net.send( plr )
         end
     end)
+    
+    -- Anti-shapecharge cheese
+    timer.create("prop_npc_shapecharge_remover", 0.5, 0, function()
+        for i,subject in pairs(PropNPC.Instances) do
+            local min, max = subject:worldSpaceAABB()
+            
+            local sc = find.inBox( min - Vector(300,300,300), max + Vector(300,300,300), function(e)
+                return isValid(e) and e:getClass() == "cfc_shaped_charge"
+            end)
+            
+            for i,v in pairs(sc) do
+                pcall(function() v:remove() end)
+            end
+        end
+    end)
 end
 
 
 hook.add("EntityRemoved", "prop_npc_removed", function( e )
-    if e and not e.Health then return end
+    if not e or not e.Health then return end
     table.removeByValue( PropNPC.Instances, e )
+    
+    if SERVER then
+        hook.remove("EntityTakeDamage", "PropNPC_DamageDetector_" .. e:entIndex())
+    end
 end)
 
 

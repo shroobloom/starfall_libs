@@ -268,8 +268,8 @@ if (Antlion) {
                 end)
                 
                 Hitbox.DamageMultiplier = 0.25
-                Hitbox.MeleeDamageMultiplier = 16
-                Hitbox.ExplosiveDamageMultiplier = 8
+                Hitbox.MeleeDamageMultiplier = 14
+                Hitbox.ExplosiveDamageMultiplier = 5
                 
                 return Hitbox
                 
