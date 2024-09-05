@@ -214,6 +214,11 @@ if (Antlion) {
                         end
                     end
                     
+                    local vehicleHeightMul = attacker:inVehicle() and 8 or 1
+                    local floor = trace.line( attacker:getPos(), attacker:getPos() - Vector(0,0,500*vehicleHeightMul), nil, nil, COLLISION_GROUP.IN_VEHICLE )
+                    mul = mul * math.min(1 - floor.Fraction*1.1 + 0.1, 1)
+                    
+                    
                     local oldPc = LastHealth / Hitbox.MaxHealth
                     local newPc = Hitbox.Health / Hitbox.MaxHealth
                     
@@ -321,6 +326,18 @@ if (Antlion) {
                     Use = function( npc )
                         if not NPC.isSomeoneNearby( npc:getPos(), 3000 ) then return end
                         NPC.attemptSpawns( npc:getPos(), NEST_SPAWNS, {280,420}, 1 + npc.Phase )
+                    end
+                },
+                {
+                    Cooldown = 25,
+                    Use = function( npc )
+                        if NPC.isSomeoneNearby( npc:getPos(), 3000 ) then return end
+                        if not sound.canCreate() then return end
+                        
+                        local roar = sound.create(npc, "npc/combine_gunship/gunship_moan.wav", true)
+                        roar:setSoundLevel( 150 )
+                        roar:play()
+                        roar:setVolume(1)
                     end
                 }
             }
