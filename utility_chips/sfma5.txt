@@ -226,7 +226,8 @@ if SERVER then
         "proppush",
         "propspam",
         "stop",
-        "admin"
+        "admin",
+        "fuck off"
     }
     
     hook.add("PlayerSay", "SFMA_detectMention", function( speaker, msg )
@@ -385,7 +386,6 @@ if SERVER then
         if #allEnts == 0 then return end
         
         ConsoleLog( getColor(ply), getName(ply), Color(255,255,255), " unfroze ", Color(255,255,144), #allEnts, Color(255,255,255), " entities!" )
-        logOffender( ply )
     end)
     
 end
