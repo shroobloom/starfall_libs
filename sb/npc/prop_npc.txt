@@ -134,6 +134,8 @@ if CLIENT then
     
     net.receive("PropNPC_setup", function()
         net.readEntity(function( e )
+            if not isValid(e) then return end
+            
             local name = net.readString()
             local hp = net.readDouble()
             local maxHP = net.readDouble()
@@ -147,12 +149,16 @@ if CLIENT then
     
     net.receive("PropNPC_setHealth", function()
         net.readEntity(function( e )
+            if not isValid(e) then return end
+            
             e.Health = net.readDouble()
         end)
     end)
     
     net.receive("PropNPC_setInvincible", function()
         net.readEntity(function( e )
+            if not isValid(e) then return end
+            
             PropNPC.setInvincible(e, net.readBool())
         end)
     end)
