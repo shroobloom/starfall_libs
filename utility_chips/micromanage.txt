@@ -30,6 +30,13 @@ local SELECT_HITBOX_PADDING = 30
 local PP_COURSE_E2_NAME = "lib/proppush_course"
 
 
+local PermissionLevels = {
+    ["Director"] = 3,
+    ["Admin"] = 3,
+    ["Moderator"] = 2,
+    ["Sentinel"] = 1
+}
+
 
 local Fonts = {
     Main = render.createFont("Coolvetica", FONT_HEIGHT, 1200, true)
@@ -149,6 +156,7 @@ Micromanage:addOption({
    
 Micromanage:addOption({
     Name = "Spectate",
+    Restrict = "Moderator",
     Icon = "icon16/eye.png",
     Commands = {
         "fspectate"
@@ -158,6 +166,7 @@ Micromanage:addOption({
 
 Micromanage:addOption({
     Name = "Freeze",
+    Restrict = "Moderator",
     Icon = "icon16/wand.png",
     Draw = function( self, plr, buttonX, buttonY )
         Micromanage.drawOption( self.Icon, plr:isFrozen() and "Unfreeze" or "Freeze", false, buttonX, buttonY )
@@ -175,6 +184,7 @@ Micromanage:addOption({
 
 Micromanage:addOption({
     Name = "Cleanup",
+    Restrict = "Moderator",
     Icon = "icon16/cut_red.png",
     Initialize = function( self, plr )
         plr.EntCountCache = #find.all(function(e)
@@ -196,6 +206,7 @@ Micromanage:addOption({
 
 Micromanage:addOption({
     Name = "Goto",
+    Restrict = "Sentinel",
     Icon = "icon16/user_go.png",
     Commands = {
         "ulx goto"
@@ -206,6 +217,7 @@ Micromanage:addOption({
 
 Micromanage:addOption({
     Name = "Sit",
+    Restrict = "Moderator",
     Icon = "icon16/report_link.png",
     Draw = function( self, plr, buttonX, buttonY )
         Micromanage.drawOption( self.Icon, Micromanage.isInJail(plr) and "Return" or "Sit", false, buttonX, buttonY )
@@ -225,6 +237,7 @@ Micromanage:addOption({
 
 Micromanage:addOption({
     Name = "Send to Brazil",
+    Restrict = "Moderator",
     Icon = "flags16/br.png",
     Commands = {
         "ulx brazil"
@@ -252,6 +265,7 @@ local HELLCURSE = {
 
 local hc = Micromanage:addOption({
     Name = "Hellcurse",
+    Restrict = "Admin",
     Icon = "icon16/user_red.png",
     Use = function( self, plr )
         for i,c in pairs(HELLCURSE) do
@@ -269,6 +283,7 @@ end)]]
 
 Micromanage:addOption({
     Name = "Ragdoll",
+    Restrict = "Moderator",
     Icon = "icon16/vector.png",
     Draw = function( self, plr, buttonX, buttonY )
         Micromanage.drawOption( self.Icon, Micromanage.isRagdolled( plr ) and "Unragdoll" or "Ragdoll", false, buttonX, buttonY )
@@ -283,6 +298,7 @@ Micromanage:addOption({
 -- Proppush course integration
 Micromanage:addOption({
     Name = "Proppush Course",
+    Restrict = "Sentinel",
     Icon = "icon16/computer_go.png",
     Use = function( self, plr )
         concmd("say_team .course " .. plr:getName())
@@ -331,8 +347,10 @@ Util.bindPress("MOUSE2", function()
     if not bestPlayer then return end
     
     Micromanage.Selection = bestPlayer
+    local PermissionLevel = PermissionLevels[player():getTeamName()] or 0
     
     for i,v in pairs(Micromanage.Options) do
+        if v.Restrict and PermissionLevels[v.Restrict] > PermissionLevel then continue end
         if not v.Predicate() then continue end
         
         if v.Initialize then
@@ -385,9 +403,6 @@ Util.bindRelease("MOUSE1", function()
     Option:Use( Micromanage.Selection )
     
 end)
-
-
-
 
 
 
@@ -484,7 +499,7 @@ hook.add("drawhud", "Micromanage_HUD", function()
                 render.drawLine( buttonX, buttonY + FONT_HEIGHT/0.75 - 1, buttonX + 200, buttonY + FONT_HEIGHT/0.75 - 1)
                 
                 if v.Dropdown and i == SelectedOption then
-                    
+                    --TBA
                 end
             end
         end
