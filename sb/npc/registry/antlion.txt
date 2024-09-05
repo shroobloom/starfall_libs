@@ -269,6 +269,10 @@ if (Antlion) {
                         ef:play("AntlionGib")
                     end
                     
+                    if math.random() < 0.25 then
+                        NPC.attemptSpawns( attacker:getPos(), ScoutSpawns, {200,600}, 3 )
+                    end
+                    
                     return mul
                 end)
                 
