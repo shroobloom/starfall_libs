@@ -79,6 +79,15 @@ if SERVER then
             print(Color(80,255,40), "Set spawn cap multiplier to " .. mul .. "x! (" .. math.round(NPC.SpawnCap) .. ")")
         end
     })
+    
+    CommandLib:registerCommand({
+        Name = "nest",
+        Description = "Spawns a nest at your mouse position.",
+        Arguments = {},
+        Run = function(user, mul)
+            NPC.spawn( owner():getEyeTrace().HitPos, "AntlionNest" )
+        end
+    })
 end
 
 
