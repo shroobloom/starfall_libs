@@ -435,6 +435,18 @@ hook.add("drawhud", "Micromanage_HUD", function()
         render.setColor( plr:isInPvp() and Color(255,0,0, tA) or Color(0,255,0, tA) )
         render.drawSimpleText( plr.sX + plr.sW - PADDING, plr.sY + PADDING, plr:isInPvp() and "PvP" or "Build", 2 )
         
+        if plr:isInPvp() then
+            local hpc = plr:getHealth() / plr:getMaxHealth()
+            local healthCol = Color(hpc*120, 1, 1):hsvToRGB()
+            healthCol:setA(tA)
+            
+            render.setColor( Color(0,0,0, tA ) )
+            render.drawRect( plr.sX, plr.sY + plr.sH - 1, plr.sW, 1 )
+            
+            render.setColor( healthCol )
+            render.drawRect( plr.sX, plr.sY + plr.sH - 1, plr.sW*hpc, 1 )
+        end
+        
         
         if selected then
             
