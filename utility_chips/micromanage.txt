@@ -5,18 +5,12 @@
 --@include sb/util.txt
 
 
---[[http.get("https://gmod.pages.dev/realms/cfc/cfc3/players/76561199160675071", function(body)
-    print(body)
-end)]]
-
-
-
-local Micromanage = {}
-
 
 local Util = require("sb/util.txt")
 
 
+
+local Micromanage = {}
 Micromanage.Selection = nil
 
 
@@ -25,8 +19,6 @@ Micromanage.Selection = nil
 local PADDING = 3
 local FONT_HEIGHT = 22
 local SELECT_HITBOX_PADDING = 30
-
-
 local PP_COURSE_E2_NAME = "lib/proppush_course"
 
 
