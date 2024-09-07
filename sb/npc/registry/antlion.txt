@@ -8,6 +8,7 @@
 
 
 
+
 local PropNPC = require("sb/npc/prop_npc.txt")
 
 if SERVER then
@@ -184,6 +185,7 @@ if (Antlion) {
                 
                 
                 local LastHealth = data.Health
+                local LastHit = 0
                 
                 Hitbox.Phase = 0
                 
@@ -243,7 +245,7 @@ if (Antlion) {
                             
                             PropNPC.setInvincible( Hitbox, true )
                             
-                            timer.simple(6, function()
+                            timer.simple(7, function()
                                 PropNPC.setInvincible( Hitbox, false )
                             end)
                         end
@@ -263,7 +265,9 @@ if (Antlion) {
                     
                     LastHealth = Hitbox.Health
                     
-                    if effect.canCreate() then
+                    if effect.canCreate() and ((timer.curtime() - LastHit) > 0.25 or dmgType == DAMAGE.BLAST) then
+                        LastHit = timer.curtime()
+                        
                         local ef = effect.create()
                         ef:setOrigin(position)
                         ef:play("AntlionGib")
