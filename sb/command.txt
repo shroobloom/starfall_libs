@@ -11,6 +11,7 @@ CommandLib.Commands = {}
 CommandLib.log = print
 
 
+CommandLib.BULLET_COLOR = Color(36,36,36)
 CommandLib.BULLET = string.char(226) .. string.char(128) .. string.char(162)
 
 
@@ -35,7 +36,7 @@ function CommandLib:bindToChat( prefix, onlyFor )
         
         if type(result) == "table" then
             timer.simple(0, function()
-                print(Color(36,36,36), CommandLib.BULLET, Color(234,40,20), " Command Error: " .. result.Message)
+                print(CommandLib.BULLET_COLOR, CommandLib.BULLET, Color(234,40,20), " Command Error: " .. result.Message)
             end)
         end
         
@@ -85,33 +86,35 @@ function CommandLib:parseCommand( user, text )
     
     
     -- Join excess arguments into one
-    while #argsIn > #command.Arguments do
-        argsIn[#argsIn - 1] = argsIn[#argsIn - 1] .. " " .. table.remove(argsIn, #argsIn)
-    end
-    
-    
-    for i,v in pairs(command.Arguments) do
-        local inp = argsIn[i] or v.Default
-        
-        if inp == nil and not v.Optional then
-            return CommandError( "Argument \"" .. v.Name .. "\" missing." )
+    if command.Arguments then
+        while #argsIn > #command.Arguments do
+            argsIn[#argsIn - 1] = argsIn[#argsIn - 1] .. " " .. table.remove(argsIn, #argsIn)
         end
         
-        local casted = self:cast( inp, v.Type )
         
-        if not casted then
-            return CommandError( "Could not cast " .. v.Name .. " to \"" .. v.Type .. "\"." )
-        end
-        
-        if v.Validator then
-            local Error = v.Validator( casted )
+        for i,v in pairs(command.Arguments) do
+            local inp = argsIn[i] or v.Default
             
-            if Error then
-                return Error
+            if inp == nil and not v.Optional then
+                return CommandError( "Argument \"" .. v.Name .. "\" missing." )
             end
+            
+            local casted = self:cast( inp, v.Type )
+            
+            if not casted then
+                return CommandError( "Could not cast " .. v.Name .. " to \"" .. v.Type .. "\"." )
+            end
+            
+            if v.Validator then
+                local Error = v.Validator( casted )
+                
+                if Error then
+                    return Error
+                end
+            end
+            
+            table.insert(castedArgs, casted)
         end
-        
-        table.insert(castedArgs, casted)
     end
     
     return command.Run( user, unpack(castedArgs) )
