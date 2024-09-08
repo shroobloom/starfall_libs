@@ -62,7 +62,7 @@ if SERVER then
     
     
     
-    NPC.Debug = true
+    --NPC.Debug = true
     
     timer.create("spawn", 1, 0, function()
         if #NPC.Participants == 0 then return end
