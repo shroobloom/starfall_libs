@@ -1,0 +1,90 @@
+--@name Zombie Registry
+--@author shroobloom
+--@shared
+--@include sb/util.txt
+
+
+
+if SERVER then
+    
+    local Util = require("sb/util.txt")
+    
+    
+    return function( NPC )
+        
+        NPC:register("Zombie", {
+            Name = "Zombie",
+            Class = "npc_zombie",
+            Health = 90,
+            Damage = 5,
+            
+            Squad = {
+                {"Zombie", 0, 5}
+            }
+        })
+        
+        NPC:register("FastZombie", {
+            Name = "Fast Zombie",
+            Class = "npc_fastzombie",
+            Health = 40,
+            Damage = 5,
+            
+            Squad = {
+                {"FastZombie", 0, 2}
+            }
+        })
+        
+        NPC:register("PoisonZombie", {
+            Name = "Poison Zombie",
+            Class = "npc_poisonzombie",
+            Health = 200,
+            Damage = 8,
+            
+            Squad = {
+                {"Zombie", 0, 4},
+                {"PoisonZombie", 0, 1}
+            }
+        })
+        
+        NPC:register("Headcrab", {
+            Name = "Headcrab",
+            Class = "npc_headcrab",
+            Health = 10,
+            Damage = 4
+        })
+        
+        NPC:register("FastHeadcrab", {
+            Name = "Fast Headcrab",
+            Class = "npc_headcrab_fast",
+            Health = 7,
+            Damage = 3
+        })
+        
+        -- poison zombie headcrab
+        NPC:register("PoisonHeadcrab", {
+            Name = "Poison Headcrab",
+            Class = "npc_headcrab_poison",
+            Health = 10
+        })
+        
+        -- spawnmenu headcrab
+        NPC:register("BlackHeadcrab", {
+            Name = "Black Headcrab",
+            Class = "npc_headcrab_black",
+            Health = 10
+        })
+        
+        
+        NPC:register("Wraith", {
+            Name = "Wraith",
+            Class = "npc_fastzombie",
+            Health = 500,
+            Damage = 20,
+            
+            Size = 1.2
+        })
+        
+        
+    end
+
+end
