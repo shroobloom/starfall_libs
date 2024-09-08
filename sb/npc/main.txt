@@ -6,6 +6,7 @@
 --@include sb/util.txt
 --@include sb/npc/health_bar.txt
 --@include sb/npc/prop_npc.txt
+--@include sb/command.txt
 --@includedir registry
 
 
@@ -19,10 +20,30 @@ if SERVER then
     local Spawner = require("sb/spawner.txt")
     local E2VM = require("sb/e2vm.txt")
     local Util = require("sb/util.txt")
+    local CommandLib = require("sb/command.txt")
+    
     
     
     local NPC = {}
     
+    
+    CommandLib:registerCommand({
+        Name = "npc",
+        Description = "Generic command folder for NPC events.",
+        Arguments = {
+            {
+                Name = "subcommand",
+                Type = "string",
+                Validator = CommandLib.Validators.Choice( "info" )
+            }
+        },
+        Run = function(user, subcommand)
+            if subcommand == "info" then
+                print(Color(255,144,0), "--------[[ NPC INFO ]]--------")
+                print(CommandLib.BULLET_COLOR, CommandLib.BULLET, Color(255,255,255), " Spawns: ", Color(120 - (#NPC.Instances / NPC.getMax())*120, 1, 1):hsvToRGB(), #NPC.Instances, Color(125,125,125), " / ", Color(255,0,0), NPC.getMax())
+            end
+        end
+    })
     
     
     --[[ CONFIG ]]--
@@ -45,6 +66,7 @@ if SERVER then
     NPC.Debug = false
     
     -- How far mobile spawnpoints ("beacons") protect in a radius
+    -- Setting to 0 will disable the feature.
     NPC.BeaconWardDistance = 2000
     
     -- Self-explanatory
@@ -55,9 +77,30 @@ if SERVER then
     NPC.AutoRegisterParticipants = true
     
     
+    NPC.Hints = {}
+    
+    function NPC.addHints( ... )
+        for i,v in pairs({...}) do
+            table.insert(NPC.Hints, v)
+        end
+    end
+    
+    timer.simple(0, function()
+        if NPC.BeaconWardDistance <= 0 then return end
+        
+        NPC.addHints( "The Mobile Spawnpoint can be used to prevent NPC spawns within an area!" )
+    end)
+    
+    NPC.addHints(
+        "Struggling to survive? Consider making a fort!",
+        "Team up with your allies to take care of NPCs easier!"
+    )
     
     
-    
+    timer.create("hints", 60, 0, function()
+        local hint = table.random(NPC.Hints)
+        NPC.announce( Color(180,220,255), "[Hint] ", Color(255,255,255), hint )
+    end)
     
     
     
@@ -69,6 +112,11 @@ if SERVER then
     hook.add("OnEntityCreated", "RegisterBeacon", function( e )
         if not isValid(e) or e:getClass() ~= "sent_spawnpoint" then return end
         table.insert(Beacons, e)
+        
+        if NPC.BeaconWardDistance > 0 and table.hasValue(NPC.Participants, e:getOwner()) then
+            e:emitSound("buttons/button17.wav")
+            e:getOwner():chatPrint( Color(100,220,70), "[Beacon] ", Color(255,255,255), "This spawnpoint will prevent NPCs from spawning within ", Color(255,255,144), NPC.BeaconWardDistance .. " units", Color(255,255,255), "!" )
+        end
     end)
     
     hook.add("EntityRemoved", "RemoveBeacon", function( e )
@@ -204,6 +252,15 @@ if SERVER then
         
         if not ground.Hit or ground.HitNonWorld or ground.HitNoDraw then return --[[print("no ground")]] end
         
+        
+        -- Make sure its not in water
+        local contents = trace.pointContents(ground.HitPos)
+        local underwater = bit.band( CONTENTS.WATER, contents ) > 0
+        local slimed = bit.band( CONTENTS.SLIME, contents ) > 0
+        
+        if underwater or slimed then return end
+        
+        
         -- Make sure noone is too close
         local nearby = {}
         
@@ -301,6 +358,59 @@ if SERVER then
         local data = NPC.Types[ID]
         
         local ent = data.Create( pos, data )
+        NPC.wrap(ent, ID)
+        
+        if squadLeader then
+            ent:setGlobalSquad( "sb_squad_" .. tostring(squadLeader:entIndex()) )
+        elseif data.Squad then
+            ent:setGlobalSquad( "sb_squad_" .. tostring(ent:entIndex()) )
+            
+            local queue = {}
+            
+            for i,v in pairs( data.Squad ) do
+                local count = v[3] and math.random(v[2], v[3]) or v[2]
+                local id = v[1]
+                
+                for i=1, count do
+                    table.insert(queue, math.random(#queue), id)
+                end
+            end
+            
+            local r = data.BoxSize.x * (data.Scale or 1) * 1.5 * (#queue*0.2 + 1)
+            
+            for i,v in pairs(queue) do
+                local a = i/#queue * 2 * math.pi
+                local pos = ent:getPos() + Vector( math.cos(a)*r, math.sin(a)*r, 0 )
+                
+                Spawner.Enqueue(function()
+                    if not ent:isValid() then return end
+                    
+                    local ground = trace.line( pos + Vector(0,0,72), pos - Vector(0,0,72) )
+                    if not ground.Hit or ground.HitNonWorld or ground.HitNoDraw then return end
+                    
+                    NPC.spawn( ground.HitPos + Vector(0,0,8), v, ent )
+                end)
+            end
+        end
+        
+        return ent
+    end
+    
+    
+    function NPC.wrap( ent, ID )
+        
+        if not ID then
+            for i,v in pairs(NPC.Types) do
+                if v.Class == ent:getClass() then
+                    ID = i
+                    break
+                end
+            end
+        end
+        
+        if not ID then return end
+        
+        local data = NPC.Types[ID]
         table.insert(NPC.Instances, ent)
         
         ent.LastSighted = timer.curtime()
@@ -373,41 +483,18 @@ if SERVER then
             coroutine.wrap(data.Spawn)( ent )
         end
         
-        if squadLeader then
-            ent:setGlobalSquad( "sb_squad_" .. tostring(squadLeader:entIndex()) )
-        elseif data.Squad then
-            ent:setGlobalSquad( "sb_squad_" .. tostring(ent:entIndex()) )
-            
-            local queue = {}
-            
-            for i,v in pairs( data.Squad ) do
-                local count = v[3] and math.random(v[2], v[3]) or v[2]
-                local id = v[1]
-                
-                for i=1, count do
-                    table.insert(queue, math.random(#queue), id)
-                end
-            end
-            
-            local r = data.BoxSize.x * (data.Scale or 1) * 1.5 * (#queue*0.2 + 1)
-            
-            for i,v in pairs(queue) do
-                local a = i/#queue * 2 * math.pi
-                local pos = ent:getPos() + Vector( math.cos(a)*r, math.sin(a)*r, 0 )
-                
-                Spawner.Enqueue(function()
-                    if not ent:isValid() then return end
-                    
-                    local ground = trace.line( pos + Vector(0,0,72), pos - Vector(0,0,72) )
-                    if not ground.Hit or ground.HitNonWorld or ground.HitNoDraw then return end
-                    
-                    NPC.spawn( ground.HitPos + Vector(0,0,8), v, ent )
-                end)
-            end
-        end
-        
-        return ent
     end
+    
+    
+    hook.add("OnEntityCreated", "wrapNPC", function( npc )
+        if not isValid(npc) or not npc:isNPC() then return end
+        if isValid(npc:getOwner()) and npc:getOwner() ~= owner() then return end
+        
+        timer.simple(0, function()
+            if npc.IsChipNPC then return end --already wrapped
+            NPC.wrap( npc )
+        end)
+    end)
     
     
     hook.add("ClientInitialized", "setupBossbar", function( plr )
@@ -533,7 +620,7 @@ if SERVER then
     
     
     -- idk why these dont get cleaned up automatically
-    hook.add("EntityTakeDamage", "CeilingTurretCleanup", function( victim, attacker, inflictor, amount )
+    hook.add("EntityTakeDamage", "NPC_ceilingTurretCleanup", function( victim, attacker, inflictor, amount )
         if not victim:isNPC() then return end
         if not victim.IsChipNPC then return end
         
@@ -552,7 +639,7 @@ if SERVER then
     
     
     
-    hook.add("EntityRemoved", "deleteCombine", function(e)
+    hook.add("EntityRemoved", "NPC_registerNPCRemoval", function(e)
         if not e.IsChipNPC then return end
         
         table.removeByValue(NPC.Instances, e)
@@ -569,6 +656,16 @@ if SERVER then
     end)
     
     
+    
+    
+    -- world headcrab remover
+    hook.add("Removed", "NPC_deleteHeadcrabs", function()
+        for i,v in pairs(NPC.Instances) do
+            if not isValid(v:getOwner()) then
+                v:remove()
+            end
+        end
+    end)
     
     
     
@@ -627,7 +724,7 @@ if CLIENT then
     net.receive("addBossbar", function()
         net.readEntity(function(e)
             local bar = HealthBar:new( e, net.readString() )
-            bar:setOffset( Vector(0,0,e:obbSize().z)*0.6 )
+            bar:setOffset( e:obbCenter() + Vector(0,0,e:obbSize().z)*0.6 )
             bar:setParent(e)
             bar:setRotationMode( HealthBar.RotationMode.HYBRID )
             bar:setScale( e:obbSize():getLength() * 0.02 )
