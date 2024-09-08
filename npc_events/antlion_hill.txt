@@ -7,10 +7,12 @@
 
 
 
---TODO: exempt beacons from this (preferably without just setting their ward dist to 0)
 
---TODO: also maybe add a notification for beacons to the combine event
 
+--[[ CONFIG ]]--
+
+-- Set to true to disable scout spawns, making the event localized only on the Nest.
+local DisableScouts = true
 
 
 
@@ -53,7 +55,7 @@ if SERVER then
     
     
     timer.create("spawnAmbush", 5, 0, function()
-        if #NPC.Participants == 0 or not isValid(Nest) then return end
+        if #NPC.Participants == 0 or not isValid(Nest) or DisableScouts then return end
         
         local spawner = table.random(NPC.Participants)
         NPC.attemptSpawns( spawner:getPos(), ScoutSpawns, {200,600}, 3 )
@@ -85,9 +87,18 @@ if SERVER then
         Description = "Spawns a nest at your mouse position.",
         Arguments = {},
         Run = function(user, mul)
-            NPC.spawn( owner():getEyeTrace().HitPos, "AntlionNest" )
+            Spawner.Enqueue(function()
+                NPC.spawn( owner():getEyeTrace().HitPos, "AntlionNest" )
+            end)
         end
     })
+    
+    
+    NPC.addHints(
+        "Every nearby Antlion Guard grants the nest a 25% damage reduction. Take them out before dealing with the nest!",
+        "Explosives and melee weapons deal much more damage to the Nest.",
+        "Airborne attacks are not very effective!"
+    )
 end
 
 
