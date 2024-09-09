@@ -63,6 +63,8 @@ function PropNPC.setup( ent, name, maxHealth, damageCallback )
             net.writeEntity(ent)
             net.writeDouble( ent.Health )
             net.send()
+            
+            return true
         end)
         
         --[[local hax = false
