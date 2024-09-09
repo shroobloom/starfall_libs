@@ -46,6 +46,17 @@ if SERVER then
     })
     
     
+    local OwnershipOverride = E2VM:new([[
+@name [VM] Owner Bypass
+@inputs Entity:entity
+@trigger Entity
+
+if (Entity) {
+    Entity:admSetOwner(owner())
+}
+    ]])
+    
+    
     --[[ CONFIG ]]--
     
     -- Base Spawn Cap
@@ -114,7 +125,8 @@ if SERVER then
         table.insert(Beacons, e)
         
         if NPC.BeaconWardDistance > 0 and table.hasValue(NPC.Participants, e:getOwner()) then
-            e:emitSound("buttons/button17.wav")
+            --TODO: cant emitsound because i dont own it (wtf starfall)
+            --e:emitSound("buttons/button17.wav")
             e:getOwner():chatPrint( Color(100,220,70), "[Beacon] ", Color(255,255,255), "This spawnpoint will prevent NPCs from spawning within ", Color(255,255,144), NPC.BeaconWardDistance .. " units", Color(255,255,255), "!" )
         end
     end)
@@ -410,6 +422,10 @@ if SERVER then
         
         if not ID then return end
         
+        if ent:getOwner() ~= owner() then
+            OwnershipOverride:fireInput("Entity", ent)
+        end
+        
         local data = NPC.Types[ID]
         table.insert(NPC.Instances, ent)
         
@@ -513,7 +529,10 @@ if SERVER then
     
     -- Announces a message to everyone
     function NPC.announceGlobal( ... )
-        for i,v in pairs(NPC.Debug and {owner()} or find.allPlayers()) do
+        local Pool = NPC.Debug and {owner()} or find.allPlayers()
+        if not table.hasValue(Pool, owner()) then table.insert(Pool, owner()) end
+        
+        for i,v in pairs(Pool) do
             v:chatPrint(Color(255,255,255), ...)
         end
     end
@@ -521,7 +540,10 @@ if SERVER then
     
     -- Announces a message to every participant
     function NPC.announce( ... )
-        for i,v in pairs(NPC.Participants) do
+        local Pool = table.copy(NPC.Participants)
+        if not table.hasValue(Pool, owner()) then table.insert(Pool, owner()) end
+        
+        for i,v in pairs(Pool) do
             v:chatPrint(Color(255,255,255), ...)
         end
     end
