@@ -1,0 +1,134 @@
+--@name Projectile
+--@author shroobloom
+--@server
+--@include sb/spawner.txt
+--@include sb/util.txt
+
+
+
+local Spawner = require("sb/spawner.txt")
+local Util = require("sb/util.txt")
+
+
+local Projectile = class("Projectile")
+Projectile.Instances = {}
+
+
+Spawner.Enqueue(function()
+    Projectile.BOMB = prop.createSent( Vector(), Angle(), "gmod_wire_simple_explosive", true, {
+        damage = 500,
+        radius = 512
+    })
+    
+    Projectile.BOMB:setSolid(false)
+    Projectile.BOMB:setNoDraw(true)
+    Projectile.BOMB:setNocollideAll(true)
+    Projectile.BOMB:doNotDuplicate()
+end)
+
+
+
+
+local PropertyDefaults = {
+    Speed = 0,
+    Thrust = 0,
+    Gravity = true,
+    
+    ExplosionEffect = "",
+    
+    Trail = {
+        Material = "", --trails/smoke
+        StartSize = 10,
+        EndSize = 50,
+        Length = 0.25, --Duration
+        Color = Color(255,255,255),
+        Additive = false
+    }
+}
+
+
+function Projectile:initialize( pos, ang, properties )
+    
+    Util.applyDefaults( properties, PropertyDefaults )
+    
+    printTable(properties)
+    
+    self.Instance = prop.create( pos, ang + Angle(90,0,0), "models/props_c17/canister02a.mdl", false )
+    self.Instance:setUnbreakable( true )
+    self.Instance:enableDrag( false )
+    self.Instance:enableGravity( properties.Gravity )
+    
+    self.Instance:applyForceCenter( ang:getForward() * properties.Speed * self.Instance:getMass() )
+    
+    self.Instance:addCollisionListener(function( hit )
+        self:detonate()
+    end)
+    
+    self.Thrust = properties.Thrust
+    self.ExplosionEffect = properties.ExplosionEffect
+    
+    if properties.Trail.Material ~= "" then
+        self.Instance:setTrails(properties.Trail.StartSize, properties.Trail.EndSize, properties.Trail.Length, properties.Trail.Material, properties.Trail.Color, nil, properties.Trail.Additive)
+    end
+    
+    table.insert(Projectile.Instances, self)
+    
+end
+
+
+function Projectile:think()
+    
+    if self.Thrust > 0 then
+        self.Instance:applyForceCenter( self.Instance:getUp() * self.Thrust * self.Instance:getMass() )
+    end
+    
+end
+
+
+function Projectile:detonate()
+    Projectile.BOMB:setPos( self.Instance:getPos() )
+    Projectile.BOMB:getWirelink().Detonate = 1
+    Projectile.BOMB:getWirelink().Detonate = 0
+    Projectile.BOMB:setPos( Vector() )
+    
+    if self.ExplosionEffect ~= "" then
+        local ef = effect.create()
+        ef:setOrigin(self.Instance:getPos())
+        ef:play(self.ExplosionEffect)
+    end
+    
+    self:remove()
+end
+
+
+
+function Projectile:remove()
+    self.Instance:remove()
+    table.removeByValue(Projectile.Instances, self)
+end
+
+
+
+
+hook.add("think", "Projectile_Think", function()
+    for i,v in pairs(Projectile.Instances) do
+        v:think()
+    end
+end)
+
+
+
+
+
+--timer.simple(1, function()
+timer.create("machinegun mode", 0.3, 0, function()
+    
+    local p = Projectile:new( chip():getPos() + Vector(0,0,60), owner():getEyeAngles(), {
+        Speed = 5000,
+        
+        Trail = {
+            Material = "trails/smoke"
+        }
+    })
+    
+end)
