@@ -36,6 +36,8 @@ function Util.applyDefaults( DataTable, Struct )
     for i,v in pairs(Struct) do
         if DataTable[i] == nil then
             DataTable[i] = v
+        elseif type(v) == "table" then
+            Util.applyDefaults( DataTable[i], v )
         end
     end
 end
@@ -618,6 +620,7 @@ if CLIENT then
         end)
     end
 end
+
 
 
 
