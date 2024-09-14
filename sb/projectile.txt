@@ -14,6 +14,12 @@ local Projectile = class("Projectile")
 Projectile.Instances = {}
 
 
+--NOTE: Wire Simple Explosives have a hard-coded detonate cooldown of 0.2s. 
+--      If you detonate projectiles at a faster rate, some will just not deal damage.
+--      This is a known bug, but I have no intention on fixing it at the moment.
+
+
+
 
 function Projectile._spawnWireExplosive()
     if isValid(Projectile.BOMB) then
@@ -153,7 +159,6 @@ hook.add("EntityRemoved", "Projectile_Removal", function( e )
     if e:getOwner() ~= owner() then return end
     if not e.Projectile then return end
     
-    print(isValid(e))
     e.Projectile:remove()
 end)
 
