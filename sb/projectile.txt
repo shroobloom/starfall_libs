@@ -14,33 +14,46 @@ local Projectile = class("Projectile")
 Projectile.Instances = {}
 
 
-Spawner.Enqueue(function()
+
+function Projectile._spawnWireExplosive()
+    if isValid(Projectile.BOMB) then
+        Projectile.BOMB:remove()
+    end
+    
     Projectile.BOMB = prop.createSent( Vector(), Angle(), "gmod_wire_simple_explosive", true, {
         damage = 500,
-        radius = 512
+        radius = 512,
+        
+        Model = "models/hunter/blocks/cube4x4x4.mdl"
     })
     
     Projectile.BOMB:setSolid(false)
     Projectile.BOMB:setNoDraw(true)
     Projectile.BOMB:setNocollideAll(true)
     Projectile.BOMB:doNotDuplicate()
-end)
+    Projectile.BOMB:setMass(50000)
+end
+
+Spawner.Enqueue(Projectile._spawnWireExplosive)
 
 
 
 
 local PropertyDefaults = {
+    Model = "models/props_c17/canister02a.mdl",
+    ModelAngle = Angle(90,0,0),
+    
     Speed = 0,
     Thrust = 0,
     Gravity = true,
     
-    ExplosionEffect = "",
+    ExplosionEffect = "lfs_missile_explosion",
     
     Trail = {
         Material = "", --trails/smoke
         StartSize = 10,
-        EndSize = 50,
-        Length = 0.25, --Duration
+        EndSize = 30,
+        Length = 0.1, --Duration
         Color = Color(255,255,255),
         Additive = false
     }
@@ -51,18 +64,19 @@ function Projectile:initialize( pos, ang, properties )
     
     Util.applyDefaults( properties, PropertyDefaults )
     
-    printTable(properties)
-    
-    self.Instance = prop.create( pos, ang + Angle(90,0,0), "models/props_c17/canister02a.mdl", false )
+    self.Instance = prop.create( pos, ang + properties.ModelAngle, properties.Model, false )
     self.Instance:setUnbreakable( true )
     self.Instance:enableDrag( false )
     self.Instance:enableGravity( properties.Gravity )
+    self.Instance:doNotDuplicate()
     
     self.Instance:applyForceCenter( ang:getForward() * properties.Speed * self.Instance:getMass() )
     
     self.Instance:addCollisionListener(function( hit )
         self:detonate()
     end)
+    
+    self.Instance.Projectile = self
     
     self.Thrust = properties.Thrust
     self.ExplosionEffect = properties.ExplosionEffect
@@ -86,6 +100,20 @@ end
 
 
 function Projectile:detonate()
+    
+    -- If the bomb was destroyed, respawn it then try again:
+    if not isValid(Projectile.BOMB) then
+        Spawner.Enqueue(function()
+            if not isValid(Projectile.BOMB) then
+                Projectile._spawnWireExplosive()
+            end
+            
+            self:detonate()
+        end)
+        
+        return
+    end
+    
     Projectile.BOMB:setPos( self.Instance:getPos() )
     Projectile.BOMB:getWirelink().Detonate = 1
     Projectile.BOMB:getWirelink().Detonate = 0
@@ -103,7 +131,11 @@ end
 
 
 function Projectile:remove()
-    self.Instance:remove()
+    if isValid(self.Instance) then
+        self.Instance.Projectile = nil
+        self.Instance:remove()
+    end
+    
     table.removeByValue(Projectile.Instances, self)
 end
 
@@ -117,18 +149,33 @@ hook.add("think", "Projectile_Think", function()
 end)
 
 
+hook.add("EntityRemoved", "Projectile_Removal", function( e )
+    if e:getOwner() ~= owner() then return end
+    if not e.Projectile then return end
+    
+    print(isValid(e))
+    e.Projectile:remove()
+end)
 
 
 
+--[[
 --timer.simple(1, function()
 timer.create("machinegun mode", 0.3, 0, function()
     
     local p = Projectile:new( chip():getPos() + Vector(0,0,60), owner():getEyeAngles(), {
         Speed = 5000,
         
+        ExplosionEffect = "",
+        
         Trail = {
             Material = "trails/smoke"
         }
     })
     
-end)
+end)]]
+
+
+
+return Projectile
+
