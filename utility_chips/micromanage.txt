@@ -5,9 +5,7 @@
 --@include sb/util.txt
 
 
-
 local Util = require("sb/util.txt")
-
 
 
 local Micromanage = {}
@@ -19,7 +17,7 @@ Micromanage.Selection = nil
 local PADDING = 3
 local FONT_HEIGHT = 22
 local SELECT_HITBOX_PADDING = 30
-local PP_COURSE_E2_NAME = "lib/proppush_course"
+local PP_COURSE_E2_NAME = "proppush_course"
 
 
 local PermissionLevels = {
@@ -142,6 +140,15 @@ Micromanage:addOption({
     Icon = "icon16/vcard_edit.png",
     Use = function( self, plr )
         setClipboardText( plr:getSteamID() )
+    end
+})
+
+Micromanage:addOption({
+    Name = "View Warns",
+    Restrict = "Sentinel",
+    Icon = "icon16/shield.png",
+    Use = function( self, plr )
+        Micromanage.useCommandOn( "awarn_menu", plr )
     end
 })
 
@@ -307,6 +314,7 @@ Micromanage:addOption({
 
 Util.bindPress("MOUSE2", function()
     if not input.isKeyDown( 13 ) then return end --C
+    if owner():isInPvp() and not owner():isNoclipped() then return end
     
     local mX, mY = input.getCursorPos()
     local bestDist = math.huge
@@ -376,6 +384,7 @@ end)
 
 
 Util.bindPress("MOUSE1", function()
+    if owner():isInPvp() and not owner():isNoclipped() then return end
     
     local Option = Micromanage.ChoosableOptions[SelectedOption]
     if not Option then return end
@@ -385,6 +394,7 @@ Util.bindPress("MOUSE1", function()
 end)
 
 Util.bindRelease("MOUSE1", function()
+    if owner():isInPvp() and not owner():isNoclipped() then return end
     
     if not MouseDown then return end
     MouseDown = false
