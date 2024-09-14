@@ -731,7 +731,6 @@ if (Entity) {
         run( NPC )
     end
     
-    
     return NPC
     
 end
@@ -760,5 +759,9 @@ if CLIENT then
         if not e.HealthBar then return end
         e.HealthBar:remove()
     end)
+    
+    for i,run in pairs(requiredir("registry")) do
+        dofile( run )
+    end
     
 end

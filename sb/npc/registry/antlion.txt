@@ -60,6 +60,14 @@ if (Antlion) {
     
     
     
+    -- Prevent Antlion Guards from trampling Antlions
+    hook.add("EntityTakeDamage", "antlion_blockTrample", function( victim, attacker )
+        if not victim.IsChipNPC or not attacker.IsChipNPC then return end
+        if victim:getClass() ~= "npc_antlion" or attacker:getClass() ~= "npc_antlionguard" then return end
+        
+        return true
+    end)
+    
     
     return function( NPC )
         
@@ -265,12 +273,17 @@ if (Antlion) {
                     
                     LastHealth = Hitbox.Health
                     
-                    if effect.canCreate() and ((timer.curtime() - LastHit) > 0.25 or dmgType == DAMAGE.BLAST) then
+                    --effect.canCreate() and 
+                    if ((timer.curtime() - LastHit) > 0.25 or dmgType == DAMAGE.BLAST) then
                         LastHit = timer.curtime()
                         
-                        local ef = effect.create()
+                        --[[local ef = effect.create()
                         ef:setOrigin(position)
-                        ef:play("AntlionGib")
+                        ef:play("AntlionGib")]]
+                        
+                        net.start("nest_gib")
+                        net.writeVector(position)
+                        net.sendPVS(Hitbox:getPos(), true)
                     end
                     
                     if math.random() < 0.25 and amount*mul > 50 then
@@ -352,4 +365,20 @@ if (Antlion) {
         })
         
     end
+    
+end
+
+
+
+
+if CLIENT then
+    
+    net.receive("nest_gib", function()
+        if not effect.canCreate() then return end
+        
+        local ef = effect.create()
+        ef:setOrigin(net.readVector())
+        ef:play("AntlionGib")
+    end)
+    
 end
