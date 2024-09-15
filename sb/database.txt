@@ -1,0 +1,240 @@
+--@name Database V2
+--@author shroobloom
+--@shared
+--@owneronly
+--@include sb/util.txt
+
+
+local Util = require("sb/util.txt")
+
+
+--[[ Database Ver. 2.0 ]]--
+
+-- A secure database library, remade to be even better.
+-- Handles the networking of data to the server and database creation.
+-- Can serialize any data type except entities.
+-- Unlike V1, the Database does not need to be created on the client, only the server, but the code must be running on both server AND client.
+-- Unlike V1, you can access and write its contents directly on the instance.
+-- [!] Make sure you call :markDirty() after modifying any properties of existing entries, otherwise Autosave will not work.
+
+-- Hooks:
+-- - databaseLoaded( db ) - Fired when a database is loaded, passes the loaded database
+
+
+
+--TODO:
+-- [ ] SharedTable support for automatic networking and remote replication
+
+
+
+local Database = class("Database")
+Database.Instances = {}
+Database.EXTENSION = "json"
+Database.OwnerInitialized = false
+Database.DEFAULT_KEYS = {
+    ID = true, Contents = true, Loaded = true, Dirty = true, AppendPlayerMetadata = true
+}
+
+
+
+
+
+
+
+function Database:initialize( identifier )
+    assert(type(identifier) == "string", "Invalid identifier \"" .. tostring(identifier) .. "\" supplied!")
+    assert(SERVER, "Database \"" .. identifier .. "\" cannot be created on the client!")
+    assert(not Database.Instances[identifier], "Database \"" .. identifier .. "\" already exists!")
+    
+    self.ID = identifier
+    
+    self.Contents = {}
+    self.Loaded = false
+    self.Dirty = false
+    self.AppendPlayerMetadata = true --When saving a player, append metadata such as last seen, last name, last team, etc.
+    
+    if Database.OwnerInitialized then
+        net.start("db_request")
+        net.writeString( identifier )
+        net.send(owner())
+    end
+    
+    Database.Instances[identifier] = self
+end
+
+
+function Database.appendPlayerMetadata( tab, plr )
+    local Changed = --[[tab.LastModified ~= os.time() or]] tab.LastName ~= plr:getName() or tab.LastTeam ~= plr:getTeam()
+    
+    tab.LastModified = os.time()
+    tab.LastName = plr:getName()
+    tab.LastTeam = plr:getTeam()
+    
+    return Changed
+end
+
+
+
+function Database:__newindex( key, value )
+    if Database.DEFAULT_KEYS[key] then
+        return rawset(self, key, value)
+    end
+    
+    if type(key) == "Player" then
+        key = key:getSteamID()
+    end
+    
+    if rawget(self, "AppendPlayerMetadata") and key:startWith("STEAM_0:") then
+        Database.appendPlayerMetadata( value, Util.getPlayerFromSteamID( key ) )
+    end
+    
+    rawset(self, "Dirty", true)
+    self.Contents[key] = value
+end
+
+
+function Database:__index( key, value )
+    if Database.DEFAULT_KEYS[key] then
+        return rawget(self, key, value)
+    end
+    
+    if type(key) == "Player" then
+        key = key:getSteamID()
+    end
+    
+    return self.Contents[key]
+end
+
+
+
+function Database:setAutosave( t )
+    local timerName = "db_autosave_" .. self.ID
+    
+    timer.remove( timerName )
+    timer.create( timerName, t, 0, function()
+        
+        if rawget(self, "AppendPlayerMetadata") then
+            for i,v in pairs(find.allPlayers()) do
+                if not self[v:getSteamID()] then continue end
+                
+                local Changed = Database.appendPlayerMetadata( self[v:getSteamID()], v )
+                
+                if Changed then
+                    self:markDirty()
+                end
+            end
+        end
+        
+        if not self.Dirty then return end
+        self:save()
+    end)
+end
+
+
+function Database:save()
+    assert(self.Loaded, "Database has not been loaded yet!")
+    
+    coroutine.wrap(function()
+        net.start("db_save")
+        net.writeString( self.ID )
+        net.writeStream( json.encode(self.Contents, true) )
+        net.send()
+    end)()
+    
+    self.Dirty = false
+end
+
+
+function Database:markDirty()
+    self.Dirty = true
+end
+
+
+
+
+if SERVER then
+    
+    hook.add("ClientInitialized", "Database_FirstTimeInit", function( plr )
+        if plr ~= owner() then return end
+        
+        Database.OwnerInitialized = true
+        
+        for i,v in pairs(Database.Instances) do
+            net.start("db_request")
+            net.writeString( v.ID )
+            net.send(owner())
+        end
+    end)
+    
+    net.receive("db_load", function(_, plr)
+        if plr ~= owner() then return end
+        
+        local id = net.readString()
+        local self = Database.Instances[id]
+        
+        net.readStream(function( res )
+            local data = json.decode(res)
+            
+            -- Don't overwrite any data that was already there
+            for i,v in pairs(data) do
+                if not rawget(self.Contents, i) then
+                    rawset(self.Contents, i, v)
+                end
+            end
+            
+            self.Loaded = true
+            hook.run("databaseLoaded", self)
+        end)
+    end)
+    
+end
+
+
+
+if CLIENT then
+    
+    net.receive("db_request", function()
+        local id = net.readString()
+        local path = "database/" .. id:lower() .. "." .. Database.EXTENSION
+        
+        if not file.exists("database") then
+            file.createDir("database")
+        end
+        
+        if not file.exists(path) then
+            res = "{}"
+            file.write(path, res)
+            
+            net.start("db_load")
+            net.writeString(id)
+            net.writeStream(res, false)
+            net.send()
+        else
+            file.asyncRead(path, function(fname, fstatus, res)
+                net.start("db_load")
+                net.writeString(id)
+                net.writeStream(res)
+                net.send()
+            end)
+        end
+        
+    end)
+    
+    
+    net.receive("db_save", function()
+        local id = net.readString()
+        local path = "database/" .. id:lower() .. "." .. Database.EXTENSION
+        
+        net.readStream(function(compressed)
+            file.write( path, compressed )
+            print("Database \"" .. id .. "\" saved to " .. path .. "!")
+        end)
+    end)
+    
+end
+
+
+
+
+return Database
+
