@@ -1,0 +1,352 @@
+--@name Command Parser
+--@author shroobloom
+--@shared
+--@include sb/util.txt
+
+
+
+
+local Util = require("sb/util.txt")
+
+
+local CommandParser = class("CommandParser")
+
+
+function CommandParser:initialize()
+    self.Commands = {}
+    self.ErrorForUnknownCommand = true
+    
+    self:registerDefaultCommands()
+end
+
+
+
+CommandParser.Error = class("CommandParser.Error")
+
+function CommandParser.Error:initialize( Msg )
+    self.Message = Msg
+end
+
+
+
+
+
+CommandParser.Validators = {
+    Range = function( min, max )
+        return function(arg)
+            if arg < min then
+                return CommandParser.Error( "Value must not be below " .. min .. "." )
+            elseif arg > max then
+                return CommandParser.Error( "Value must not exceed " .. max .. "." )
+            end
+        end
+    end,
+    Choice = function( ... )
+        local choices = {...}
+        
+        return function(arg)
+            if not table.hasValue(choices, arg) then
+                return CommandParser.Error( "Value must be one of [" .. table.concat(choices, ", ") .. "]." )
+            end
+        end
+    end
+}
+
+
+
+
+local CommandDataStruct = {
+    Name = nil,
+    Description = "No description provided.",
+    Aliases = {},
+    Subcommands = {
+        -- ...Command
+    },
+    Arguments = {
+        -- ...Argument
+    },
+    Run = function( user, ... )
+        
+    end
+}
+
+local ArgumentStruct = {
+    Name = nil,
+    Type = "any",
+    Optional = false,
+    Validator = function()
+        return function( argument )
+            return true
+        end
+    end
+}
+
+
+
+function CommandParser:applyCommandDefaults( cmdData )
+    Util.applyDefaults( cmdData, CommandDataStruct )
+    
+    for i,v in pairs(cmdData.Arguments) do
+        Util.applyDefaults( v, ArgumentStruct )
+    end
+    
+    for i,v in pairs(cmdData.Subcommands) do
+        self:applyCommandDefaults( v )
+    end
+end
+
+
+function CommandParser:add( cmdData )
+    self:applyCommandDefaults( cmdData )
+    table.insert(self.Commands, cmdData)
+end
+
+
+
+
+local TRUTHY = {
+    ["y"] = true,
+    ["yes"] = true,
+    ["on"] = true,
+    ["t"] = true,
+    ["true"] = true,
+    ["1"] = true
+}
+
+local FALSY = {
+    ["n"] = true,
+    ["no"] = true,
+    ["off"] = true,
+    ["f"] = true,
+    ["false"] = true,
+    ["0"] = true
+}
+
+
+
+
+function CommandParser:get( commandName, subCommand )
+    commandName = commandName:lower()
+    
+    for i,v in pairs(subCommand and subCommand.Subcommands or self.Commands) do
+        if v.Name == commandName then
+            return v
+        end
+        
+        if v.Aliases then
+            for _, alias in pairs(v.Aliases) do
+                if alias == commandName then
+                    return v
+                end
+            end
+        end
+    end
+end
+
+
+function CommandParser:getCount()
+    return #self.Commands
+end
+
+function CommandParser:getAll()
+    return self.Commands
+end
+
+
+
+function CommandParser:cast( value, type )
+    local casted = nil
+    
+    if type == "string" then
+        return tostring( value )
+    elseif type == "int" then
+        if not tonumber(value) then return end
+        return math.floor(tonumber( value ))
+    elseif type == "number" then
+        return tonumber( value )
+    elseif type == "any" then
+        return tonumber(value) or tostring(value)
+    elseif type == "bool" then
+        value = value:lower()
+        if TRUTHY[value] then return true end
+        if FALSY[value] then return false end
+    elseif type == "player" then
+        return find.playersByName(value)[1]
+    end
+    
+    return casted
+end
+
+
+
+
+
+-- Parses a given text into a command and arguments
+-- String text - The text to parse
+-- Command subcommand - The command to look for subcommands in (INTERNAL)
+-- Returns:
+-- 1. The command
+-- 2. The parsed arguments for said command
+-- 3. The CommandParser.Error, if one was thrown
+
+function CommandParser:parse( text, subCommand )
+    
+    local argsIn = text:split(" ")
+    
+    local commandIn = table.remove( argsIn, 1 )
+    local castedArgs = {}
+    
+    local command = self:get( commandIn, subCommand )
+    
+    if not command then
+        return nil, castedArgs, self.ErrorForUnknownCommand and CommandParser.Error( "Unknown command \"" .. commandIn .. "\"." ) or nil
+    end
+    
+    -- Join excess arguments into one
+    if #argsIn > 1 and #command.Subcommands == 0 then
+        while #argsIn > #command.Arguments do
+            argsIn[#argsIn - 1] = argsIn[#argsIn - 1] .. " " .. table.remove(argsIn, #argsIn)
+        end
+    end
+    
+    if #command.Subcommands > 0 then
+        local subcmd, subArgs, err = self:parse( table.concat(argsIn, " "), command )
+        if not subcmd then return nil, castedArgs, CommandParser.Error("Subcommand not found.") end
+        if err then return err end
+        
+        for i,v in pairs(subArgs) do
+            table.insert(castedArgs, v)
+        end
+        
+        command = subcmd
+    else
+        for i=1, #command.Arguments do
+            local argInfo = command.Arguments[i]
+            local inp = table.remove(argsIn, 1) or argInfo.Default
+            
+            if inp == nil and not argInfo.Optional then
+                return command, castedArgs, CommandParser.Error( "Argument \"" .. argInfo.Name .. "\" missing." )
+            end
+            
+            if inp ~= nil then
+                local casted = self:cast( inp, argInfo.Type )
+                
+                if not casted then
+                    return command, castedArgs, CommandParser.Error( "Could not cast " .. argInfo.Name .. " to " .. argInfo.Type .. "." )
+                end
+                
+                
+                local Error = argInfo.Validator( casted )
+                
+                if Error then
+                    return command, castedArgs, Error
+                end
+                
+                
+                table.insert(castedArgs, casted)
+            end
+        end
+    end
+    
+    return command, castedArgs
+    
+end
+
+
+
+
+
+
+function CommandParser:registerDefaultCommands()
+    --[[
+    self:add({
+        Name = "example",
+        Description = "Example command",
+        Arguments = {
+            {
+                Name = "input",
+                Type = "number",
+                Optional = true,
+                Validator = CommandParser.Validators.Range( 1, 10 )
+            }
+        },
+        Run = function(user, num)
+            self:log( Color(255,255,255), user:getName() .. " ran this command!", Color(255,0,0), num and (" Value: " .. tostring(num)) or "" )
+        end
+    })]]
+    
+    --TBA (inside the chat command fork of this)
+    --[[self:add({
+        Name = "help",
+        Description = "Displays all available commands.",
+        Arguments = {
+            {
+                Name = "command",
+                Type = "string",
+                Optional = true,
+                Validator = function( arg )
+                    if not self:get( arg ) then
+                        return CommandParser.Error( "Unknown command \"" .. arg .. "\"." )
+                    end
+                end
+            }
+        },
+        Run = function( user, command )
+            if not command then
+                local out = {Color(255,255,255), "-----------= Help =-----------"}
+                
+                for i,v in pairs(self.Commands) do
+                    local argList = ""
+                    
+                    if v.Arguments then
+                        for i,v in pairs(v.Arguments) do
+                            argList = argList .. "<" .. v.Type .. " " .. v.Name .. (v.Optional and "" or "?") .. "> "
+                        end
+                    end
+                    
+                    table.insert(out, CommandParser.BULLET_COLOR)
+                    table.insert(out, CommandParser.BULLET)
+                    table.insert(out, Color(255,255,255))
+                    table.insert(out, " " .. v.Name .. " " .. argList .. "\n")
+                end
+                
+                self:log(unpack(out))
+            else
+                
+                local out = {Color(255,255,255), "Help - ", cmdData.Name .. " - " .. cmdData.Description}
+                
+                if next(cmdData.Aliases) then
+                    out = out .. "\nAliases: "
+                    
+                    for i,v in pairs(cmdData.Aliases) do
+                        out = out .. v .. (i < #cmdData.Aliases and ", " or "")
+                    end
+                end
+                
+                if cmdData.Arguments then
+                    out = out .. "\nArguments: \n"
+                    
+                    for i,v in pairs(cmdData.Args) do
+                        argList = argList .. "<" .. v.Type .. " " .. v.Name .. (v.Optional and "" or "?") .. "> "
+                    end
+                end
+                
+                table.insert(out, "\n")
+                
+                self:log(unpack(out))
+            end
+        end
+    })]]
+end
+
+
+
+function CommandParser:log( ... )
+    print(...)
+end
+
+
+
+
+
+return CommandParser

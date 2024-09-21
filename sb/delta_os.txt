@@ -1,0 +1,250 @@
+--@name DeltaOS Draw Functions
+--@author shrooblooms
+--@shared
+--@include sb/util.txt
+
+
+local Util = require("sb/util.txt")
+
+
+
+local DeltaOS = {}
+
+
+DeltaOS.Sound = {
+    POWER_ON = "buttons/button1.wav",
+    POWER_OFF = "buttons/lightswitch2.wav"
+}
+
+
+
+function DeltaOS.getPreferredColor()
+    local preferredColor = player():getWeaponColor()
+    return Color(math.round(preferredColor.x*255), math.round(preferredColor.y*255), math.round(preferredColor.z*255))
+end
+
+
+function DeltaOS.drawOutlinedBox( x, y, w, h, padding )
+    padding = padding or 5
+    
+    render.drawRectOutline( x,   y,   w,   h )
+    render.drawRectOutline( x+1, y+1, w-2, h-2 )
+    
+    render.drawRectOutline( x+padding,   y+padding,   w-padding*2,     h-padding*2 )
+    render.drawRectOutline( x+padding+1, y+padding+1, w-(padding+1)*2, h-(padding+1)*2 )
+end
+
+
+
+
+-- Boot Data Struct
+--[[
+{
+    SystemName,
+    CPU?,
+    RAM?,
+    
+    TableMessage?
+}
+]]
+
+
+
+local Fonts = {}
+
+if CLIENT then
+    Fonts.Startup = {
+        ["screen"] = render.createFont("Roboto Mono", 26, 500, false, nil, true),
+        ["hud1440"] = render.createFont("Roboto Mono", 30, 1600, false, nil, true)
+    }
+    
+    Fonts.CenterScreenText = render.createFont("Roboto Mono", 120, 1600, false, nil, true)
+end
+
+
+
+
+function DeltaOS.drawBootMenu( x, y, h, StartupTime, StartupDuration, Data )
+    
+    -- duration used to be 4 on old values
+    local Prog = StartupTime / StartupDuration
+    
+    local w = h*1.7
+    
+    render.setFont(h > 1200 and Fonts.Startup.hud1440 or Fonts.Startup.screen)
+    render.setColor(DeltaOS.getPreferredColor())
+    
+    
+    DeltaOS.drawOutlinedBox( x, y, w, h )
+    DeltaOS.drawOutlinedBox( x, y, w, h*0.2 )
+    
+    local LogoX = x + w*0.075
+    local LogoY = y + h*0.1
+    
+    render.drawPoly({
+        {x=LogoX - w*0.04, y=LogoY+w*0.03},
+        {x=LogoX, y=LogoY-w*0.03},
+        {x=LogoX + w*0.04, y=LogoY+w*0.03},
+    })
+    
+    render.setColor( Color(0,0,0) )
+    render.drawPoly({
+        {x=LogoX - w*0.0325, y=LogoY+w*0.025},
+        {x=LogoX - w*0.0025, y=LogoY-w*0.02},
+        {x=LogoX + w*0.0275, y=LogoY+w*0.025},
+    })
+    
+    render.drawRect( LogoX - w*0.05, LogoY + w*0.015, w*0.05, w*0.01 )
+    
+    render.setColor(DeltaOS.getPreferredColor())
+    render.drawSimpleText( 
+        x + w*0.15,
+        y + h*0.06,
+        Data.SystemName,
+        0,
+        1
+    )
+    
+    render.drawSimpleText( 
+        x + w*0.15,
+        y + h*0.135,
+        "Copyright (C) 2023-2024, Delta Corp.",
+        0,
+        1
+    )
+    
+    
+    -- 1
+    if Prog < 0.25 then return end
+    
+    
+    render.drawSimpleText( 
+        x + w*0.025,
+        y + h*0.25,
+        "CPU:                " .. (Data.CPU or "Delta Core i900 @ 1633MHz"),
+        0,
+        1
+    )
+    
+    render.drawSimpleText( 
+        x + w*0.025,
+        y + h*0.325,
+        "Memory Test:        " .. (Data.RAM or 16777216) .. "K OK",
+        0,
+        1
+    )
+    
+    
+    if Prog < 0.275 then return end
+    
+    render.drawSimpleText( 
+        x + w*0.025,
+        y + h*0.4,
+        "Display:            " .. (isValid(Data.Screen) and render.getScreenInfo(Data.Screen).Name or "Generic Display"),
+        0,
+        1
+    )
+    
+    -- table
+    
+    --TODO: make the table make sense somehow for other uses
+    
+    -- 1.5
+    render.drawText(
+        x + w*0.025,
+        y + h*1.05,
+        (Data.TableMessage or "Device I/O Listening") .. "\n\n" ..
+        
+        (Prog > 0.375 and 
+        ("CPU      ID     Link     Status\n" ..
+         "----------------------------------------\n" ..
+         "1        5      23ab7f   OK\n" ..
+         "2        6      6fa2ac   OK\n" ..
+         "3        3      bf201c   OK\n" ..
+         "4        2      afc92a   OK\n" ..
+         "5        4      67dfb3   OK\n" ..
+         "6        1      6713ff   OK\n" ..
+         "7        7      f31aff   OK\n" ..
+         "8        8      ffffff   OK\n"
+        ) or "")
+    )
+    
+    
+    
+    -- 1.1
+    if Prog < 0.3 then return end
+    
+    -- funny date :)
+    render.drawText( 
+        x + w*0.025,
+        y + h*0.5,
+        "Delta Corp. Boot Application v.1.26.23"
+    )
+    
+    -- LORE!!! LORE!!!!!!!!!!
+    render.drawText( 
+        x + w*0.025,
+        y + h*0.575,
+        "Copyright (C) 2023-2024 Delta Corp."
+    )
+    
+    -- 1.5
+    if Prog < 0.375 then return end
+    
+    render.drawText( 
+        x + w*0.025,
+        y + h*0.75,
+        "Detected Boot Record ROM"
+    )
+    
+    render.drawText( 
+        x + w*0.025,
+        y + h*0.825,
+        "Boot OK"
+    )
+    
+    if Prog < 0.5 then return end
+    
+    render.drawText( 
+        x + w*0.025,
+        y + h*0.9,
+        "Loading kernel..."
+    )
+    
+end
+
+
+
+
+function DeltaOS.drawCenterSplashText( Text )
+    
+    local sX,sY = render.getResolution()
+    local cX,cY = sX/2, sY/2
+    
+    Text = "[ " .. Text .. " ]"
+    
+    render.setFont(Fonts.CenterScreenText)
+    local w,h = render.getTextSize(Text)
+    DeltaOS.drawOutlinedBox( cX-w/2, cY-h/2, w, h+10 )
+    
+    render.drawText(cX, cY - h/2, Text, 1)
+    
+end
+
+
+-- boot test screen
+--[[
+Util.createRenderTarget("asdf", function()
+    DeltaOS.drawBootMenu( 0, 0, 1024*0.35, 3.4, 5, {
+        SystemName = "Testbench"
+    })
+end)
+
+hook.add("render", "", function()
+    render.setRenderTargetTexture("asdf")
+    render.drawTexturedRect(0,0,512,512)
+end)]]
+
+
+
+return DeltaOS
