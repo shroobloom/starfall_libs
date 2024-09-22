@@ -23,7 +23,7 @@ CLI.Commands = CommandParser:new()
 CLI.User = nil
 CLI.LastUser = nil
 CLI.Lines = {}
-CLI.VERSION = "2.0"
+CLI.VERSION = "2.1"
 
 CLI.MOTDs = {
     "Welcome to the terminal.",

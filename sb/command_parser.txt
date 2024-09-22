@@ -74,10 +74,7 @@ local ArgumentStruct = {
     Name = nil,
     Type = "any",
     Optional = false,
-    Validator = function()
-        return function( argument )
-            return true
-        end
+    Validator = function( argument )
     end
 }
 
@@ -212,7 +209,7 @@ function CommandParser:parse( text, subCommand )
     if #command.Subcommands > 0 then
         local subcmd, subArgs, err = self:parse( table.concat(argsIn, " "), command )
         if not subcmd then return nil, castedArgs, CommandParser.Error("Subcommand not found.") end
-        if err then return err end
+        if err then return nil, castedArgs, err end
         
         for i,v in pairs(subArgs) do
             table.insert(castedArgs, v)
@@ -234,7 +231,6 @@ function CommandParser:parse( text, subCommand )
                 if not casted then
                     return command, castedArgs, CommandParser.Error( "Could not cast " .. argInfo.Name .. " to " .. argInfo.Type .. "." )
                 end
-                
                 
                 local Error = argInfo.Validator( casted )
                 
