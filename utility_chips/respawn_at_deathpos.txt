@@ -16,7 +16,7 @@ hook.add("PlayerDeath", "RAD_Death", function( ply, inflictor, attacker )
     if inflictor:isValid() and inflictor:getClass() == "the_orb" then
         local dir = (inflictor:getPos() - DeathPos)
         dir:setZ(0)
-        DeathPos = DeathPos - dir:getNormalized()*200
+        DeathPos = inflictor:getPos() - dir:getNormalized()*800
     end
 end)
 
