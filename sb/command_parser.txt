@@ -65,9 +65,9 @@ local CommandDataStruct = {
     Arguments = {
         -- ...Argument
     },
-    Run = function( user, ... )
+    --[[Run = function( user, ... )
         
-    end
+    end]]
 }
 
 local ArgumentStruct = {
@@ -208,39 +208,44 @@ function CommandParser:parse( text, subCommand )
     
     if #command.Subcommands > 0 then
         local subcmd, subArgs, err = self:parse( table.concat(argsIn, " "), command )
-        if not subcmd then return nil, castedArgs, CommandParser.Error("Subcommand not found.") end
+        if not subcmd and not command.Run then return nil, castedArgs, CommandParser.Error("Subcommand not found.") end
         if err then return nil, castedArgs, err end
         
-        for i,v in pairs(subArgs) do
-            table.insert(castedArgs, v)
+        if subcmd then
+            for i,v in pairs(subArgs) do
+                table.insert(castedArgs, v)
+            end
+            
+            command = subcmd
+            
+            return command, castedArgs
         end
         
-        command = subcmd
-    else
-        for i=1, #command.Arguments do
-            local argInfo = command.Arguments[i]
-            local inp = table.remove(argsIn, 1) or argInfo.Default
+    end
+    
+    for i=1, #command.Arguments do
+        local argInfo = command.Arguments[i]
+        local inp = table.remove(argsIn, 1) or argInfo.Default
+        
+        if inp == nil and not argInfo.Optional then
+            return command, castedArgs, CommandParser.Error( "Argument \"" .. argInfo.Name .. "\" missing." )
+        end
+        
+        if inp ~= nil then
+            local casted = self:cast( inp, argInfo.Type )
             
-            if inp == nil and not argInfo.Optional then
-                return command, castedArgs, CommandParser.Error( "Argument \"" .. argInfo.Name .. "\" missing." )
+            if not casted then
+                return command, castedArgs, CommandParser.Error( "Could not cast " .. argInfo.Name .. " to " .. argInfo.Type .. "." )
             end
             
-            if inp ~= nil then
-                local casted = self:cast( inp, argInfo.Type )
-                
-                if not casted then
-                    return command, castedArgs, CommandParser.Error( "Could not cast " .. argInfo.Name .. " to " .. argInfo.Type .. "." )
-                end
-                
-                local Error = argInfo.Validator( casted )
-                
-                if Error then
-                    return command, castedArgs, Error
-                end
-                
-                
-                table.insert(castedArgs, casted)
+            local Error = argInfo.Validator( casted )
+            
+            if Error then
+                return command, castedArgs, Error
             end
+            
+            
+            table.insert(castedArgs, casted)
         end
     end
     

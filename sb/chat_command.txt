@@ -38,7 +38,7 @@ local TYPE_COLOURS = {
 
 
 ChatCommand.UsePredicates = {
-    OWNER_ONLY = function( self, user )
+    OWNER_ONLY = function( user )
         return user == owner()
     end
 }
@@ -62,28 +62,27 @@ local getHelp
 getHelp = function( cmdData, scope )
     scope = scope or 0
     
-    local lead = string.rep("      ", scope)
-    local out = {Color(255,255,255), lead, Color(255,255,144), cmdData.Name, Color(255,255,255), " - " .. cmdData.Description}
+    local indent = string.rep("      ", scope)
+    
+    local out = {Color(255,255,255), indent, Color(255,255,144), cmdData.Name, Color(255,255,255), " - ", Color(110,255,110), cmdData.Description}
     
     if scope ~= 0 then
         table.insert(out, 3, ChatCommand.BULLET_COLOR)
         table.insert(out, 4, ChatCommand.BULLET .. " ")
-    end
-    
-    if #cmdData.Aliases > 0 then
-        table.insert(out, "\n" .. lead)
-        table.insert(out, ChatCommand.BULLET_COLOR)
-        table.insert(out, ChatCommand.BRACKET)
-        table.insert(out, Color(255,255,255))
-        table.insert(out, " Aliases: ")
         
         for i,v in pairs(cmdData.Aliases) do
-            table.insert(out, Color(255,255,144))
-            table.insert(out, v)
+            out[6] = out[6] .. "/" .. v
+        end
+    end
+    
+    if #cmdData.Aliases > 0 and scope == 0 then
+        Util.bulkPush( out, "\n" .. indent, ChatCommand.BULLET_COLOR, ChatCommand.BRACKET, Color(255,255,255), " Aliases: " )
+        
+        for i,v in pairs(cmdData.Aliases) do
+            Util.bulkPush( out, Color(255,255,144), v )
             
             if i < #cmdData.Aliases then
-                table.insert(out, Color(255,255,255))
-                table.insert(out, ", ")
+                Util.bulkPush( out, Color(255,255,255), ", " )
             end
         end
         
@@ -91,11 +90,7 @@ getHelp = function( cmdData, scope )
     end
     
     if #cmdData.Subcommands > 0 then
-        table.insert(out, "\n" .. lead)
-        table.insert(out, ChatCommand.BULLET_COLOR)
-        table.insert(out, ChatCommand.BRACKET)
-        table.insert(out, Color(255,255,255))
-        table.insert(out, " Subcommands: ")
+        Util.bulkPush( out, "\n" .. indent, ChatCommand.BULLET_COLOR, ChatCommand.BRACKET, Color(255,255,255), " Subcommands: " )
         
         for i,v in pairs(cmdData.Subcommands) do
             local components = getHelp( v, scope + 1 )
@@ -107,23 +102,13 @@ getHelp = function( cmdData, scope )
             end
         end
     elseif #cmdData.Arguments > 0 then
-        table.insert(out, "\n" .. lead)
-        table.insert(out, ChatCommand.BULLET_COLOR)
-        table.insert(out, ChatCommand.BRACKET)
-        table.insert(out, Color(255,255,255))
-        table.insert(out, " Arguments: ")
+        Util.bulkPush( out, "\n" .. indent, ChatCommand.BULLET_COLOR, ChatCommand.BRACKET, Color(255,255,255), " Arguments: " )
         
         for i,v in pairs(cmdData.Arguments) do
-            table.insert(out, Color(255,255,255))
-            table.insert(out, "\n        " .. lead .. tostring(i) .. ". ")
-            table.insert(out, TYPE_COLOURS[v.Type] or Color(200,144,255))
-            table.insert(out, v.Type .. " ")
-            table.insert(out, Color(255,255,255))
-            table.insert(out, v.Name)
+            Util.bulkPush( out, Color(255,255,255), "\n        " .. indent, TYPE_COLOURS[v.Type] or Color(200,144,255), v.Type .. " ", Color(255,255,255), v.Name )
             
             if v.Optional then
-                table.insert(out, Color(144,144,144))
-                table.insert(out, " (Optional)")
+                Util.bulkPush( out, Color(100,100,100), " (Optional)" )
             end
         end
     end
@@ -195,7 +180,7 @@ if SERVER then
         if not text:startsWith(prefix) then return end
         
         local cmd, args, err = ChatCommand.Instance:parse( text:sub( prefix:len()+1 ) )
-        if cmd and not cmd:CanUse( ply ) then return end
+        if cmd and not cmd.CanUse( ply ) then return end
         
         if err then
             timer.simple(0, function()
@@ -227,30 +212,50 @@ ChatCommand.Instance = ChatCommand:new()
 ChatCommand.Instance.ErrorForUnknownCommand = false
 
 
---TODO: how to stop ppl from running the basic version?
+--[[
 ChatCommand.Instance:add({
     Name = "test",
     Description = "Subcommand test.",
+    Arguments = {
+        {
+            Name = "value",
+            Type = "any"
+        },
+    },
     Subcommands = {
         {
-            Name = "brick",
-            Description = "Modifies the brick",
-            Aliases = {"b"},
+            Name = "sub",
+            Description = "Subcommand example A",
+            Aliases = {"a"},
             Arguments = {
                 {
                     Name = "Amount",
                     Type = "int"
                 }
             },
-            Run = function( user )
-                ChatCommand.Instance:log(Color(200,60,50), "Ran with brick")
+            Run = function( user, amt )
+                ChatCommand.Instance:log(Color(200,60,50), "Ran with example A: ", amt)
+            end
+        },
+        {
+            Name = "sub2",
+            Description = "Subcommand example B",
+            Aliases = {"b"},
+            Arguments = {
+                {
+                    Name = "Target",
+                    Type = "player"
+                }
+            },
+            Run = function( user, target )
+                ChatCommand.Instance:log(Color(60,200,50), "Ran with example B: ", target)
             end
         }
     },
-    Run = function( user )
-        ChatCommand.Instance:log(Color(0,255,0), "Ran with no subcommand. (how)")
+    Run = function( user, val )
+        ChatCommand.Instance:log(Color(0,255,0), "Ran with no subcommand.", val, type(val))
     end
-})
+})]]
 
 
 return ChatCommand.Instance
