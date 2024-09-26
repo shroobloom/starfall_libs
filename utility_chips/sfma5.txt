@@ -2,14 +2,13 @@
 --@author Shrooblooms
 --@shared
 --@owneronly
---@include sb/command.txt
-
+--@include sb/chat_command.txt
 
 
 local AutoSpectate = false
 
 
-local Command = require("sb/command.txt")
+local ChatCommands = require("sb/chat_command.txt")
 
 
 
@@ -77,7 +76,7 @@ end
 
 
 
-Command:registerCommand({
+ChatCommands:add({
     Name = "autospectate",
     Description = "Automatically spectates when an offender is logged.",
     Aliases = {"autospec", "as"},
@@ -96,7 +95,7 @@ Command:registerCommand({
 local AFKWatch = {}
 
 
-Command:registerCommand({
+ChatCommands:add({
     Name = "await",
     Description = "Waits for someone to get back from being AFK, and notifies you when they do.",
     Aliases = {"a"},
@@ -121,11 +120,41 @@ Command:registerCommand({
 
 
 
+--[[ HOST MODE ]]--
+
+local HostMode = false
+
+ChatCommands:add({
+    Name = "eventhost",
+    Description = "Enables Event Host mode, which cloaks, gods, and puts you in PvP mode.",
+    Aliases = {"host"},
+    Run = function( user )
+        if not SERVER then return end
+        
+        local state = not user:hasGodMode()
+        HostMode = state
+        
+        concmd( "ulx " .. (state and "god" or "ungod") .. " \"$" .. user:getSteamID() .. "\"" )
+        concmd( "ulx " .. (state and "cloak" or "uncloak") .. " \"$" .. user:getSteamID() .. "\"" )
+        concmd( "ulx " .. (state and "setpvp" or "setbuild") .. " \"$" .. user:getSteamID() .. "\"" )
+        
+        if not user:isNoclipped() and state then
+            concmd("ulx noclip \"$" .. user:getSteamID() .. "\"")
+        end
+        
+        ChatLog("Event host mode ", state and Color(0,255,0) or Color(255,0,0), state and "enabled" or "disabled", Color(255,255,255), ".")
+    end
+})
+
+
+
+
+
 
 if SERVER then
     
     
-    hook.add("KeyPress", "", function( plr, key )
+    hook.add("KeyPress", "SFMA_AFKWatch", function( plr, key )
         if not AFKWatch[plr] then return end
         
         AFKWatch[plr] = nil
