@@ -43,6 +43,14 @@ function Util.applyDefaults( DataTable, Struct )
 end
 
 
+-- Pushes many values to a table at once
+function Util.bulkPush( tab, ... )
+    for i,v in pairs {...} do
+        table.insert(tab, v)
+    end
+end
+
+
 -- A quick way to lock controls when someone connects to your HUD
 function Util.lockControlsInHud( State )
     
@@ -121,32 +129,6 @@ function Util.wait( duration )
     coroutine.yield(cr)
 end
 
-
--- Plays a self-destruct effect while destroying all constrained props
-function Util.selfDestruct( EffectName )
-    
-    local Center = Vector()
-    local Pool = chip():getAllConstrained()
-    
-    for i,v in pairs(Pool) do
-        if v:isValid() and v:getOwner() == owner() and v ~= chip() then
-            Center = Center + v:getPos()
-            v:remove()
-        end
-    end
-    
-    Center = Center / #Pool
-    
-    
-    if EffectName ~= "" then
-        local expl = effect.create()
-        expl:setOrigin(Center)
-        expl:play(EffectName or "lfs_explosion")
-    end
-    
-    chip():remove()
-    
-end
 
 
 
@@ -536,7 +518,8 @@ end
 
 
 -- Shorthand method for the "remote" hook
--- The callback will only be called if one of your own chips sends a remote with a specific name.a
+-- The callback will only be called if one of your own chips sends a remote with a specific name.
+-- Does not allow loopback.
 function Util.bindRemote( RemoteName, Callback )
     hook.add("remote", RemoteName, function( SendingChip, SendingPlayer, Type, ... )
         if SendingPlayer ~= owner() then return end
@@ -620,6 +603,50 @@ if CLIENT then
         end)
     end
 end
+
+
+
+
+function Util.isInMySquad( ent )
+    if not ent:isPlayer() and not isValid(ent:getOwner()) then
+        return false
+    end
+    
+    local mySquad = owner():getSquadID()
+    if mySquad == -1 then return ent == owner() or ent:getOwner() == owner() end
+    
+    local theirSquad = ent:isPlayer() and ent:getSquadID() or ent:getOwner():getSquadID()
+    
+    return mySquad == theirSquad
+end
+
+
+
+function Util.cloneAsHolo( e )
+    local h = hologram.create( e:getPos(), e:getAngles(), e:getModel() )
+    h:setMaterial( e:getMaterial() )
+    h:setColor( e:getColor() )
+    h:setSkin( e:getSkin() )
+    h:setBodygroup(1, e:getBodygroup(1))
+    h:setRenderMode( e:getRenderMode() )
+    
+    -- Advanced/custom materials don't always load right away
+    if not isValid(e:getParent()) then print(e:entIndex(), e:getMaterial()) end
+    if e:getMaterial():startsWith("!") then
+        if not isValid(e:getParent()) then print(e:entIndex(), "its an adv mat") end
+        timer.simple(3, function()
+            if not e:isValid() then return end --idk
+            if not isValid(e:getParent()) then print(e:entIndex(), "h's mat: ", h:getMaterial()) end
+            if not isValid(e:getParent()) then print(e:entIndex(), "retry: ", e:getMaterial()) end
+            h:setMaterial( "" )
+            h:setMaterial( e:getMaterial() )
+        end)
+    end
+    
+    return h
+end
+
+
 
 
 
