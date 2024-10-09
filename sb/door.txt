@@ -30,6 +30,12 @@ Door.ActuatorType = {
 
 
 
+--[[ TODO ]]--
+-- [ ] Don't create a second prop if Clip is true and ActuatorType is LINEAR (to save on CPU time) (also so its easier to close doors shutter)
+-- [ ] Make doors solid and toolgunnable when closed
+
+
+
 --[[ Sound Struct ]]--
 -- Interact - Plays when you press E on the door
 -- Locked - Plays when you press E on the door but don't have access
@@ -78,143 +84,144 @@ Door.Locks = {
     -- Only you can enter this door, but in buildmode anyone can open it.
     PVP_OWNER_ONLY = function( player )
         return not owner():isInPvp() or player == owner()
+    end,
+    
+    -- Only you and your squad members can open this door.
+    SQUAD = function( player )
+        if owner():getSquadID() == -1 then
+            return player == owner()
+        end
+        
+        return player:getSquadID() == owner():getSquadID()
+    end,
+    
+    -- Only you and your squad members can open this door, but in buildmode anyone can open it.
+    PVP_SQUAD = function( player )
+        if not owner():isInPvp() then return true end
+        
+        return Door.Locks.SQUAD( player )
     end
 }
 
 
--- Data table structure
---[[
-{
+
+Door.Animations = {
+    -- {locked, open}
+    ["models/props_c17/door01_left.mdl"] = {1,3},
+    ["models/props_doors/door03_slotted_left.mdl"] = {1,2},
+    ["models/props_c17/door02_double.mdl"] = {1,2}
+}
+
+
+
+
+local DoorDataStruct = {
     -- Mostly internal, flips the open direction
-    Flipped: boolean? = false
+    Flipped = false,
     
     -- If true, the door will open in the direction the opener is facing. If false, it will only open in the direction of Flipped.
-    Bidirectional: boolean? = true
+    Bidirectional = true,
     
     -- How long the door takes to open
-    OpenTime: number? = 0.5
+    OpenTime = 0.5,
     
     -- The way the door opens/closes. See Door.ActuatorType for more info.
-    ActuatorType: Door.ActuatorType? = Door.ActuatorType.ANGULAR
+    ActuatorType = Door.ActuatorType.ANGULAR,
     
     -- The axis to actuate on.
-    -- Currently only used for linear doors
-    ActuatorAxis: Vector3? = Vector(0,1,0)
+    ActuatorAxis = Vector(0,0,1),
+    
+    -- The offset of the actuator relative to the prop
+    ActuatorOffset = Vector(0,0,0),
     
     -- The angle the door opens up to, in degrees, if ActuatorType is set to ANGULAR.
-    MaxAngle: number? = 100
+    MaxAngle = 100,
     
     -- A number 0-1 describing what % of the door's width it should move, if ActuatorType is set to LINEAR.
-    LinearMovement: number? = 0.9
+    LinearMovement = 0.9,
     
     -- If true, the door's hologram will be clipped, if ActuatorType is set to LINEAR.
     -- Enable this if your door is poking out of the wall/roof when opened.
-    Clip: boolean?
+    Clip = false,
     
     -- Sound table, you can set this to a Door.SoundPresets value or make your own table.
-    Sounds: Sound? = Door.SoundPresets.WOOD,
+    Sounds = Door.SoundPresets.WOOD,
     
     -- A function that returns a boolean for whether or not a passed Player can open the door.
     -- Preset lock functions exist in Door.Locks.
-    Lock = Function<Player, Boolean>|Door.Locks?,
+    Lock = function(plr)
+        return true
+    end,
     
     -- If set to true, the door will automatically close when the opener is far enough away.
-    AutoClose: boolean? = true
+    AutoClose = true
     
 }
-]]
 
-
-
-local function cloneAsHolo( e )
-    local h = hologram.create( e:getPos(), e:getAngles(), e:getModel() )
-    h:setMaterial( e:getMaterial() )
-    h:setColor( e:getColor() )
-    h:setSkin( e:getSkin() )
-    h:setBodygroup(1, e:getBodygroup(1))
-    h:setRenderMode( e:getRenderMode() )
-    
-    return h
-end
 
 
 function Door:initialize( Prop, Data )
     
     Data = Data or {}
+    Util.applyDefaults(Data, DoorDataStruct)
+    
+    for i,v in pairs(Data) do
+        self[i] = v
+    end
     
     self.Prop = Prop
     
-    self.Sounds = table.copy(Data.Sounds or Door.SoundPresets.WOOD)
     self.Initialized = false
     
-    self.Flipped = Data.Flipped
-    self.Bidirectional = Data.Bidirectional
-    
-    self.OpenDir = 1
     self.Brother = nil
     self.Busy = false
     
-    self.OpenTime = Data.OpenTime or 0.5
     self.Open = false
     self.OpenLerp = 0
-    
-    self.ActuatorType = Data.ActuatorType or Door.ActuatorType.ANGULAR
-    self.ActuatorAxis = Data.ActuatorAxis or Vector(0,1,0)
-    self.ActuatorOffset = Data.ActuatorOffset or Vector(0,0,0)
-    self.MaxAngle = Data.MaxAngle or 100
-    self.LinearMovement = Data.LinearMovement or 0.9
-    
-    self.Clip = Data.Clip
-    
-    self.AccessPredicate = Data.Lock
-    
-    if Data.AutoClose ~= nil then
-        self.AutoClose = Data.AutoClose
-    else
-        self.AutoClose = true
-    end
+    self.OpenDir = 1
     
     self.Proxies = {}
     
     Spawner.Enqueue(function()
+        local closedPos, closedAng = self:getHoloLocation( 0 )
         
-        local openPos, openAng = self:getHoloLocation( 1 ) --self:getOpenOffset()
+        self.PhysHull = prop.create( closedPos, closedAng, Prop:getModel(), true )
+        self.PhysHull:doNotDuplicate()
+        self.PhysHull:setMass(50000)
+        self.PhysHull:setColor(Color(0,0,0,0))
         
-        --TODO: maybe disable collisions on this since i keep getting STUCK
-        self.Prop2 = prop.create( openPos, openAng, Prop:getModel(), true )
-        --self.Prop2:setParent( Prop ) --? needs collisions (NO IT DOESNT)
-        self.Prop2:setNocollideAll( true )
-        self.Prop2:doNotDuplicate()
-        self.Prop2:setMass(50000)
-        self.Prop2:setSolid(false)
-        self.Prop2:setColor(Color(0,0,0,0))
-        
-        Door.FromProp[self.Prop] = self
-        Door.FromProp[self.Prop2] = self
+        Door.FromProp[self.PhysHull] = self
         
         self.Initialized = true
     end)
     
     
-    self.Holo = cloneAsHolo( Prop )
+    
+    self.Holo = Util.cloneAsHolo( Prop )
     
     for i,v in pairs(Prop:getChildren()) do
-        local copy = cloneAsHolo(v)
-        --v:setColor(Color(0,0,0,0))
+        if v:getClass() ~= "prop_physics" then continue end
+        
+        local copy = Util.cloneAsHolo(v)
         v:setNoDraw(true)
-        copy:setParent(self.Holo)
         v:setNocollideAll(true)
+        v:setSolid(false)
+        
+        copy:setParent(self.Holo)
     end
+    
+    
     
     --TODO: set for all holos
     if self.Clip and self.ActuatorType ~= Door.ActuatorType.ANGULAR then
         self.Holo:setClip(1, true, self.Holo:obbCenterW() + self.Prop:localToWorldVector(self.Holo:obbSize()*self.ActuatorAxis*0.5), self.Prop:localToWorldVector(-self.ActuatorAxis))
     end
     
-    --self.Holo:setParent( Prop )
+    self.Holo:setParent( Prop )
     
-    --Prop:setColor(Color(0,0,0,0))
     Prop:setNoDraw(true)
+    Prop:setSolid(false)
+    Prop:setNocollideAll(true)
     
     table.insert(Door.Instances, self)
     
@@ -235,29 +242,18 @@ function Door:addProxy( Proxy, ProxySounds )
 end
 
 
--- Deprecated, use below method
-function Door:getOpenOffset()
-    if self.ActuatorType == Door.ActuatorType.ANGULAR then
-        return Vector(), Vector(), Angle(0, self.MaxAngle*(self.Flipped and -1 or 1), 0)
-    elseif self.ActuatorType == Door.ActuatorType.LINEAR then
-        local OBBSize = self.Prop:obbSize()
-        return self.Prop:localToWorldVector( OBBSize * self.ActuatorAxis ) * (self.Flipped and -1 or 1) * self.LinearMovement, Angle()
-    end
-end
-
 
 
 
 function Door:getHoloLocation( t )
     if self.ActuatorType == Door.ActuatorType.ANGULAR then
-        --TODO: account for flipped?
-        local a = self.Prop:getAngles():rotateAroundAxis( self.Prop:localToWorldVector(self.ActuatorAxis), self.MaxAngle*t )
+        local a = self.Prop:getAngles():rotateAroundAxis( self.Prop:localToWorldVector(self.ActuatorAxis), self.MaxAngle*t*(self.Flipped and -1 or 1)*self.OpenDir )
         local c1 = localToWorld( self.ActuatorOffset*self.Prop:obbSize(), Angle(), Vector(), a )
         
         return self.Prop:localToWorld( -self.ActuatorOffset*self.Prop:obbSize() ) + c1, a
         
     elseif self.ActuatorType == Door.ActuatorType.LINEAR then
-        --TODO: fix
+        --TODO: fix (is this fixed i dont remember)
         local OBBSize = self.Prop:obbSize()
         return self.Prop:localToWorld( OBBSize * self.ActuatorAxis * (self.Flipped and -1 or 1) * self.LinearMovement * t ), self.Prop:getAngles()
     end
@@ -348,17 +344,19 @@ function Door:setOpen( Open, User )
     
     self.Open = Open
     self.Busy = true
-    --self.Holo:setAnimation(3)
+    
+    local anims = Door.Animations[self.Prop:getModel()]
+    if anims then
+        self.Holo:setAnimation(anims[2])
+    end
     
     self:emitSound("Move")
     
+    self.PhysHull:setSolid( false )
+    self.PhysHull:setNocollideAll( true )
+    
     if Open then
         self:emitSound("Open")
-        
-        timer.simple(0.1, function()
-            self.Prop:setSolid(false)
-            self.Prop:setNocollideAll( true )
-        end)
         
         if User and self.AutoClose then
             table.insert(Door.HeldOpen, self)
@@ -369,23 +367,18 @@ function Door:setOpen( Open, User )
     else
         self:emitSound("CloseStart")
         
-        timer.simple(0.1, function()
-            self.Prop2:setSolid(false)
-        end)
-        
         table.removeByValue(Door.HeldOpen, self)
         
         self.Holder = nil
         self.HoldDistance = nil
-        
     end
 end
 
 
 
 function Door:isLockedTo( player  )
-    if self.AccessPredicate then
-        return not self.AccessPredicate( player )
+    if self.Lock then
+        return not self.Lock( player )
     end
     
     return false
@@ -394,25 +387,24 @@ end
 
 
 function Door:open()
-    Door:setOpen(true)
+    self:setOpen(true)
 end
 
 
 function Door:close()
-    Door:setOpen(false)
+    self:setOpen(false)
 end
 
 
 function Door:remove()
-    self.Prop2:remove()
+    self.PhysHull:remove()
     self.Holo:remove()
     
     if isValid(self.Prop) then
         self.Prop:remove()
     end
     
-    Door.FromProp[self.Prop] = nil
-    Door.FromProp[self.Prop2] = nil
+    Door.FromProp[self.PhysHull] = nil
     table.removeByValue(Door.HeldOpen, self)
     table.removeByValue(Door.Instances, self)
     
@@ -434,42 +426,32 @@ end
 
 
 
-hook.add("Tick", "Door_Tick", function()
-    for i,v in pairs(Door.Instances) do
-        local openGoal = v.Open and 1 or 0
+hook.add("think", "door_think", function()
+    for i,self in pairs(Door.Instances) do
+        local openGoal = self.Open and 1 or 0
         
-        if openGoal ~= v.OpenLerp then
-            v.OpenLerp = math.clamp(v.OpenLerp + math.sign(openGoal - v.OpenLerp)/v.OpenTime*timer.frametime(), 0, 1)
-            local t = Util.smoothCurve( v.OpenLerp )
+        if openGoal ~= self.OpenLerp then
+            self.OpenLerp = math.clamp(self.OpenLerp + math.sign(openGoal - self.OpenLerp)/self.OpenTime*timer.frametime(), 0, 1)
+            local t = Util.smoothCurve( self.OpenLerp )
+            local holoPos, holoAng = self:getHoloLocation( t )
             
-            --local openPos, openAng = v:getOpenOffset()
-            local holoPos, holoAng = v:getHoloLocation( t )
+            self.Holo:setPos(holoPos)
+            self.Holo:setAngles(holoAng)
             
-            --TODO: would OpenDir even like... work? the hitbox isnt in the right position...
-            --v.Holo:setAngles( v.Prop:getAngles() + Angle(0,t*v.MaxAngle*(v.Flipped and -1 or 1)*v.OpenDir,0) )
-            
-            
-            --[[if v.ActuatorType == Door.ActuatorType.ANGULAR then
-                v.Holo:setAngles( v.Prop:getAngles() + openAng*t*v.OpenDir )
-            else
-                v.Holo:setPos( v.Prop:getPos() + openPos*t )
-            end]]
-            
-            v.Holo:setPos(holoPos)
-            v.Holo:setAngles(holoAng)
-            
-            if openGoal == v.OpenLerp then
-                v.Busy = false
+            if openGoal == self.OpenLerp then
+                self.Busy = false
                 
-                v:stopSound("Move")
+                self:stopSound("Move")
                 
-                if not v.Open then
-                    v:emitSound("Close")
-                    v.Prop:setSolid(true)
-                    v.Prop:setNocollideAll(false)
+                self.PhysHull:setPos(holoPos)
+                self.PhysHull:setAngles(holoAng)
+                self.PhysHull:setSolid( true )
+                
+                if not self.Open then
+                    self.PhysHull:setNocollideAll( false )
+                    self:emitSound("Close")
                 else
-                    v:emitSound("OpenFinish")
-                    v.Prop2:setSolid(true)
+                    self:emitSound("OpenFinish")
                 end
             end
         end
@@ -497,7 +479,7 @@ hook.add("Removed", "Door_RevertOnChipRemoved", function()
     for i,v in pairs(Door.Instances) do
         v.Prop:setSolid(true)
         v.Prop:setNocollideAll(false)
-        v.Prop:setColor(Color(255,255,255,255))
+        v.Prop:setNoDraw(false)
     end
 end)
 
@@ -519,14 +501,17 @@ hook.add("PlayerUse", "Door_Interact", function( play, e )
     if d and not d.Busy and d.Initialized then
         
         if d:isLockedTo( play ) then
-            
             if isProxy then
                 if e.Sounds and e.Sounds.Locked then
                     e:emitSound(e.Sounds.Locked)
                 end
             else
                 d:emitSound("Locked")
-                --d.Holo:setAnimation(1)
+                
+                local anims = Door.Animations[d.Prop:getModel()]
+                if anims then
+                    d.Holo:setAnimation(anims[1])
+                end
             end
             
             d.Busy = true --ill probably regret this tbh
@@ -545,24 +530,22 @@ hook.add("PlayerUse", "Door_Interact", function( play, e )
             end
         else
             d:emitSound("Interact")
-            --d.Holo:setAnimation(1)
         end
         
         
         local state = not d.Open
         
         if state then
-            local diff = e:getPos() - play:getPos()
-            local side = diff:getNormalized():dot( d.Flipped and -e:getForward() or e:getForward() )
-            
-            --TODO: why is it setting d.Prop2 angles? shouldnt it stay static and alternate prop1/2 depending on state?
-            d.OpenDir = -math.sign(side)
-            --d.Prop2:setAngles( d.Prop:getAngles() + Angle(0,d.MaxAngle*(d.Flipped and -1 or 1)*d.OpenDir,0) )
+            if d.Bidirectional then
+                local diff = e:getPos() - play:getPos()
+                local side = diff:getNormalized():dot( d.Flipped and -e:getForward() or e:getForward() )
+                
+                d.OpenDir = -math.sign(side)
+            end
             
             if d.Brother then
                 local d2 = d.Brother
                 d2.OpenDir = d.OpenDir
-                --d2.Prop2:setAngles( d2.Prop:getAngles() + Angle(0,d2.MaxAngle*(d2.Flipped and -1 or 1)*d2.OpenDir,0) )
             end
         end
         
