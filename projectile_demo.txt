@@ -1,0 +1,100 @@
+--@name shrobl missile shooter thing
+--@author shroobloom
+--@server
+--@model models/sprops/misc/tubes_thin/size_2/t_tube_24x96.mdl
+--@include sb/projectile.txt
+--@include sb/spawner.txt
+--@include sb/util.txt
+
+
+
+
+wire.adjustInputs({"Fire", "TargetPos"}, {"NORMAL", "VECTOR"})
+
+
+
+local Projectile = require("sb/projectile.txt")
+local Spawner = require("sb/spawner.txt")
+local Util = require("sb/util.txt")
+
+
+
+--[[ CONFIG ]]--
+local BURST_SIZE = 10
+local BURST_INTERVAL = 0.15
+local GUIDED = false
+--[[ CONFIG END ]]--
+
+
+
+
+local Firing = false
+
+function fire()
+    if Firing then return end
+    
+    Firing = true
+    
+    coroutine.wrap(function()
+        for i=1, BURST_SIZE do
+            Spawner.Enqueue(function()
+                chip():emitSound("acf_missiles/missiles/flare_launch.mp3")
+                
+                pcall(function()
+                    
+                    --[[ MISSILE PROPERTIES ]]--
+                    local rocket = Projectile:new( chip():getPos(), chip():localToWorldAngles(Angle(0,-90,0)), {
+                        Model = "models/props_phx/ww2bomb.mdl",
+                        ModelAngle = Angle(0,0,0),
+                        Thrust = 2000,
+                        
+                        Gravity = false,
+                        
+                        ExplosionEffect = "lfs_missile_explosion",
+                        
+                        Wobble = {
+                            Power = math.random(4,28),
+                            Speed = math.random(2,4)
+                        },
+                        
+                        Trail = {
+                            Material = "trails/smoke"
+                        }
+                        
+                    })
+                    
+                    rocket.Instance:setNocollideAll(true)
+                    
+                    timer.simple(0.25, function()
+                        rocket.Instance:setNocollideAll(false)
+                    end)
+                    
+                    if GUIDED then
+                        rocket.Target = wire.ports.TargetPos
+                    end
+                end)
+            end)
+            
+            Util.wait( BURST_INTERVAL )
+        end
+        
+        Firing = false
+    end)()
+end
+
+
+
+
+
+hook.add("input", "readInputs", function( k, v )
+    if k == "Fire" and v ~= 0 then
+        fire()
+    elseif k == "TargetPos" and GUIDED then
+        for i,v in pairs(Projectile.Instances) do
+            v.Target = wire.ports.TargetPos
+        end
+    end
+end)
+
+
+
