@@ -8,9 +8,7 @@
 
 
 
-
 wire.adjustInputs({"Fire", "TargetPos"}, {"NORMAL", "VECTOR"})
-
 
 
 local Projectile = require("sb/projectile.txt")
@@ -18,13 +16,11 @@ local Spawner = require("sb/spawner.txt")
 local Util = require("sb/util.txt")
 
 
-
 --[[ CONFIG ]]--
 local BURST_SIZE = 10
 local BURST_INTERVAL = 0.15
 local GUIDED = false
 --[[ CONFIG END ]]--
-
 
 
 
@@ -66,6 +62,7 @@ function fire()
                     rocket.Instance:setNocollideAll(true)
                     
                     timer.simple(0.25, function()
+                        if not isValid(rocket.Instance) then return end
                         rocket.Instance:setNocollideAll(false)
                     end)
                     
@@ -81,9 +78,6 @@ function fire()
         Firing = false
     end)()
 end
-
-
-
 
 
 hook.add("input", "readInputs", function( k, v )
