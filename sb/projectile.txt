@@ -14,9 +14,9 @@ Projectile.Instances = {}
 
 
 --TODO:
--- [ ] Missiles should lose their target
+-- [ ] Missiles should lose their target if they die, also, they'd try to go back to their LaunchAngle, which is bad.
 -- [ ] Arc mode, they should do a big arc to reach their target if this is on
--- [ ] Upon hitting a vehicle, missiles should teleport closer to the vehicle's origin to increase damage
+-- [ ] (?) (only on collision) Upon hitting a vehicle, missiles should teleport closer to the vehicle's origin to increase damage
 -- [X] A ThrustMax and ThrustRampupTime variable to allow the rockets to move faster the longer they're alive for
 
 
@@ -177,6 +177,7 @@ end
 function Projectile:detonate( DontBreak )
     if self.Detonated then return end
     
+    self.Enabled = false
     self.Detonated = true
     
     if isValid(self.Instance) and not DontBreak then
@@ -200,6 +201,8 @@ function Projectile:remove()
         self.Instance:remove()
         self.Detonated = true
     end
+    
+    self.Enabled = false
     
     table.removeByValue(Projectile.Instances, self)
 end
