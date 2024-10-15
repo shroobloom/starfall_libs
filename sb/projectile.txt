@@ -1,12 +1,10 @@
 --@name Projectile
 --@author shroobloom
 --@server
---@include sb/spawner.txt
 --@include sb/util.txt
 
 
 
-local Spawner = require("sb/spawner.txt")
 local Util = require("sb/util.txt")
 
 
@@ -14,43 +12,32 @@ local Projectile = class("Projectile")
 Projectile.Instances = {}
 
 
---NOTE: Wire Simple Explosives have a hard-coded detonate cooldown of 0.2s. 
---      If you detonate projectiles at a faster rate, some will just not deal damage.
---      This is a known bug, but I have no intention on fixing it at the moment.
 
-
-
-
-function Projectile._spawnWireExplosive()
-    if isValid(Projectile.BOMB) then
-        Projectile.BOMB:remove()
-    end
-    
-    Projectile.BOMB = prop.createSent( Vector(), Angle(), "gmod_wire_simple_explosive", true, {
-        damage = 500,
-        radius = 512,
-        
-        Model = "models/hunter/blocks/cube4x4x4.mdl"
-    })
-    
-    Projectile.BOMB:setSolid(false)
-    Projectile.BOMB:setNoDraw(true)
-    Projectile.BOMB:setNocollideAll(true)
-    Projectile.BOMB:doNotDuplicate()
-    Projectile.BOMB:setMass(50000)
-end
-
-Spawner.Enqueue(Projectile._spawnWireExplosive)
-
-
+--TODO:
+-- [ ] Missiles should lose their target
+-- [ ] Arc mode, they should do a big arc to reach their target if this is on
+-- [ ] Upon hitting a vehicle, missiles should teleport closer to the vehicle's origin to increase damage
+-- [X] A ThrustMax and ThrustRampupTime variable to allow the rockets to move faster the longer they're alive for
 
 
 local PropertyDefaults = {
     Model = "models/props_c17/canister02a.mdl",
     ModelAngle = Angle(90,0,0),
     
+    Enabled = true,
+    
+    -- Initial velocity - the projectile will have this velocity on launch
+    -- The max speed for a projectile is equal to physenv.getPerformanceSettings().MaxVelocity, which is ~2966 at the time of writing on CFC.
     Speed = 0,
+    
+    -- Constant thrust - the projectile will try to maintain this speed
     Thrust = 0,
+    
+    -- Maximum thrust and thrust rampup - the projectile will slowly ramp up to this thrust level as it's existed for up to its rampup time
+    -- Similar to how the LFS Rocket Launcher will speed up as it's been chasing the target for longer. Good for versatile weapons.
+    ThrustMax = nil,
+    ThrustRampupTime = 10,
+    
     Gravity = true,
     
     ExplosionEffect = "lfs_missile_explosion",
@@ -58,10 +45,19 @@ local PropertyDefaults = {
     Trail = {
         Material = "", --trails/smoke
         StartSize = 10,
-        EndSize = 30,
-        Length = 0.1, --Duration
+        EndSize = 75,
+        Length = 0.25, --Duration
         Color = Color(255,255,255),
         Additive = false
+    },
+    
+    Wobble = {
+        Speed = 0,
+        Power = 0
+    },
+    
+    Homing = {
+        TurnForce = 0
     }
 }
 
@@ -70,25 +66,34 @@ function Projectile:initialize( pos, ang, properties )
     
     Util.applyDefaults( properties, PropertyDefaults )
     
+    for i,v in pairs(properties) do
+        self[i] = v
+    end
+    
+    
     self.Instance = prop.create( pos, ang + properties.ModelAngle, properties.Model, false )
-    self.Instance:setUnbreakable( true )
     self.Instance:enableDrag( false )
     self.Instance:enableGravity( properties.Gravity )
     self.Instance:doNotDuplicate()
     
     self.Instance:applyForceCenter( ang:getForward() * properties.Speed * self.Instance:getMass() )
     
-    self.Instance:addCollisionListener(function( hit )
-        self:detonate()
-    end)
-    
     self.Instance.Projectile = self
-    
-    self.Thrust = properties.Thrust
-    self.ExplosionEffect = properties.ExplosionEffect
     
     if properties.Trail.Material ~= "" then
         self.Instance:setTrails(properties.Trail.StartSize, properties.Trail.EndSize, properties.Trail.Length, properties.Trail.Material, properties.Trail.Color, nil, properties.Trail.Additive)
+    end
+    
+    self.Detonated = false
+    self.Target = nil --Either a Vector or an Entity
+    
+    --TODO: configuration
+    self.WobbleSeed = math.random()*math.pi
+    self.WobbleDir = math.sign(math.random()-0.5)
+    
+    if properties.Enabled then
+        self.Enabled = false
+        self:fire()
     end
     
     table.insert(Projectile.Instances, self)
@@ -96,50 +101,104 @@ function Projectile:initialize( pos, ang, properties )
 end
 
 
+
+
+function Projectile:fire()
+    assert(not self.Enabled, "Projectile has already been fired!")
+    
+    self.LaunchTime = timer.curtime()
+    self.LaunchAngle = self.Instance:getAngles() - self.ModelAngle
+    self.Enabled = true
+    
+    self.Instance:addCollisionListener(function( hit )
+        if self.Detonated or hit.HitEntity.Projectile then return end
+        self:detonate()
+    end)
+end
+
+
+function Projectile:getTargetPos()
+    return type(self.Target) == "Vector" and self.Target or self.Target:obbCenterW()
+end
+
+
+
+-- Runs 10 times/s to allow for a ton of projectiles and still being performant
 function Projectile:think()
+    if not self.Enabled then return end
+    
+    if type(self.Target) ~= "Vector" and not isValid(self.Target) then
+        self.Target = nil
+    end
     
     if self.Thrust > 0 then
-        self.Instance:applyForceCenter( self.Instance:getUp() * self.Thrust * self.Instance:getMass() )
+        local curThrust = self.Thrust
+        
+        if self.MaxThrust then
+            local accel = math.clamp((timer.curtime() - self.LaunchTime) / self.ThrustRampupTime, 0, 1)
+            curThrust = math.lerp(accel, self.Thrust, self.MaxThrust or self.Thrust)
+        end
+        
+        self.Instance:applyForceCenter( (self.Instance:getForward()*curThrust - self.Instance:getVelocity()*1) * self.Instance:getMass() )
+    end
+    
+    
+    
+    local targetAngle = self.LaunchAngle
+    
+    if self.Target then
+        local targetPos = self:getTargetPos()
+        targetAngle = (targetPos - self.Instance:getPos()):getAngle()
+    end
+    
+    if self.Wobble.Frequency ~= 0 then
+        targetAngle = targetAngle + Angle(
+            math.sin( timer.curtime()*math.pi*self.Wobble.Speed*self.WobbleDir + self.WobbleSeed )*self.Wobble.Power,
+            math.cos( timer.curtime()*math.pi*self.Wobble.Speed*self.WobbleDir + self.WobbleSeed )*self.Wobble.Power,
+            0
+        ) * math.min( (timer.curtime() - self.LaunchTime), 1 )
+    end
+    
+    
+    if targetAngle ~= self.LaunchAngle then
+        local inertiaVec = self.Instance:getInertia()
+        local inertia = Angle( inertiaVec.y, inertiaVec.z, inertiaVec.x )
+        
+        local localAng = self.Instance:worldToLocalAngles(targetAngle)
+        localAng.p = math.clamp(localAng.p, -15, 15)
+        localAng.y = math.clamp(localAng.y, -15, 15)
+        
+        self.Instance:applyAngForce( (localAng*200 - self.Instance:getAngleVelocityAngle()*30) * inertia )
     end
     
 end
 
 
-function Projectile:detonate()
+function Projectile:detonate( DontBreak )
+    if self.Detonated then return end
     
-    -- If the bomb was destroyed, respawn it then try again:
-    if not isValid(Projectile.BOMB) then
-        Spawner.Enqueue(function()
-            if not isValid(Projectile.BOMB) then
-                Projectile._spawnWireExplosive()
-            end
-            
-            self:detonate()
-        end)
-        
-        return
+    self.Detonated = true
+    
+    if isValid(self.Instance) and not DontBreak then
+        self.Instance:applyDamage(10, owner(), owner(), DAMAGE.BLAST)
+        self.Instance:breakEnt()
     end
     
-    Projectile.BOMB:setPos( self.Instance:getPos() )
-    Projectile.BOMB:getWirelink().Detonate = 1
-    Projectile.BOMB:getWirelink().Detonate = 0
-    Projectile.BOMB:setPos( Vector() )
-    
-    if self.ExplosionEffect ~= "" then
+    if self.ExplosionEffect ~= "" and effect.canCreate() then
         local ef = effect.create()
         ef:setOrigin(self.Instance:getPos())
         ef:play(self.ExplosionEffect)
     end
     
-    self:remove()
+    table.removeByValue(Projectile.Instances, self)
 end
 
 
 
 function Projectile:remove()
     if isValid(self.Instance) then
-        self.Instance.Projectile = nil
         self.Instance:remove()
+        self.Detonated = true
     end
     
     table.removeByValue(Projectile.Instances, self)
@@ -148,7 +207,7 @@ end
 
 
 
-hook.add("think", "Projectile_Think", function()
+timer.create("Projectile_Think", 0.1, 0, function()
     for i,v in pairs(Projectile.Instances) do
         v:think()
     end
@@ -159,17 +218,21 @@ hook.add("EntityRemoved", "Projectile_Removal", function( e )
     if e:getOwner() ~= owner() then return end
     if not e.Projectile then return end
     
-    e.Projectile:remove()
+    e.Projectile:detonate( true )
 end)
 
 
 
 --[[
---timer.simple(1, function()
-timer.create("machinegun mode", 0.3, 0, function()
+timer.simple(1, function()
     
-    local p = Projectile:new( chip():getPos() + Vector(0,0,60), owner():getEyeAngles(), {
-        Speed = 5000,
+    local p = Projectile:new( chip():getPos() + Vector(0,0,60), Angle(-90,0,0), {
+        Model = "models/props_phx/ww2bomb.mdl",
+        ModelAngle = Angle(),
+        Thrust = 1500,
+        MaxThrust = 3000,
+        
+        Gravity = false,
         
         ExplosionEffect = "",
         
@@ -178,7 +241,49 @@ timer.create("machinegun mode", 0.3, 0, function()
         }
     })
     
-end)]]
+    local fins = hologram.create( p.Instance:localToWorld(Vector(0,0,-2.5)), p.Instance:getAngles(), "models/props_phx/amraam.mdl", Vector(0.5,1,1) )
+    fins:setParent(p.Instance)
+    
+    p.Target = owner()
+    
+    timer.create("", 0.1, 0, function()
+        print(p.Instance:getVelocity():getLength())
+    end)
+    
+end)
+]]
+
+--[[
+
+--timer.simple(1, function()
+timer.create("hellfire", 0.3, 0, function()
+    
+    local p = Projectile:new( chip():getPos() + Vector(0,0,60), Angle(-90,0,0), {
+        Model = "models/props_phx/ww2bomb.mdl",
+        ModelAngle = Angle(),
+        Speed = 5000,
+        
+        Gravity = false,
+        
+        ExplosionEffect = "",
+        
+        Trail = {
+            Material = "trails/smoke"
+        }
+    })
+    
+    local fins = hologram.create( p.Instance:localToWorld(Vector(0,0,-2.5)), p.Instance:getAngles(), "models/props_phx/amraam.mdl", Vector(0.5,1,1) )
+    fins:setParent(p.Instance)
+    
+end)
+
+
+timer.create("", 0, 0, function()
+    for i,v in pairs(Projectile.Instances) do
+        v.Target = owner():getEyeTrace().HitPos
+    end
+end)
+]]
 
 
 
