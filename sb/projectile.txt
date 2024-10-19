@@ -246,9 +246,7 @@ end)
 
 
 hook.add("EntityRemoved", "Projectile_Removal", function( e )
-    if e:getOwner() ~= owner() then return end
     if not e.Projectile then return end
-    
     e.Projectile:detonate( true )
 end)
 
