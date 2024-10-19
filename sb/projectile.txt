@@ -18,6 +18,7 @@ Projectile.Instances = {}
 -- [ ] Arc mode, they should do a big arc to reach their target if this is on
 -- [ ] (?) (only on collision) Upon hitting a vehicle, missiles should teleport closer to the vehicle's origin to increase damage
 -- [X] A ThrustMax and ThrustRampupTime variable to allow the rockets to move faster the longer they're alive for
+-- [X] Projectiles should have a Lifetime property, and explode (or lose fuel?) after they live for long enough
 
 
 local PropertyDefaults = {
@@ -57,9 +58,16 @@ local PropertyDefaults = {
     },
     
     Homing = {
-        TurnForce = 0
-    }
+        TurnForce = 0 --TODO: implement
+    },
+    
+    -- If set, causes the missiles to curve to their target instead of flying directly at them at a specific height.
+    ArcHeight = nil,
+    
+    -- After this duration, the projectile will self-destruct
+    Lifetime = 30
 }
+
 
 
 function Projectile:initialize( pos, ang, properties )
@@ -75,6 +83,7 @@ function Projectile:initialize( pos, ang, properties )
     self.Instance:enableDrag( false )
     self.Instance:enableGravity( properties.Gravity )
     self.Instance:doNotDuplicate()
+    self.Instance:setMass(10) --just so impacts dont kill
     
     self.Instance:applyForceCenter( ang:getForward() * properties.Speed * self.Instance:getMass() )
     
@@ -107,6 +116,7 @@ function Projectile:fire()
     assert(not self.Enabled, "Projectile has already been fired!")
     
     self.LaunchTime = timer.curtime()
+    self.LaunchPos = self.Instance:getPos()
     self.LaunchAngle = self.Instance:getAngles() - self.ModelAngle
     self.Enabled = true
     
@@ -131,6 +141,10 @@ function Projectile:think()
         self.Target = nil
     end
     
+    if timer.curtime() - self.LaunchTime > self.Lifetime then
+        return self:detonate()
+    end
+    
     if self.Thrust > 0 then
         local curThrust = self.Thrust
         
@@ -148,6 +162,20 @@ function Projectile:think()
     
     if self.Target then
         local targetPos = self:getTargetPos()
+        
+        if self.ArcHeight then
+            local tpz0 = targetPos:clone():setZ(0)
+            local lpz0 = self.LaunchPos:clone():setZ(0)
+            
+            local startDist = tpz0:getDistance(lpz0)
+            local currentDist = tpz0:getDistance( self.Instance:getPos():setZ(0) )
+            local alpha = 1 - math.clamp(currentDist / startDist, 0, 1)
+            local mid = (self.LaunchPos + targetPos)/2
+            mid:setZ( math.max(self.LaunchPos.z, targetPos.z) + self.ArcHeight )
+            
+            targetPos = math.bezierVector( alpha + 0.1, self.LaunchPos, mid, targetPos )
+        end
+        
         targetAngle = (targetPos - self.Instance:getPos()):getAngle()
     end
     
@@ -239,6 +267,8 @@ timer.simple(1, function()
         
         ExplosionEffect = "",
         
+        ArcHeight = 4000,
+        
         Trail = {
             Material = "trails/smoke"
         }
@@ -247,14 +277,16 @@ timer.simple(1, function()
     local fins = hologram.create( p.Instance:localToWorld(Vector(0,0,-2.5)), p.Instance:getAngles(), "models/props_phx/amraam.mdl", Vector(0.5,1,1) )
     fins:setParent(p.Instance)
     
-    p.Target = owner()
+    p.Target = chip():localToWorld(Vector(5000,0,0))
     
-    timer.create("", 0.1, 0, function()
+    --local h = hologram.create(chip():localToWorld(Vector(5000,0,0)), Angle(), "models/hunter/blocks/cube1x1x05.mdl")
+    
+    --[[timer.create("", 0.1, 0, function()
         print(p.Instance:getVelocity():getLength())
-    end)
+    end)] ]
     
-end)
-]]
+end)]]
+
 
 --[[
 
