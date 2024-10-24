@@ -434,11 +434,20 @@ if CLIENT then
         end
     end)
     
+    
+    local lastYPress = 0
+    
     hook.add("inputPressed", "SFMA_quickSpectate", function( key )
         if input.getKeyName(key) ~= "y" then return end
         
         if not lastOffender then
             return ChatLog("There is no recent offender to spectate!")
+        end
+        
+        -- Require a double-tap when in PvP mode
+        if owner():isInPvp() and timer.curtime() - lastYPress > 0.35 then
+            lastYPress = timer.curtime()
+            return ChatLog("Double tap Y to spectate...")
         end
         
         ChatLog("Spectating ", getColor(lastOffender), getName(lastOffender), Color(255,255,255), ".")
