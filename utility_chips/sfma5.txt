@@ -117,6 +117,25 @@ ChatCommands:add({
 })
 
 
+if owner():isAdmin() then
+    ChatCommands:add({
+        Name = "skybox",
+        Description = "Teleports you to the skybox.",
+        Aliases = {"sb"},
+        Run = function( user, Target )
+            if user ~= owner() then return end
+            
+            local skyCamera = find.byClass("sky_camera")[1]
+            
+            if not skyCamera then
+                return ChatCommands.Error("No skybox found for " .. game.getMap() .. "!")
+            end
+            
+            owner():setPos( skyCamera:getPos() )
+            ChatLog("Teleported to the Skybox.")
+        end
+    })
+end
 
 
 
