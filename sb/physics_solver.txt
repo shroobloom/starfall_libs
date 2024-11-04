@@ -1,0 +1,76 @@
+--@name PhysicsSolver
+--@author
+--@shared
+
+
+local PhysicsSolver = {}
+
+-- How high the Z difference needs to be for it to use the more complicated formulae
+PhysicsSolver.Z_THRESHOLD = 100
+
+
+local function G()
+    return -physenv.getGravity().z
+end
+
+
+-- Calculates the launch angle Theta of a projectile with initial velocity v0 and direction Dir.
+-- If Shallow is supplied, it will return either the steep (true) or shallow (false) angle. Otherwise, it returns both.
+
+function PhysicsSolver.getLaunchAngle( v0, Dir, Steep )
+    
+    local Horizontal = Vector(Dir.x, Dir.y, 0)
+    local Dist = Horizontal:getLength()
+    
+    if math.abs(Dir.z) < PhysicsSolver.Z_THRESHOLD then
+        if Steep == false then
+            return 0.5*math.asin((G()*Dist)/(v0^2))
+        elseif Steep == true then
+            return 0.5*math.acos((G()*Dist)/(v0^2))
+        else
+            local a = (G()*Dist)/(v0^2)
+            
+            return {
+                0.5*math.acos(a),
+                0.5*math.asin(a)
+            }
+        end
+    else
+        local Root = math.sqrt(v0^4 - G()*(G()*Dist^2 + 2*Dir.z*v0^2))
+        
+        if Steep == false then
+            return math.atan( (v0^2 - Root) / (G()*Dist) )
+        elseif Steep == true then
+            return math.atan( (v0^2 + Root) / (G()*Dist) )
+        else
+            return {
+                math.atan( (v0^2 + Root) / (G()*Dist) ),
+                math.atan( (v0^2 - Root) / (G()*Dist) )
+            }
+        end
+    end
+
+end
+
+
+
+-- Calculates how long a projectile will stay in the air for, given an initial velocity v0, a direction Dir, and a launch angle Theta.
+-- If Dir is not specified, it will assume the Y difference is 0.
+
+function PhysicsSolver.getFlightTime( v0, Theta, Dir )
+    local v0z = math.sin(Theta) * v0
+    
+    if not Dir or math.abs(Dir.y) < PhysicsSolver.Z_THRESHOLD then
+        return 2*v0z/-physenv.getGravity()
+    else
+        local Root = math.sqrt(v0z^2 + 2*G()*Dir.z)
+        return (-v0z - Root) / physenv.getGravity()
+    end
+end
+
+
+
+
+
+return PhysicsSolver
+
