@@ -643,10 +643,38 @@ function Util.cloneAsHolo( e )
         end)
     end
     
+    for i,v in pairs(e:getMaterials()) do
+        h:setSubMaterial(i, e:getSubMaterial(i))
+    end
+    
+    if isValid(e:getParent()) then
+        h:setParent(e:getParent())
+    end
+    
     return h
 end
 
 
+
+
+-- Similar to coroutine.wrap, but automatically runs and has proper error logging.
+-- Returns the spawned thread.
+function Util.spawn(callback)
+    local thread = coroutine.wrap(function()
+        local s,e = pcall(callback)
+        
+        if not s then
+            if type(e) == "table" then
+                error(e.message .. "\n" .. e.traceback)
+            else
+                error(e)
+            end
+        end
+    end)
+    
+    thread()
+    return thread
+end
 
 
 
