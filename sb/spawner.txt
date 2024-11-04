@@ -18,12 +18,15 @@ end
 
 
 
-function Spawner.Enqueue( Callback )
+function Spawner.enqueue( Callback )
     table.insert(Spawner.Queue, Callback)
     TryEmptyQueue()
 end
 
-function Spawner.Await()
+-- Deprecated
+Spawner.Enqueue = Spawner.enqueue
+
+function Spawner.await()
     if prop.canSpawn() then return end
     
     local cr = coroutine.running()
@@ -35,6 +38,8 @@ function Spawner.Await()
     coroutine.yield(cr)
 end
 
+-- Deprecated
+Spawner.Await = Spawner.await
 
 
 timer.create("Spawner_Queue", 1/prop.spawnRate(), 0, TryEmptyQueue)
