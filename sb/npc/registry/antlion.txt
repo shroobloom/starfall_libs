@@ -377,17 +377,23 @@ if (Antlion) {
                         if NPC.isSomeoneNearby( npc:getPos(), 3000 ) then return end
                         if not sound.canCreate() then return end
                         
-                        local roar = sound.create(npc, "npc/combine_gunship/gunship_moan.wav", true)
-                        roar:setSoundLevel( 150 )
-                        roar:play()
-                        roar:setVolume(1)
+                        if sound.canCreate() then
+                            local roar = sound.create(npc, "npc/combine_gunship/gunship_moan.wav", true)
+                            roar:setSoundLevel( 150 )
+                            roar:play()
+                            roar:setVolume(1)
+                            
+                            timer.simple(sound.duration("npc/combine_gunship/gunship_moan.wav"), function()
+                                roar:destroy()
+                            end)
+                        end
                     end
                 },
                 {
                     -- Artillery
                     Cooldown = 8,
                     Use = function( npc )
-                        if npc.Phase < 1 or math.random() < 0.5 then return end
+                        --if npc.Phase < 1 or math.random() < 0.5 then return end
                         
                         local LaunchPos = npc:obbCenterW()
                         
@@ -417,11 +423,16 @@ if (Antlion) {
                         
                         if #targets == 0 then return end
                         
-                        local roar = sound.create(npc, "npc/combine_gunship/gunship_moan.wav", true)
-                        roar:setSoundLevel( 100 )
-                        roar:play()
-                        roar:setVolume(1)
-                        
+                        if sound.canCreate() then
+                            local roar = sound.create(npc, "npc/combine_gunship/gunship_moan.wav", true)
+                            roar:setSoundLevel( 100 )
+                            roar:play()
+                            roar:setVolume(1)
+                            
+                            timer.simple(sound.duration("npc/combine_gunship/gunship_moan.wav"), function()
+                                roar:destroy()
+                            end)
+                        end
                         
                         local tar = targets[math.random(#targets)]
                         
