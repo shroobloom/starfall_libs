@@ -8,6 +8,10 @@
 
 
 
+--[[ TODO ]]--
+-- [ ] Vort effect to show antlion guards granting a shield
+-- [ ] Mortar shell attack to deal with helicopters and ground units
+
 
 --[[ CONFIG ]]--
 
@@ -41,9 +45,9 @@ if SERVER then
     
     
     --[[ DEBUG BLOCK ]]--
-    --[[NPC.Debug = true
+    NPC.Debug = true
     NPC.AutoRegisterParticipants = false
-    table.insert(NPC.Participants, owner())]]
+    table.insert(NPC.Participants, owner())
     
     
     
@@ -97,7 +101,8 @@ if SERVER then
     NPC.addHints(
         "Every nearby Antlion Guard grants the nest a 25% damage reduction. Take them out before dealing with the nest!",
         "Explosives and melee weapons deal much more damage to the Nest.",
-        "Airborne attacks are not very effective!"
+        "Airborne attacks are not very effective!",
+        "Watch out for projectiles from above!"
     )
 end
 

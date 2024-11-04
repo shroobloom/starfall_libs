@@ -16,6 +16,16 @@ dofile "sb/npc/prop_npc.txt"
 
 
 
+--[[ TODO ]]--
+-- [ ] Remove collisions between NPCs
+-- [ ] Burst limit error?
+-- [ ] PropNPC Health error
+-- [ ] Verify antlion unburrow sequence didnt break
+-- [ ] path_track setpos spam to make helicopters and other flying enemies work
+-- [ ] Antlion hill should be able to be damaged from explosive props (maybe at a reduced multiplier?)
+
+
+
 if SERVER then
     local Spawner = require("sb/spawner.txt")
     local E2VM = require("sb/e2vm.txt")
@@ -507,6 +517,7 @@ if (Entity) {
         if isValid(npc:getOwner()) and npc:getOwner() ~= owner() then return end
         
         timer.simple(0, function()
+            if not isValid(npc) then return end
             if npc.IsChipNPC then return end --already wrapped
             NPC.wrap( npc )
         end)

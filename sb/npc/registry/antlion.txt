@@ -5,6 +5,7 @@
 --@include sb/util.txt
 --@include sb/spawner.txt
 --@include sb/npc/prop_npc.txt
+--@include sb/physics_solver.txt
 
 
 
@@ -15,6 +16,7 @@ if SERVER then
     local E2VM = require("sb/e2vm.txt")
     local Util = require("sb/util.txt")
     local Spawner = require("sb/spawner.txt")
+    local Solver = require("sb/physics_solver.txt")
     
     
     
@@ -31,7 +33,7 @@ if (Antlion) {
     
     
     
-    local NEST_GUARD_PROTECTION_RANGE = 1250
+    local NEST_GUARD_PROTECTION_RANGE = 2500
     
     local NestDamageIndicators = {
         "The shell has hardened. Take out the nest's guardians to weaken its armor!",
@@ -69,7 +71,20 @@ if (Antlion) {
     end)
     
     
+    
     return function( NPC )
+        
+        function getNearbyGuards( npc )
+            local Out = {}
+            
+            for i,v in pairs(NPC.Instances) do
+                if v:getClass() == "npc_antlionguard" and v:getPos():getDistanceSqr( npc:getPos() ) < NEST_GUARD_PROTECTION_RANGE^2 then
+                    table.insert(Out, v)
+                end
+            end
+            
+            return Out
+        end
         
         NPC:register("Antlion", {
             Name = "Antlion",
@@ -217,12 +232,12 @@ if (Antlion) {
                     local mul = math.clamp(1 - 0.5 * (distance - 1500)/1500, 0, 1)
                     
                     -- -25% for every nearby antlion guard
+                    local guards = getNearbyGuards( Hitbox )
                     
-                    for i,v in pairs(NPC.Instances) do
-                        if v:getClass() == "npc_antlionguard" and v:getPos():getDistanceSqr( Hitbox:getPos() ) < NEST_GUARD_PROTECTION_RANGE^2 then
-                            mul = mul * 0.75
-                        end
+                    for i,v in pairs(guards) do
+                        mul = mul * 0.75
                     end
+                    
                     
                     local vehicleHeightMul = attacker:inVehicle() and 8 or 1
                     local floor = trace.line( attacker:getPos(), attacker:getPos() - Vector(0,0,500*vehicleHeightMul), nil, nil, COLLISION_GROUP.IN_VEHICLE )
@@ -273,17 +288,22 @@ if (Antlion) {
                     
                     LastHealth = Hitbox.Health
                     
-                    --effect.canCreate() and 
                     if ((timer.curtime() - LastHit) > 0.25 or dmgType == DAMAGE.BLAST) then
                         LastHit = timer.curtime()
-                        
-                        --[[local ef = effect.create()
-                        ef:setOrigin(position)
-                        ef:play("AntlionGib")]]
                         
                         net.start("nest_gib")
                         net.writeVector(position)
                         net.sendPVS(Hitbox:getPos(), true)
+                        
+                        for i=1, dmgType == DAMAGE.BLAST and #guards or 3 do
+                            if #guards == 0 or not effect.canCreate() then break end
+                            
+                            local g = table.remove(guards, math.random(#guards))
+                            
+                            local ef = effect.create()
+                            ef:setOrigin(g:getPos())
+                            ef:play("VortDispel")
+                        end
                     end
                     
                     if math.random() < 0.25 and amount*mul > 50 then
@@ -343,6 +363,7 @@ if (Antlion) {
             
             Abilities = {
                 {
+                    -- Antlion Spawn (Nearby)
                     Cooldown = 3,
                     Use = function( npc )
                         if not NPC.isSomeoneNearby( npc:getPos(), 3000 ) then return end
@@ -350,6 +371,7 @@ if (Antlion) {
                     end
                 },
                 {
+                    -- Location Cry
                     Cooldown = 25,
                     Use = function( npc )
                         if NPC.isSomeoneNearby( npc:getPos(), 3000 ) then return end
@@ -359,6 +381,145 @@ if (Antlion) {
                         roar:setSoundLevel( 150 )
                         roar:play()
                         roar:setVolume(1)
+                    end
+                },
+                {
+                    -- Artillery
+                    Cooldown = 8,
+                    Use = function( npc )
+                        if npc.Phase < 1 or math.random() < 0.5 then return end
+                        
+                        local LaunchPos = npc:obbCenterW()
+                        
+                        local targets = find.byClass("player", function(e)
+                            local maxRange = isValid(e:getVehicle()) and 6500 or 3000
+                            return table.hasValue(NPC.Participants, e) and e:getPos():getDistance(LaunchPos) < maxRange and not trace.line( LaunchPos, e:getPos(), nil, COLLISION_GROUP.DEBRIS ).Hit
+                        end)
+                        
+                        -- if a vehicle is present, only target vehicles:
+                        local vehiclePresent = false
+                        
+                        for i,v in pairs(targets) do
+                            if isValid(v:getVehicle()) then
+                                vehiclePresent = true
+                                break
+                            end
+                        end
+                        
+                        if vehiclePresent then
+                            for i=#targets, 1, -1 do
+                                if not isValid(targets[i]:getVehicle()) then
+                                    table.remove(targets, i)
+                                end
+                            end
+                        end
+                        
+                        
+                        if #targets == 0 then return end
+                        
+                        local roar = sound.create(npc, "npc/combine_gunship/gunship_moan.wav", true)
+                        roar:setSoundLevel( 100 )
+                        roar:play()
+                        roar:setVolume(1)
+                        
+                        
+                        local tar = targets[math.random(#targets)]
+                        
+                        for i=1, math.random(2,7) do
+                            
+                            Util.wait(0.25 + math.random()*0.5)
+                            Spawner.await()
+                            
+                            local Vehicle = tar:getVehicle()
+                            local Vel
+                            
+                            if isValid(Vehicle) then
+                                Vel = isValid(Vehicle:getParent()) and Vehicle:getParent():getVelocity() or Vehicle:getVelocity()
+                            else
+                                Vel = tar:getVelocity()
+                            end
+                            
+                            
+                            local Goal = tar:getPos()
+                            local dist = LaunchPos:getDistance(Goal)
+                            local speed = isValid(Vehicle) and (1600+npc.Phase*300) or (800 + dist/5)
+                            local steep = Goal.z < LaunchPos.z or dist < 1000
+                            local ttr = dist/speed
+                            Goal = Goal + Vel*ttr * math.random(0.9, 1.1)
+                            
+                            if not isValid(Vehicle) then
+                                Goal = Goal + Vector(math.random()-0.5, math.random()-0.5, 0)*125
+                            end
+                            
+                            local p = Solver.getLaunchAngle( speed, Goal - LaunchPos, steep )
+                            if p ~= p then return end
+                            
+                            local _, proj = pcall(function() return prop.create(LaunchPos, Angle(math.random(),math.random(),math.random())*360, "models/hunter/blocks/cube075x075x075.mdl", false) end)
+                            if not isValid(proj) then break end
+                            
+                            proj:enableDrag(false)
+                            proj:setMaterial("models/antlion/antlion_innards")
+                            proj:setMass(5000)
+                            proj:setCollisionGroup(COLLISION_GROUP.INTERACTIVE_DEBRIS)
+                            
+                            constraint.nocollide(proj, npc)
+                            
+                            for i=1,3 do
+                                local gunk = hologram.create(proj:getPos(), Angle(math.random(),math.random(),math.random())*360, "models/props_c17/canister_propane01a.mdl", Vector(1.7,1.7,0.4))
+                                gunk:setMaterial("models/antlion/antlion_innards")
+                                gunk:setParent(proj)
+                            end
+                            
+                            
+                            local launchAng = (Goal - LaunchPos):getAngle():setP(-math.deg(p))
+                            
+                            proj:getPhysicsObject():setVelocity( launchAng:getForward() * speed )
+                            proj:setAngleVelocity( Vector(math.random()-0.5,math.random()-0.5,math.random()-0.5)*1000 )
+                            
+                            npc:emitSound("weapons/l4d2mw_shovel/impactflesh2.wav")
+                            
+                            proj:addCollisionListener(function( data )
+                                proj:removeCollisionListener()
+                                
+                                if isValid(data.HitEntity) then
+                                    data.HitEntity:applyDamage(1000, chip(), proj, DAMAGE.BLAST, proj:getPos())
+                                end
+                                
+                                for i=1, 3 do
+                                    if effect.canCreate() then
+                                        local ef = effect.create()
+                                        ef:setOrigin(proj:getPos())
+                                        ef:play("AntlionGib")
+                                    end
+                                end
+                                
+                                pcall(function()
+                                    local Emitter = hologram.create(proj:getPos(), Angle(), "models/hunter/blocks/cube025x025x025.mdl")
+                                    
+                                    Emitter:setNoDraw(true)
+                                    
+                                    Emitter:emitSound("physics/flesh/flesh_squishy_impact_hard3.wav")
+                                    timer.simple(sound.duration("physics/flesh/flesh_squishy_impact_hard3.wav"), function()
+                                        Emitter:remove()
+                                    end)
+                                end)
+                                
+                                for i,v in pairs(NPC.Participants) do
+                                    if isValid(v:getVehicle()) then continue end
+                                    
+                                    local dist = v:getPos():getDistance( proj:getPos() )
+                                    local dmg = 220 * (1 - dist/300)
+                                    
+                                    if dmg <= 0 then continue end
+                                    
+                                    v:applyDamage(dmg, chip(), proj, DAMAGE.BLAST, proj:getPos())
+                                end
+                                
+                                timer.simple(0, function()
+                                    proj:remove()
+                                end)
+                            end)
+                        end
                     end
                 }
             }
