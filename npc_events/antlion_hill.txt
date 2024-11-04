@@ -45,9 +45,9 @@ if SERVER then
     
     
     --[[ DEBUG BLOCK ]]--
-    NPC.Debug = true
+    --[[NPC.Debug = true
     NPC.AutoRegisterParticipants = false
-    table.insert(NPC.Participants, owner())
+    table.insert(NPC.Participants, owner())]]
     
     
     
