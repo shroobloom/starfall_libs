@@ -34,11 +34,11 @@ if SERVER then
     
     
     
-    
+    --[[
     NPC.Debug = true
     NPC.AutoRegisterParticipants = false
     table.insert(NPC.Participants, owner())
-    
+    ]]
     
     local HordeActive = false
     
@@ -51,7 +51,10 @@ if SERVER then
     end)]]
     
     
-    --[[
+    NPC.SpawnCap = 40
+    NPC.SpawnDistance = {800,1400}
+    
+    
     timer.create("spawn", 1, 0, function()
         if #NPC.Participants == 0 then return end
         
@@ -60,24 +63,24 @@ if SERVER then
     end)
     
     
-    timer.create("hordeTick", 5, 0, function()
-        if not HordeActive and math.random() < 1 then
+    timer.create("hordeTick", 10, 0, function()
+        if not HordeActive and math.random() < 0.025 then
             HordeActive = true
             
             NPC.announceGlobal( Color(100,200,100), "[Zombies]", Color(255,255,255), " A Horde is spawning in ", Color(255,255,144), "30 seconds", Color(255,255,255), "! Take cover!" )
             
             coroutine.wrap(function()
-                NPC.SpawnCap = 60
-                Util.wait(30)
+                NPC.SpawnCap = 120
+                Util.wait(120)
                 NPC.announceGlobal( Color(100,200,100), "[Zombies]", Color(255,255,255), "The Horde has subsided. Finish off the rest!" )
                 
-                NPC.SpawnCap = 20
+                NPC.SpawnCap = 40
                 
                 Util.wait(10)
                 HordeActive = false
             end)()
         end
-    end)]]
+    end)
     
     
     hook.add("PlayerDeath", "zombieSurvival_spawnWraith", function( ply, inflictor, attacker )

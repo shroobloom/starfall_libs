@@ -19,8 +19,10 @@ if SERVER then
     local Solver = require("sb/physics_solver.txt")
     
     
+    local Burrow, Damager
     
-    local Burrow = E2VM:new([[
+    Spawner.Enqueue(function()
+        Burrow = E2VM:new([[
 @name [VM] Burrow KV
 @inputs Antlion:entity
 @trigger Antlion
@@ -28,10 +30,21 @@ if SERVER then
 if (Antlion) {
     Antlion:entSetKeyValue( "StartBurrowed", 1 )
 }
-    ]])
+        ]])
+    end)
     
-    
-    
+    Spawner.Enqueue(function()
+        Damager = E2VM:new([[
+@name [VM] Damager
+@inputs Amount:number DamageType:number Attacker:entity Target:entity
+@trigger Target
+
+if (Target) {
+    #Target:takeDamage( Amount, Attacker )
+    Target:admAttack( Amount, Attacker, Attacker, DamageType, vec(), Attacker:pos())
+}
+        ]])
+    end)
     
     local NEST_GUARD_PROTECTION_RANGE = 2500
     
@@ -44,6 +57,8 @@ if (Antlion) {
     
     
     local function antlionUnburrow( npc )
+        if not Burrow then return end
+        
         npc:setColor(Color(0,0,0,0))
         Burrow:fireInput( "Antlion", npc )
         
@@ -60,6 +75,15 @@ if (Antlion) {
         
     end
     
+    
+    local function damage( ent, amount, attacker, dmgType )
+        if not Damager then return end
+        
+        Damager:fireInput("Amount", amount)
+        Damager:fireInput("Attacker", attacker)
+        Damager:fireInput("DamageType", dmgType)
+        Damager:fireInput("Target", ent)
+    end
     
     
     -- Prevent Antlion Guards from trampling Antlions
@@ -393,7 +417,7 @@ if (Antlion) {
                     -- Artillery
                     Cooldown = 8,
                     Use = function( npc )
-                        --if npc.Phase < 1 or math.random() < 0.5 then return end
+                        if npc.Phase < 1 or math.random() < 0.5 then return end
                         
                         local LaunchPos = npc:obbCenterW()
                         
@@ -493,7 +517,8 @@ if (Antlion) {
                                 proj:removeCollisionListener()
                                 
                                 if isValid(data.HitEntity) then
-                                    data.HitEntity:applyDamage(1000, chip(), proj, DAMAGE.BLAST, proj:getPos())
+                                    damage( data.HitEntity, 1000, proj, DAMAGE.BLAST )
+                                    --data.HitEntity:applyDamage(1000, chip(), proj, DAMAGE.BLAST, proj:getPos())
                                 end
                                 
                                 for i=1, 3 do
@@ -523,7 +548,8 @@ if (Antlion) {
                                     
                                     if dmg <= 0 then continue end
                                     
-                                    v:applyDamage(dmg, chip(), proj, DAMAGE.BLAST, proj:getPos())
+                                    damage( v, dmg, proj, DAMAGE.BLAST )
+                                    --v:applyDamage(dmg, chip(), proj, DAMAGE.BLAST, proj:getPos())
                                 end
                                 
                                 timer.simple(0, function()

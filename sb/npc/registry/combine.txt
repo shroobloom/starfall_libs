@@ -3,6 +3,7 @@
 --@shared
 --@include sb/e2vm.txt
 --@include sb/util.txt
+--@include sb/spawner.txt
 
 
 
@@ -10,9 +11,13 @@ if SERVER then
     
     local E2VM = require("sb/e2vm.txt")
     local Util = require("sb/util.txt")
+    local Spawner = require("sb/spawner.txt")
     
     
-    local BullseyeMaker = E2VM:new([[
+    local BullseyeMaker
+    
+    Spawner.Enqueue(function()
+        BullseyeMaker = E2VM:new([[
 @name [VM] Bullseye Maker
 @inputs Pos:vector
 @outputs Bullseye:entity
@@ -23,11 +28,13 @@ propSpawnUndo(0)
 if (Pos) {
     Bullseye = entSpawn( "npc_bullseye", Pos )
 }
-    ]])
-    
+        ]])
+    end)
     
     
     local function makeBullseye( pos )
+        if not BullseyeMaker then return end
+        
         BullseyeMaker:fireInput("Pos", pos)
         local bullseye = BullseyeMaker:getOutput("Bullseye")
         bullseye:setNocollideAll(true)
