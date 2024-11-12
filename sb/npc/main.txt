@@ -454,6 +454,8 @@ if (Entity) {
             ent:setDamageMultiplier( NPC.DamageMultiplier * (data.Damage or 1) )
             ent:setWeaponProficiency( data.Proficiency or NPC.WeaponProficiency )
             
+            ent:setLagCompensated(true)
+            
             if data.Scale then
                 timer.simple(0, function()
                     ent:setScale( data.Scale )
