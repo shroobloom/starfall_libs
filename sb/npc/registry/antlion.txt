@@ -553,6 +553,7 @@ if (Target) {
                                 end
                                 
                                 timer.simple(0, function()
+                                    if not isValid(proj) then return end
                                     proj:remove()
                                 end)
                             end)
