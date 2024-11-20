@@ -460,9 +460,9 @@ if (Target) {
                         
                         local tar = targets[math.random(#targets)]
                         
-                        for i=1, math.random(2,7) do
+                        for i=1, math.random(2 + npc.Phase,7 + npc.Phase) do
                             
-                            Util.wait(0.25 + math.random()*0.5)
+                            Util.wait(0.25 + (math.random()*0.5 - npc.Phase*0.1))
                             Spawner.await()
                             
                             local Vehicle = tar:getVehicle()
@@ -519,47 +519,56 @@ if (Target) {
                             npc:emitSound("weapons/l4d2mw_shovel/impactflesh2.wav")
                             
                             proj:addCollisionListener(function( data )
-                                proj:removeCollisionListener()
-                                
-                                if isValid(data.HitEntity) then
-                                    damage( data.HitEntity, 1000, proj, DAMAGE.BLAST )
-                                    --data.HitEntity:applyDamage(1000, chip(), proj, DAMAGE.BLAST, proj:getPos())
-                                end
-                                
-                                for i=1, 3 do
+                                Util.safeSpawn(function()
+                                    proj:removeCollisionListener()
+                                    
+                                    if isValid(data.HitEntity) then
+                                        damage( data.HitEntity, 1000, proj, DAMAGE.BLAST )
+                                        --data.HitEntity:applyDamage(1000, chip(), proj, DAMAGE.BLAST, proj:getPos())
+                                    end
+                                    
                                     if effect.canCreate() then
                                         local ef = effect.create()
                                         ef:setOrigin(proj:getPos())
-                                        ef:play("AntlionGib")
+                                        ef:setScale(500)
+                                        ef:play("ThumperDust")
+                                        
+                                        for i=1, 3 do
+                                            if effect.canCreate() then
+                                                local ef = effect.create()
+                                                ef:setOrigin(proj:getPos())
+                                                ef:play("AntlionGib")
+                                            end
+                                        end
                                     end
-                                end
-                                
-                                pcall(function()
-                                    local Emitter = hologram.create(proj:getPos(), Angle(), "models/hunter/blocks/cube025x025x025.mdl")
                                     
-                                    Emitter:setNoDraw(true)
-                                    
-                                    Emitter:emitSound("physics/flesh/flesh_squishy_impact_hard3.wav")
-                                    timer.simple(sound.duration("physics/flesh/flesh_squishy_impact_hard3.wav"), function()
-                                        Emitter:remove()
+                                    pcall(function()
+                                        local Emitter = hologram.create(proj:getPos(), Angle(), "models/hunter/blocks/cube025x025x025.mdl")
+                                        
+                                        Emitter:setNoDraw(true)
+                                        
+                                        Emitter:emitSound("physics/flesh/flesh_squishy_impact_hard3.wav")
+                                        timer.simple(sound.duration("physics/flesh/flesh_squishy_impact_hard3.wav"), function()
+                                            Emitter:remove()
+                                        end)
                                     end)
-                                end)
-                                
-                                for i,v in pairs(NPC.Participants) do
-                                    if isValid(v:getVehicle()) then continue end
                                     
-                                    local dist = v:getPos():getDistance( proj:getPos() )
-                                    local dmg = 220 * (1 - dist/300)
+                                    for i,v in pairs(NPC.Participants) do
+                                        if isValid(v:getVehicle()) then continue end
+                                        
+                                        local dist = v:getPos():getDistance( proj:getPos() )
+                                        local dmg = 220 * (1 - dist/300)
+                                        
+                                        if dmg <= 0 then continue end
+                                        
+                                        damage( v, dmg, proj, DAMAGE.BLAST )
+                                        --v:applyDamage(dmg, chip(), proj, DAMAGE.BLAST, proj:getPos())
+                                    end
                                     
-                                    if dmg <= 0 then continue end
-                                    
-                                    damage( v, dmg, proj, DAMAGE.BLAST )
-                                    --v:applyDamage(dmg, chip(), proj, DAMAGE.BLAST, proj:getPos())
-                                end
-                                
-                                timer.simple(0, function()
-                                    if not isValid(proj) then return end
-                                    proj:remove()
+                                    timer.simple(0, function()
+                                        if not isValid(proj) then return end
+                                        proj:remove()
+                                    end)
                                 end)
                             end)
                         end

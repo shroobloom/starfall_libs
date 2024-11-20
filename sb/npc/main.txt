@@ -458,6 +458,7 @@ if (Entity) {
             
             if data.Scale then
                 timer.simple(0, function()
+                    if not isValid(ent) then return end
                     ent:setScale( data.Scale )
                 end)
             end
@@ -483,7 +484,7 @@ if (Entity) {
             for i,v in pairs(data.Abilities) do
                 timer.simple(math.random()*v.Cooldown, function()
                     timer.create("Entity" .. ent:entIndex() .. "_Ability" .. i, v.Cooldown, 0, function()
-                        coroutine.wrap(v.Use)( ent )
+                        Util.safeSpawn( v.Use, ent )
                     end)
                 end)
             end

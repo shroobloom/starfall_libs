@@ -624,23 +624,24 @@ end
 
 function Util.cloneAsHolo( e )
     local h = hologram.create( e:getPos(), e:getAngles(), e:getModel() )
-    h:setMaterial( e:getMaterial() )
     h:setColor( e:getColor() )
     h:setSkin( e:getSkin() )
     h:setBodygroup(1, e:getBodygroup(1))
     h:setRenderMode( e:getRenderMode() )
     
-    -- Advanced/custom materials don't always load right away
-    if not isValid(e:getParent()) then print(e:entIndex(), e:getMaterial()) end
+    -- Advanced/custom materials don't always load right away, setting them too early can bug them out for clients.
+    --if not isValid(e:getParent()) then print(e:entIndex(), e:getMaterial()) end
     if e:getMaterial():startsWith("!") then
-        if not isValid(e:getParent()) then print(e:entIndex(), "its an adv mat") end
+        --if not isValid(e:getParent()) then print(e:entIndex(), "its an adv mat") end
         timer.simple(3, function()
             if not e:isValid() then return end --idk
-            if not isValid(e:getParent()) then print(e:entIndex(), "h's mat: ", h:getMaterial()) end
-            if not isValid(e:getParent()) then print(e:entIndex(), "retry: ", e:getMaterial()) end
-            h:setMaterial( "" )
+            --if not isValid(e:getParent()) then print(e:entIndex(), "h's mat: ", h:getMaterial()) end
+            --if not isValid(e:getParent()) then print(e:entIndex(), "retry: ", e:getMaterial()) end
+            --h:setMaterial( "" )
             h:setMaterial( e:getMaterial() )
         end)
+    else
+        h:setMaterial( e:getMaterial() )
     end
     
     for i,v in pairs(e:getMaterials()) do
@@ -659,9 +660,10 @@ end
 
 -- Similar to coroutine.wrap, but automatically runs and has proper error logging.
 -- Returns the spawned thread.
-function Util.spawn(callback)
+function Util.spawn(callback, ...)
+    local payload = {...}
     local thread = coroutine.wrap(function()
-        local s,e = pcall(callback)
+        local s,e = pcall(callback, unpack(payload))
         
         if not s then
             if type(e) == "table" then
@@ -675,6 +677,23 @@ function Util.spawn(callback)
     thread()
     return thread
 end
+
+
+-- Similar to Util.spawn, but will safely terminate the thread in the event of an error instead of the whole chip.
+-- Returns the spawned thread.
+function Util.safeSpawn(callback, ...)
+    local payload = {...}
+    local thread = coroutine.wrap(function()
+        xpcall(callback, function( errorMessage, errorTraceback )
+            print(Color(255,100,100), "[!] ", Color(255,180,180), "A thread has errored and has been logged. Check your console for more details!")
+            printConsole(errorTraceback)
+        end, unpack(payload))
+    end)
+    
+    thread()
+    return thread
+end
+
 
 
 
