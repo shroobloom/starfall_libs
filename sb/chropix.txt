@@ -1,0 +1,114 @@
+--@name chropix
+--@author TwoLemons & shrooblooms
+--@client
+
+
+
+--[[ Chropix lib ]]--
+-- credit to twolemons/legokidlogan for like all the code
+-- i just fixed some bugs and ported it to starfall
+
+
+
+local Chropix = {}
+Chropix.CompressionLevel = 8
+Chropix.SliceCount = 8
+Chropix.Spread = 0.0025
+Chropix.Enabled = false
+
+
+local RT_SIZE = 1024
+local COLOR_EMPTY = Color( 0, 0, 0, 0 )
+
+local scrW, scrH = render.getResolution()
+
+local rtName = "chropix"
+render.createRenderTarget( rtName )
+
+
+local rtMat = material.create( "UnlitGeneric" )
+rtMat:setTextureRenderTarget( "$basetexture", rtName )
+rtMat:setInt("$flags", 32768) --ignorez
+
+local chroMat = material.create( "UnlitGeneric" )
+chroMat:setTexture( "$basetexture", "_rt_PowerOfTwoFB" )
+chroMat:setInt("$flags", 16 + 32768) --vertexcolor + ignorez
+
+
+
+
+local CHANNELS = {
+    Color( 255, 0, 0, 255 ),
+    Color( 0, 255, 0, 255 ),
+    Color( 0, 0, 255, 255 ),
+}
+
+
+
+-- needs to happen before or at PreDrawHalos, but SF doesnt have PreDrawHalos.
+-- halos cause the screen to go black
+--TODO: also use POINT texfilter for the camera static?
+--TODO: try making the screenmat/pixelatemat fullbright for FLIR (probably wont work but w/e)
+hook.add( "predrawviewmodels", "chropix_captureScreen", function()
+    if not Chropix.Enabled then return end
+    
+    render.selectRenderTarget( rtName )
+        
+        render.clear( COLOR_EMPTY, true )
+        
+        render.setMaterial( chroMat )
+        render.overrideBlend( true, BLEND.ONE, BLEND.ONE, BLENDFUNC.ADD, BLEND.ZERO, BLEND.ZERO, BLENDFUNC.ADD )
+        render.setFilterMin( TEXFILTER.POINT )
+        
+        for _, channel in ipairs( CHANNELS ) do
+            render.setColor( channel )
+            
+            for i = 0, Chropix.SliceCount - 1 do
+                local spreadX = (math.random()-0.5)*Chropix.Spread*2
+                
+                render.drawTexturedRectUV( 
+                    -- pos
+                    scrW * spreadX / Chropix.CompressionLevel, 
+                    scrH * i / Chropix.SliceCount / Chropix.CompressionLevel, 
+                    
+                    -- size
+                    scrW / Chropix.CompressionLevel,
+                    scrH / Chropix.SliceCount / Chropix.CompressionLevel, 
+                    
+                    -- uv start/end
+                    0, i / Chropix.SliceCount, 
+                    1, ( i + 1 ) / Chropix.SliceCount
+                )
+            end
+        end
+        
+        render.setFilterMin( TEXFILTER.NONE )
+        render.overrideBlend( false )
+        
+    render.selectRenderTarget()
+end)
+
+
+hook.add("drawhud", "chropix_render", function()
+    if not Chropix.Enabled then return end
+    
+    -- seems to get rid of bloom
+    render.setRGBA( 0, 0, 0, 255 )
+    render.drawRect( 0, 0, scrW, scrH )
+    
+    render.setMaterial( rtMat )
+    render.setRGBA( 255, 255, 255, 255 )
+    
+    render.setFilterMag( TEXFILTER.POINT )
+    render.drawTexturedRectUV( 
+        0, 0, 
+        scrW, scrH, 
+        0, 0, 
+        scrW / RT_SIZE / Chropix.CompressionLevel, scrH / RT_SIZE / Chropix.CompressionLevel
+    )
+    render.setFilterMag( TEXFILTER.NONE )
+end)
+
+
+
+return Chropix
