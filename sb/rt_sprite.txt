@@ -1,6 +1,6 @@
 --@name RT Sprite
 --@author shroobloom
---@client
+--@shared
 --@include sb/util.txt
 
 
@@ -9,6 +9,8 @@ local Util = require("sb/util.txt")
 
 local RTSprite = class("RTSprite")
 RTSprite.Instances = {}
+RTSprite.RenderOrder = {}
+RTSprite.MaxRTs = 20 --Lower this number if you need to reserve RTs for yourself, the max is 20 by default.
 
 RTSprite.ScalingMode = {
     -- Scales relative to the world (3d sprite appearance, appears smaller as you get farther away)
@@ -19,45 +21,61 @@ RTSprite.ScalingMode = {
 }
 
 
-RTSprite.RotationMode = {
-    -- Always looks at your camera
-    NORMAL = 1,
-    
-    -- Stays upright
-    YAW = 2,
-    
-    -- Average of the two previous ones
-    HYBRID = 3,
-}
-
-
 
 
 function RTSprite:initialize()
+    assert(CLIENT, "RTSprite can only be created client-side!")
+    
     self.Parent = nil
     self.Position = Vector()
     self.Offset = Vector()
     
     self.ID = table.insert(RTSprite.Instances, self)
     
-    render.createRenderTarget(self:getRenderTargetName())
-    
-    self.Material = material.create("VertexLitGeneric")
-    self.Material:setTextureRenderTarget("$basetexture", self:getRenderTargetName())
+    self.Loaded = false
     self:setIgnoreZ(false)
+    
+    table.insert(RTSprite.RenderOrder, self)
+    
+    self.RenderPriority = 1
     
     self.Holo = hologram.create( Vector(), Angle(), "models/holograms/plane.mdl" )
     self.Holo:suppressEngineLighting(true)
     self.Holo:setColor(Color(255,255,255,254))
     self:setScale(1)
-    
-    self.Holo:setMaterial("!" .. self.Material:getName())
     self.Holo:setFilterMag(1)
     
+    self:setLoaded(false)
+    
+    --[[if #RTSprite.RenderOrder <= 20 then
+        self:setLoaded(true)
+    end]]
+    
     self.ScalingMode = RTSprite.ScalingMode.WORLD
-    self.RotationMode = RTSprite.RotationMode.NORMAL
 end
 
+
+function RTSprite:setLoaded( state )
+    if self.Loaded == state then return end
+    
+    self.Loaded = state
+    
+    self.Holo:setNoDraw(not state)
+    --self.Holo:setColor(state and Color(255,255,255) or Color(255,255,255,144))
+    
+    if self.Loaded then
+        render.createRenderTarget(self:getRenderTargetName())
+        
+        self.Material = material.create("VertexLitGeneric")
+        self.Material:setTextureRenderTarget("$basetexture", self:getRenderTargetName())
+        self.Material:setInt("$flags", self.IgnoreZ and 2097152 + 32768 or 0 )
+        self.Holo:setMaterial("!" .. self.Material:getName())
+    else
+        render.destroyRenderTarget(self:getRenderTargetName())
+        self.Material:destroy()
+        self.Material = nil
+    end
+end
 
 function RTSprite:getRenderTargetName()
     return "sb_rtsprite_" .. self.ID
@@ -106,7 +124,11 @@ function RTSprite:render()
 end
 
 function RTSprite:setIgnoreZ( state )
-    self.Material:setInt("$flags", state and 2097152 + 32768 or 0 )
+    self.IgnoreZ = state
+    
+    if self.Loaded then
+        self.Material:setInt("$flags", state and 2097152 + 32768 or 0 )
+    end
 end
 
 
@@ -116,49 +138,89 @@ function RTSprite:remove()
     render.destroyRenderTarget(self:getRenderTargetName())
     
     RTSprite.Instances[self.ID] = nil
+    table.removeByValue(RTSprite.RenderOrder, self)
 end
 
 
-
-hook.add("renderoffscreen", "sb_rtsprite_render", function()
-    for i,self in pairs(RTSprite.Instances) do
-        
-        --[[ ANGLE ]]--
-        local a = (self:getPos() - render.getEyePos()):getAngle()
-        
-        if self.RotationMode == RTSprite.RotationMode.YAW then
-            a:setP(0)
-        elseif self.RotationMode == RTSprite.RotationMode.HYBRID then
-            -- no you cant just divide it by 2, yes i tried
-            a = math.lerpAngle( 0.5, a, Angle(0, a.y, a.r) )
-        end
-        
-        self.Holo:setAngles( a + Angle( 90,0,180 ) )
-        
-        --[[ POSITION ]]--
-        self.Holo:setPos( self:getPos() )
-        
-        --[[ SCALE ]]--
-        local s = Vector()
-        
-        --TODO: screenscaling is a bit delayed
-        if self.ScalingMode == RTSprite.ScalingMode.WORLD then
-            s = self.Scale * 4
-        elseif self.ScalingMode == RTSprite.ScalingMode.SCREEN then
-            local dist = self:getPos():getDistance(render.getEyePos())
-            s = self.Scale * dist * 0.01
-        end
-        
-        if self.Holo:getScale().x ~= s then
-            self.Holo:setScale( Vector(s) )
-        end
-        
-        render.selectRenderTarget( self:getRenderTargetName() )
-        self:render()
-    end
+if CLIENT then
     
-    render.selectRenderTarget( nil )
-end)
+    timer.create("sb_rtsprite_reorder", 1, 0, function()
+        --[[
+        local split = {}
+        local renderPriorities = {}
+        
+        for i,v in pairs(RTSprite.RenderOrder) do
+            if not renderPriorities[v.RenderPriority] then
+                local idx = table.insert(split, {})
+                renderPriorities[v.RenderPriority] = idx
+            end
+            
+            table.insert(split[renderPriorities[v.RenderPriority] ], v)
+        end
+        ]]
+        
+        --[[local newOrder = {}
+        
+        
+        for i=#priorities, 1, -1 do
+            local priority = priorities[i]
+            local v = split[priority]
+            
+            table.sort( v, function( a, b )
+                return a:getPos():getDistance( render.getEyePos() ) / a.RenderPriority < b:getPos():getDistance( render.getEyePos() ) / b.RenderPriority
+            end)
+            
+            table.add(newOrder, v)
+        end
+        
+        
+        RTSprite.RenderOrder = newOrder]]
+        
+        -- if it works it aint stupid
+        table.sort(RTSprite.RenderOrder, function( a, b )
+            return a:getPos():getDistance( render.getEyePos() ) / a.RenderPriority < b:getPos():getDistance( render.getEyePos() ) / b.RenderPriority
+        end)
+        
+        -- backwards so we unload before loading
+        for i=#RTSprite.RenderOrder, 1, -1 do
+            local self = RTSprite.RenderOrder[i]
+            self:setLoaded( i <= RTSprite.MaxRTs )
+        end
+    end)
+    
+    hook.add("renderoffscreen", "sb_rtsprite_render", function()
+        for i,self in pairs(RTSprite.RenderOrder) do
+            if not self.Loaded then break end
+            
+            local a = render.getAngles()
+            
+            self.Holo:setAngles( a + Angle( 90,0,180 ) )
+            
+            --[[ POSITION ]]--
+            self.Holo:setPos( self:getPos() )
+            
+            --[[ SCALE ]]--
+            local s = Vector()
+            
+            --TODO: screenscaling is a bit delayed
+            if self.ScalingMode == RTSprite.ScalingMode.WORLD then
+                s = self.Scale * 4
+            elseif self.ScalingMode == RTSprite.ScalingMode.SCREEN then
+                local dist = self:getPos():getDistance(render.getEyePos())
+                s = self.Scale * dist * 0.01
+            end
+            
+            if self.Holo:getScale().x ~= s then
+                self.Holo:setScale( Vector(s) )
+            end
+            
+            render.selectRenderTarget( self:getRenderTargetName() )
+            self:render()
+        end
+        
+        render.selectRenderTarget( nil )
+    end)
+end
 
 
 -- test

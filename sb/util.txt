@@ -679,6 +679,7 @@ function Util.spawn(callback, ...)
 end
 
 
+
 -- Similar to Util.spawn, but will safely terminate the thread in the event of an error instead of the whole chip.
 -- Returns the spawned thread.
 function Util.safeSpawn(callback, ...)
@@ -692,6 +693,14 @@ function Util.safeSpawn(callback, ...)
     
     thread()
     return thread
+end
+
+
+
+-- Remaps value to use a new range
+function Util.remap( value, oldRangeMin, oldRangeMax, newRangeMin, newRangeMax )
+    local pc = (value - oldRangeMin) / (oldRangeMax - oldRangeMin)
+    return newRangeMin + pc*(newRangeMax-newRangeMin)
 end
 
 

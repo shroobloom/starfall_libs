@@ -12,6 +12,9 @@
     Do not use table.insert with this; it internally uses rawset!
     (i assume table.remove, removeByValue, etc. are the same)
     Instead use the :insert method.
+    
+    Hooks:
+    - sharedTable_changed( self, key, value ) - Fired when a table is modified.
 ]]--
 
 
@@ -44,6 +47,7 @@ function SharedTable:initialize( id, Networked, Crosschip )
 end
 
 
+
 function SharedTable:__newindex( key, value )
     if SharedTable.DEFAULT_KEYS[key] then
         return rawset(self, key, value)
@@ -62,6 +66,8 @@ function SharedTable:__newindex( key, value )
         net.writeType(value)
         net.send()
     end
+    
+    hook.run("sharedTable_changed", self, key, value)
 end
 
 
@@ -71,6 +77,13 @@ function SharedTable:__index( key, value )
     end
     
     return self.Contents[key]
+end
+
+
+function SharedTable:update()
+    for i,v in pairs(self.Contents) do
+        self:__newindex( i, v )
+    end
 end
 
 
@@ -113,6 +126,7 @@ Util.bindRemote("sb_st_newindex", function(id, key, value)
     if not t or not t.Crosschip then return end
     
     rawset(t.Contents, key, value)
+    hook.run("sharedTable_changed", t, key, value)
 end)
 
 
@@ -127,6 +141,7 @@ if CLIENT then
         local value = net.readType()
         
         rawset(t.Contents, key, value)
+        hook.run("sharedTable_changed", self, key, value)
     end)
     
     net.receive("sb_st_sendContents", function()
@@ -135,6 +150,7 @@ if CLIENT then
         if not t or not t.Networked then return end
         
         t.Contents = net.readTable()
+        hook.run("sharedTable_changed", self, key, value)
     end)
 end
 

@@ -10,13 +10,12 @@
 
 
 
-local PropNPC = require("sb/npc/prop_npc.txt")
-
 if SERVER then
     local E2VM = require("sb/e2vm.txt")
     local Util = require("sb/util.txt")
     local Spawner = require("sb/spawner.txt")
     local Solver = require("sb/physics_solver.txt")
+    local PropNPC = require("sb/npc/prop_npc.txt")
     
     
     local Burrow, Damager
@@ -132,7 +131,14 @@ if (Target) {
             Health = 350,
             
             SpawnObscured = false,
-            Spawn = antlionUnburrow,
+            Spawn = function( npc )
+                antlionUnburrow( npc )
+                
+                timer.simple(3, function()
+                    if not isValid(npc) then return end
+                    NPC.createHealthbar( npc )
+                end)
+            end,
             
             Squad = {
                 {"Antlion", 0, 4}
@@ -177,7 +183,7 @@ if (Target) {
             Name = "Antlion Nest",
             BoxSize = Vector(256, 256, 512),
             
-            Health = 20000,
+            Health = 3000,
             Boss = true,
             
             Create = function( pos, data )
@@ -231,7 +237,6 @@ if (Target) {
                 end
                 
                 
-                local LastHealth = data.Health
                 local LastHit = 0
                 
                 Hitbox.Phase = 0
@@ -268,15 +273,16 @@ if (Target) {
                     mul = mul * math.min(1 - floor.Fraction*1.1 + 0.1, 1)
                     
                     
-                    local oldPc = LastHealth / Hitbox.MaxHealth
-                    local newPc = Hitbox.Health / Hitbox.MaxHealth
+                    local oldPc = Hitbox.Health / Hitbox.MaxHealth
+                    local newPc = (Hitbox.Health - amount*mul) / Hitbox.MaxHealth
                     
                     for i=1,3 do
                         if oldPc > i*0.25 and newPc <= i*0.25 then
+                            
                             Hitbox:emitSound("npc/antlion/distract1.wav", 100)
                             Hitbox:emitSound("npc/combine_gunship/gunship_moan.wav", 100)
                             
-                            Hitbox.Phase = Hitbox.Phase + 1
+                            Hitbox.Phase = 4 - math.ceil(newPc*4)
                             NPC.announce( Color(255,255,144), "The Antlion Nest is hatching reinforcements! " .. NestDamageIndicators[Hitbox.Phase] )
                             
                             for i=1,9 do
@@ -295,6 +301,8 @@ if (Target) {
                             timer.simple(7, function()
                                 PropNPC.setInvincible( Hitbox, false )
                             end)
+                            
+                            break
                         end
                     end
                     
@@ -309,8 +317,6 @@ if (Target) {
                         end
                     end
                     
-                    
-                    LastHealth = Hitbox.Health
                     
                     if ((timer.curtime() - LastHit) > 0.25 or dmgType == DAMAGE.BLAST) then
                         LastHit = timer.curtime()
@@ -340,9 +346,14 @@ if (Target) {
                 Hitbox.DamageMultiplier = 0.25
                 Hitbox.MeleeDamageMultiplier = 14
                 Hitbox.ExplosiveDamageMultiplier = 5
+                Hitbox.DeathSequenceLength = 7
                 
                 return Hitbox
                 
+            end,
+            
+            Spawn = function( npc )
+                NPC.createHealthbar( npc )
             end,
             
             Death = function( npc )
@@ -381,7 +392,10 @@ if (Target) {
                 end
                 
                 npc.HoloParent:remove()
-                NPC.announceGlobal( Color(144,255,100), "The Antlion Nest has been defeated!" )
+                
+                -- nest is removed before this is run
+                local plural = #NPC.getAll( "AntlionNest" ) > 0
+                NPC.announceGlobal( Color(144,255,100), (plural and "An" or "The") .. " Antlion Nest has been defeated!" )
                 
             end,
             
@@ -460,7 +474,7 @@ if (Target) {
                         
                         local tar = targets[math.random(#targets)]
                         
-                        for i=1, math.random(2 + npc.Phase,7 + npc.Phase) do
+                        for i=1, math.random(2 + npc.Phase*2,7 + npc.Phase*4) do
                             
                             Util.wait(0.25 + (math.random()*0.5 - npc.Phase*0.1))
                             Spawner.await()
@@ -477,8 +491,8 @@ if (Target) {
                             
                             local Goal = tar:getPos()
                             local dist = LaunchPos:getDistance(Goal)
-                            local speed = isValid(Vehicle) and (1600+npc.Phase*300) or (800 + dist/5)
                             local steep = Goal.z < LaunchPos.z or dist < 1000
+                            local speed = steep and (800 + dist/5) or (1600+npc.Phase*300)
                             local ttr = dist/speed
                             Goal = Goal + Vel*ttr * math.random(0.9, 1.1)
                             
@@ -512,6 +526,7 @@ if (Target) {
                             
                             
                             local launchAng = (Goal - LaunchPos):getAngle():setP(-math.deg(p))
+                            launchAng = launchAng + Angle( math.random()-0.5, math.random()-0.5, 0 ) * (npc.Phase * 0.25)
                             
                             proj:getPhysicsObject():setVelocity( launchAng:getForward() * speed )
                             proj:setAngleVelocity( Vector(math.random()-0.5,math.random()-0.5,math.random()-0.5)*1000 )
@@ -536,7 +551,7 @@ if (Target) {
                                         for i=1, 3 do
                                             if effect.canCreate() then
                                                 local ef = effect.create()
-                                                ef:setOrigin(proj:getPos())
+                                                ef:setOrigin(proj:getPos() + Vector(math.random()-0.5, math.random()-0.5, 0)*50)
                                                 ef:play("AntlionGib")
                                             end
                                         end
@@ -556,8 +571,15 @@ if (Target) {
                                     for i,v in pairs(NPC.Participants) do
                                         if isValid(v:getVehicle()) then continue end
                                         
-                                        local dist = v:getPos():getDistance( proj:getPos() )
-                                        local dmg = 220 * (1 - dist/300)
+                                        local dist = v:obbCenterW():getDistance( proj:getPos() )
+                                        if dist > 400 then continue end
+                                        
+                                        local losCheck = trace.line( proj:getPos(), v:obbCenterW(), {proj, v} )
+                                        local hasLoS = not losCheck.Hit
+                                        local aoe = hasLoS and 400 or 200
+                                        local baseDmg = hasLoS and 130 or 65
+                                        
+                                        local dmg = baseDmg * (1 - dist/aoe)
                                         
                                         if dmg <= 0 then continue end
                                         

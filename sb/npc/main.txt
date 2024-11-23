@@ -5,13 +5,9 @@
 --@include sb/e2vm.txt
 --@include sb/util.txt
 --@include sb/npc/health_bar.txt
---@include sb/npc/prop_npc.txt
---@include sb/command.txt
+--@include sb/chat_command.txt
 --@includedir registry
 
-
-
-dofile "sb/npc/prop_npc.txt"
 
 
 
@@ -26,33 +22,46 @@ dofile "sb/npc/prop_npc.txt"
 
 
 
+local HealthBar = require("sb/npc/health_bar.txt")
+
+
+
 if SERVER then
     local Spawner = require("sb/spawner.txt")
     local E2VM = require("sb/e2vm.txt")
     local Util = require("sb/util.txt")
-    local CommandLib = require("sb/command.txt")
+    local ChatCommands = require("sb/chat_command.txt")
     
     
     
     local NPC = {}
     
     
-    CommandLib:registerCommand({
+    function NPC.appendEventInfo()
+    end
+    
+    ChatCommands:add({
         Name = "npc",
         Description = "Generic command folder for NPC events.",
-        Arguments = {
+        Subcommands = {
             {
-                Name = "subcommand",
-                Type = "string",
-                Validator = CommandLib.Validators.Choice( "info" )
+                Name = "info",
+                Description = "Gets info about spawns and such.",
+                Run = function( user )
+                    print(Color(255,144,0), "--------[[ NPC INFO ]]--------")
+                    
+                    local function addLine( ... )
+                        print( ChatCommands.BULLET_COLOR, ChatCommands.BULLET, Color(255,255,255), " ", Color(255,255,255), ... )
+                    end
+                    
+                    addLine("Spawns: ", Color(120 - (#NPC.Instances / NPC.getMax())*120, 1, 1):hsvToRGB(), #NPC.Instances, Color(125,125,125), " / ", Color(255,0,0), NPC.getMax())
+                    addLine("Participants: ", Color(120 - (#NPC.Participants / game.getMaxPlayers())*120, 1, 1):hsvToRGB(), #NPC.Participants)
+                    
+                    NPC.appendEventInfo( addLine )
+                    
+                end
             }
         },
-        Run = function(user, subcommand)
-            if subcommand == "info" then
-                print(Color(255,144,0), "--------[[ NPC INFO ]]--------")
-                print(CommandLib.BULLET_COLOR, CommandLib.BULLET, Color(255,255,255), " Spawns: ", Color(120 - (#NPC.Instances / NPC.getMax())*120, 1, 1):hsvToRGB(), #NPC.Instances, Color(125,125,125), " / ", Color(255,0,0), NPC.getMax())
-            end
-        end
     })
     
     
@@ -219,6 +228,18 @@ if (Entity) {
         return math.round(NPC.SpawnCap*(math.log( #NPC.Participants, 2 ) + 1))
     end
     
+    
+    function NPC.getAll( npcClass )
+        local found = {}
+        
+        for i,v in pairs(NPC.Instances) do
+            if v.ID == npcClass then
+                found[#found+1] = v
+            end
+        end
+        
+        return found
+    end
     
     
     function NPC.isSomeoneNearby( origin, radius )
@@ -473,16 +494,11 @@ if (Entity) {
             ent:setMaterial(data.Material)
         end
         
-        if data.Boss then
-            net.start("addBossbar")
-            net.writeEntity(ent)
-            net.writeString(data.Name)
-            net.send()
-        end
-        
         if data.Abilities then
             for i,v in pairs(data.Abilities) do
                 timer.simple(math.random()*v.Cooldown, function()
+                    if not isValid(ent) then return end
+                    
                     timer.create("Entity" .. ent:entIndex() .. "_Ability" .. i, v.Cooldown, 0, function()
                         Util.safeSpawn( v.Use, ent )
                     end)
@@ -524,20 +540,6 @@ if (Entity) {
             if npc.IsChipNPC then return end --already wrapped
             NPC.wrap( npc )
         end)
-    end)
-    
-    
-    hook.add("ClientInitialized", "setupBossbar", function( plr )
-        for i,v in pairs(NPC.Instances) do
-            local data = NPC.Types[v.ID]
-            
-            if data.Boss then
-                net.start("addBossbar")
-                net.writeEntity(v)
-                net.writeString(data.Name)
-                net.send( plr )
-            end
-        end
     end)
     
     
@@ -597,6 +599,13 @@ if (Entity) {
     end
     
     
+    function NPC.createHealthbar( npc )
+        local data = NPC.Types[npc.ID]
+        
+        npc.HealthBar = HealthBar:new( npc, data.Boss and data.Name or "", data.Boss )
+        npc.HealthBar:setHealth( data.Health )
+        npc.HealthBar:setMaxHealth( data.Health )
+    end
     
     
     -- Interact with doors
@@ -655,12 +664,12 @@ if (Entity) {
     end)
     
     
-    -- idk why these dont get cleaned up automatically
-    hook.add("EntityTakeDamage", "NPC_ceilingTurretCleanup", function( victim, attacker, inflictor, amount )
-        if not victim:isNPC() then return end
+    
+    hook.add("EntityTakeDamage", "NPC_cleanup", function( victim, attacker, inflictor, amount, dmgType )
         if not victim.IsChipNPC then return end
         
-        if victim:getHealth() - amount <= 0 then
+        --TODO: convert this to a death function on CeilingTurret?
+        if victim:isNPC() and victim:getHealth() - amount <= 0 then
             if victim:getClass() == "npc_turret_ceiling" then
                 timer.simple(1, function()
                     if not isValid(victim) then return end
@@ -668,10 +677,22 @@ if (Entity) {
                     victim:remove()
                 end)
             end
+            
+            hook.run("NPCDeath", victim, attacker, inflictor, dmgType )
         end
     end)
     
     
+    hook.add("NPCDeath", "NPC_runDeathFunction", function(victim)
+        local data = NPC.Types[victim.ID]
+        Util.spawn( data.Death, victim )
+        
+        if data.Abilities then
+            for i,v in pairs(data.Abilities) do
+                timer.stop("Entity" .. victim:entIndex() .. "_Ability" .. i)
+            end
+        end
+    end)
     
     
     
@@ -687,8 +708,6 @@ if (Entity) {
                 timer.stop("Entity" .. e:entIndex() .. "_Ability" .. i)
             end
         end
-        
-        coroutine.wrap(data.Death)( e )
     end)
     
     
@@ -755,18 +774,6 @@ end
 if CLIENT then
     
     local HealthBar = require("sb/npc/health_bar.txt")
-    
-    net.receive("addBossbar", function()
-        net.readEntity(function(e)
-            local bar = HealthBar:new( e, net.readString() )
-            bar:setOffset( e:obbCenter() + Vector(0,0,e:obbSize().z)*0.6 )
-            bar:setParent(e)
-            bar:setRotationMode( HealthBar.RotationMode.HYBRID )
-            bar:setScale( e:obbSize():getLength() * 0.02 )
-            
-            e.HealthBar = bar
-        end)
-    end)
     
     -- TODO: band-aid fix
     hook.add("OnEntityRemoved", "npc_health_bar_removal", function( e )

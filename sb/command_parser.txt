@@ -177,7 +177,6 @@ end
 
 
 
-
 -- Parses a given text into a command and arguments
 -- String text - The text to parse
 -- Command subcommand - The command to look for subcommands in (INTERNAL)
@@ -234,7 +233,7 @@ function CommandParser:parse( text, subCommand )
         if inp ~= nil then
             local casted = self:cast( inp, argInfo.Type )
             
-            if not casted then
+            if casted == nil then
                 return command, castedArgs, CommandParser.Error( "Could not cast " .. argInfo.Name .. " to " .. argInfo.Type .. "." )
             end
             

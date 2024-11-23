@@ -1,15 +1,17 @@
 --@name Prop NPC Utils
 --@author shroobloom
---@shared
-
+--@server
 
 
 -- For helping with Prop-based NPCs
 
 
+--TODO: rework this, it should probably be an entity wrapper and stored inside NPC
+
 
 local PropNPC = class("PropNPC")
 PropNPC.Instances = {}
+
 
 
 function PropNPC.setup( ent, name, maxHealth, damageCallback )
@@ -22,57 +24,46 @@ function PropNPC.setup( ent, name, maxHealth, damageCallback )
     ent.ExplosiveDamageMultiplier = 1
     ent.DamageMultiplier = 1
     
+    ent.DeathSequenceLength = 0
+    
     ent.Name = name
     
-    if SERVER then
-        ent:setMass(50000)
+    ent:setMass(50000)
+    
+    hook.add("EntityTakeDamage", "PropNPC_DamageDetector_" .. ent:entIndex(), function( victim, attacker, inflictor, amount, dmgType, position )
+        if victim ~= ent then return end
+        if ent.Invincible then return end
+        if ent.Health <= 0 then return end
+        if not isValid(attacker) or not attacker:isPlayer() then return end
         
-        net.start("PropNPC_setup")
-        net.writeEntity(ent)
-        net.writeString(name)
-        net.writeDouble(maxHealth)
-        net.writeDouble(maxHealth)
-        net.writeBool(ent.Invincible)
-        net.send()
         
-        hook.add("EntityTakeDamage", "PropNPC_DamageDetector_" .. ent:entIndex(), function( victim, attacker, inflictor, amount, dmgType, position )
-            if victim ~= ent then return end
-            if ent.Invincible then return end
-            if ent.Health <= 0 then return end
-            if not isValid(attacker) or not attacker:isPlayer() then return end
+        --[[ MULTIPLIERS ]]--
+        amount = amount * ent.DamageMultiplier
+        
+        if dmgType == DAMAGE.CRUSH or dmgType == DAMAGE.SLASH or dmgType == DAMAGE.CLUB or (isValid(inflictor) and inflictor:getClass() == "cw_extrema_ratio_official") then
+            amount = amount * ent.MeleeDamageMultiplier
+        elseif dmgType == DAMAGE.BLAST then
+            amount = amount * ent.ExplosiveDamageMultiplier
+        end
+        
+        local mul = damageCallback and damageCallback(victim, attacker, inflictor, amount, dmgType, position ) or 1
+        
+        ent.Health = ent.Health - amount*mul
+        
+        if ent.HealthBar then
+            ent.HealthBar:setHealth(ent.Health)
+        end
+        
+        if ent.Health <= 0 then
+            hook.run("NPCDeath", victim, attacker, inflictor, dmgType )
             
-            
-            --[[ MULTIPLIERS ]]--
-            amount = amount * ent.DamageMultiplier
-            
-            if dmgType == DAMAGE.CRUSH or dmgType == DAMAGE.SLASH or dmgType == DAMAGE.CLUB or (isValid(inflictor) and inflictor:getClass() == "cw_extrema_ratio_official") then
-                amount = amount * ent.MeleeDamageMultiplier
-            elseif dmgType == DAMAGE.BLAST then
-                amount = amount * ent.ExplosiveDamageMultiplier
-            end
-            
-            local mul = damageCallback and damageCallback(victim, attacker, inflictor, amount, dmgType, position ) or 1
-            
-            ent.Health = ent.Health - amount*mul
-            
-            if ent.Health <= 0 then
+            timer.simple(ent.DeathSequenceLength, function()
                 ent:remove()
-            end
-            
-            net.start("PropNPC_setHealth")
-            net.writeEntity(ent)
-            net.writeDouble( ent.Health )
-            net.send()
-            
-            return true
-        end)
+            end)
+        end
         
-        --[[local hax = false
-        timer.create("PropNPC_healthExploit", 0, 0, function()
-            hax = not hax
-            ent:setMass( hax and 50000 or 49000 )
-        end)]]
-    end
+        return true
+    end)
     
     table.insert(PropNPC.Instances, ent)
 end
@@ -81,29 +72,15 @@ end
 function PropNPC.setInvincible( ent, state )
     ent.Invincible = state
     
-    if SERVER then
-        net.start("PropNPC_setInvincible")
-        net.writeEntity(ent)
-        net.writeBool( state )
-        net.send()
+    if ent.HealthBar then
+        ent.HealthBar:setColor( state and Color(170,170,170) or Color(255,0,0) )
+        ent.HealthBar:setDecayColor( state and Color(100,100,100) or Color(255,156,3) )
     end
 end
 
 
 
 if SERVER then
-    hook.add("ClientInitialized", "prop_npc_initiali_network", function( plr )
-        for i,ent in pairs(PropNPC.Instances) do
-            net.start("PropNPC_setup")
-            net.writeEntity(ent)
-            net.writeString(ent.Name)
-            net.writeDouble(ent.Health)
-            net.writeDouble(ent.MaxHealth)
-            net.writeBool(ent.Invincible)
-            net.send( plr )
-        end
-    end)
-    
     -- Anti-shapecharge cheese
     timer.create("prop_npc_shapecharge_remover", 0.5, 0, function()
         for i,subject in pairs(PropNPC.Instances) do
@@ -125,54 +102,10 @@ hook.add("EntityRemoved", "prop_npc_removed", function( e )
     if not e or not e.Health then return end
     table.removeByValue( PropNPC.Instances, e )
     
-    if SERVER then
-        hook.remove("EntityTakeDamage", "PropNPC_DamageDetector_" .. e:entIndex())
-    end
+    hook.remove("EntityTakeDamage", "PropNPC_DamageDetector_" .. e:entIndex())
 end)
 
 
-
-if CLIENT then
-    
-    net.receive("PropNPC_setup", function()
-        net.readEntity(function( e )
-            if not isValid(e) then return end
-            
-            local name = net.readString()
-            local hp = net.readDouble()
-            local maxHP = net.readDouble()
-            local invincible = net.readBool()
-            
-            PropNPC.setup( e, name, maxHP )
-            e.Health = hp
-            e.Invincible = invincible
-        end)
-    end)
-    
-    net.receive("PropNPC_setHealth", function()
-        net.readEntity(function( e )
-            if not isValid(e) then return end
-            
-            e.Health = net.readDouble()
-        end)
-    end)
-    
-    net.receive("PropNPC_setInvincible", function()
-        net.readEntity(function( e )
-            if not isValid(e) then return end
-            
-            PropNPC.setInvincible(e, net.readBool())
-        end)
-    end)
-    
-end
-
-
---[[
-if SERVER then
-    -- test
-    PropNPC.setup( chip(), "The Faller of Stars", 100 )
-end]]
 
 
 
