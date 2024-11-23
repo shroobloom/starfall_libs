@@ -3,7 +3,7 @@
 --@shared
 --@include sb/npc/main.txt
 --@include sb/spawner.txt
---@include sb/command.txt
+--@include sb/chat_command.txt
 
 
 
@@ -23,7 +23,7 @@ local DisableScouts = true
 local NPC = require("sb/npc/main.txt")
 
 if SERVER then
-    local CommandLib = require("sb/command.txt")
+    local ChatCommands = require("sb/chat_command.txt")
     local Spawner = require("sb/spawner.txt")
     
     
@@ -45,9 +45,9 @@ if SERVER then
     
     
     --[[ DEBUG BLOCK ]]--
-    --[[NPC.Debug = true
+    NPC.Debug = true
     NPC.AutoRegisterParticipants = false
-    table.insert(NPC.Participants, owner())]]
+    table.insert(NPC.Participants, owner())
     
     
     Spawner.Enqueue(function()
@@ -69,9 +69,22 @@ if SERVER then
     
     
     
+    local npc_getMax = NPC.getMax
+    
+    function NPC.getMax()
+        local nestCount = #NPC.getAll( "AntlionNest" )
+        return npc_getMax() * (1 + (nestCount-1)*0.5)
+    end
     
     
-    CommandLib:registerCommand({
+    function NPC.appendEventInfo( addLine )
+        local nestCount = #NPC.getAll( "AntlionNest" )
+        addLine("Nests: ", Color(120 - math.min(nestCount / 5, 1)*120, 1, 1):hsvToRGB(), nestCount)
+    end
+    
+    
+    
+    ChatCommands:add({
         Name = "limit",
         Description = "Modifies the spawn limit multiplier.",
         Arguments = {
@@ -86,9 +99,9 @@ if SERVER then
         end
     })
     
-    CommandLib:registerCommand({
+    ChatCommands:add({
         Name = "nest",
-        Description = "Spawns a nest at your mouse position.",
+        Description = "Spawns a nest at your aim position.",
         Arguments = {},
         Run = function(user, mul)
             Spawner.Enqueue(function()
