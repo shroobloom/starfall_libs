@@ -184,7 +184,7 @@ if SERVER then
         
         if err then
             timer.simple(0, function()
-                print(ChatCommand.BULLET_COLOR, ChatCommand.BULLET, Color(234,60,40), " Command Parse Error: ", Color(255,120,120), err.Message)
+                print(ChatCommand.BULLET_COLOR, ChatCommand.BULLET, Color(234,60,40), " Syntax Error: ", Color(255,120,120), err.Message)
             end)
             
             return ""
@@ -196,7 +196,7 @@ if SERVER then
                 
                 if err then
                     timer.simple(0, function()
-                        print(ChatCommand.BULLET_COLOR, ChatCommand.BULLET, Color(234,60,40), " Command Runtime Error: ", Color(255,120,120), err.Message)
+                        print(ChatCommand.BULLET_COLOR, ChatCommand.BULLET, Color(234,60,40), " Command Error: ", Color(255,120,120), err.Message)
                     end)
                 end
             end
