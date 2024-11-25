@@ -389,7 +389,7 @@ if (Entity) {
     
     
     function NPC.shouldParticipate( plr )
-        return plr:isInPvp() and not plr:isNoclipped() and not plr:hasGodMode() and plr:isAlive()
+        return plr:isInPvp() and (not plr:isNoclipped() or isValid(plr:getVehicle())) and not plr:hasGodMode() and plr:isAlive()
     end
     
     
