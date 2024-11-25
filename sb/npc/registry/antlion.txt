@@ -178,6 +178,7 @@ if (Target) {
         }
         
         
+        --TODO: enable prop damage
         
         NPC:register("AntlionNest", {
             Name = "Antlion Nest",
@@ -343,9 +344,9 @@ if (Target) {
                     return mul
                 end)
                 
-                Hitbox.DamageMultiplier = 0.25
-                Hitbox.MeleeDamageMultiplier = 14
-                Hitbox.ExplosiveDamageMultiplier = 5
+                Hitbox.DamageMultiplier = 1
+                Hitbox.MeleeDamageMultiplier = 4
+                Hitbox.ExplosiveDamageMultiplier = 1.5
                 Hitbox.DeathSequenceLength = 7
                 
                 return Hitbox
@@ -429,14 +430,14 @@ if (Target) {
                 },
                 {
                     -- Artillery
-                    Cooldown = 8,
+                    Cooldown = 10,
                     Use = function( npc )
                         if npc.Phase < 1 or math.random() < 0.5 then return end
                         
                         local LaunchPos = npc:obbCenterW()
                         
                         local targets = find.byClass("player", function(e)
-                            local maxRange = isValid(e:getVehicle()) and 6500 or 3000
+                            local maxRange = isValid(e:getVehicle()) and 7500 or 3000
                             return table.hasValue(NPC.Participants, e) and e:getPos():getDistance(LaunchPos) < maxRange and not trace.line( LaunchPos, e:getPos(), nil, COLLISION_GROUP.DEBRIS ).Hit
                         end)
                         
@@ -491,7 +492,7 @@ if (Target) {
                             
                             local Goal = tar:getPos()
                             local dist = LaunchPos:getDistance(Goal)
-                            local steep = Goal.z < LaunchPos.z or dist < 1000
+                            local steep = not isValid(tar:getVehicle()) --Goal.z < LaunchPos.z or dist < 1000
                             local speed = steep and (800 + dist/5) or (1600+npc.Phase*300)
                             local ttr = dist/speed
                             Goal = Goal + Vel*ttr * math.random(0.9, 1.1)
