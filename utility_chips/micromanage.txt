@@ -314,7 +314,7 @@ Micromanage:addOption({
 
 Util.bindPress("MOUSE2", function()
     if not input.isKeyDown( 13 ) then return end --C
-    if owner():isInPvp() and not owner():isNoclipped() then return end
+    if owner():isInPvp() and (not owner():isNoclipped() or isValid(owner():getVehicle())) then return end
     
     local mX, mY = input.getCursorPos()
     local bestDist = math.huge
@@ -367,6 +367,9 @@ end)
 local SelectedOption = nil
 local MouseDown = false
 
+local function isMicromanageAllowed()
+    return owner():isInBuild() or (owner():isNoclipped() and not isValid(owner():getVehicle()))
+end
 
 local function setOptionSelection( n )
     if SelectedOption == n then return end
@@ -384,7 +387,7 @@ end)
 
 
 Util.bindPress("MOUSE1", function()
-    if owner():isInPvp() and not owner():isNoclipped() then return end
+    if not isMicromanageAllowed() then return end
     
     local Option = Micromanage.ChoosableOptions[SelectedOption]
     if not Option then return end
@@ -394,7 +397,7 @@ Util.bindPress("MOUSE1", function()
 end)
 
 Util.bindRelease("MOUSE1", function()
-    if owner():isInPvp() and not owner():isNoclipped() then return end
+    if not isMicromanageAllowed() then return end
     
     if not MouseDown then return end
     MouseDown = false
@@ -411,8 +414,8 @@ end)
 enableHud( player(), true )
 
 hook.add("drawhud", "Micromanage_HUD", function()
-    if owner():isInPvp() and not owner():isNoclipped() then return end
     if not input.isKeyDown( 13 ) then return end --C
+    if not isMicromanageAllowed() then return end
     
     render.setFilterMag(2)
     
