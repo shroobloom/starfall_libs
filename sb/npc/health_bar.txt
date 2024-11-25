@@ -310,7 +310,7 @@ timer.simple(2, function()
 end)
 ]]
 
-
+--[[
 -- test v2
 if SERVER then
     local bar = HealthBar:new( chip(), "asdf", true )
@@ -325,7 +325,7 @@ if SERVER then
     timer.create("asdf", 1, 0, function()
         bar:setHealth( bar.Health - 10 * math.random() )
     end)
-end
+end]]
 
 
 return HealthBar
