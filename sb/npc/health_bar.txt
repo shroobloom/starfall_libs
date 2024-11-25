@@ -67,31 +67,32 @@ function HealthBar:network( target )
     if not self:isValid() then return end
     
     net.start("healthBar_create")
-    net.writeEntity(self.Subject)
     net.writeString(self.Name)
     net.writeFloat(self.Health)
     net.writeFloat(self.MaxHealth)
     net.writeColor(self.Color)
     net.writeColor(self.DecayColor)
     net.writeBool(self.Boss)
+    net.writeEntity(self.Subject)
     net.send( target )
 end
 
 if CLIENT then
     net.receive("healthBar_create", function()
+        local name = net.readString()
+        local health = net.readFloat()
+        local maxHealth = net.readFloat()
+        local col = net.readColor()
+        local decay = net.readColor()
+        local isBoss = net.readBool()
+        
         net.readEntity(function(subject)
-            local name = net.readString()
-            local health = net.readFloat()
-            local maxHealth = net.readFloat()
-            local col = net.readColor()
-            local decay = net.readColor()
-            
             local created = HealthBar:new( subject, name )
             created:setHealth( health )
             created:setMaxHealth( maxHealth )
             created:setColor( col )
             created:setDecayColor( decay )
-            created.Boss = net.readBool()
+            created.Boss = isBoss
         end)
     end)
 end
@@ -112,23 +113,25 @@ end
 
 
 
---TODO: network
+
 function HealthBar:setColor( col )
     self.Color = col
     
     if SERVER and self:isValid() then
         net.start("healthBar_setColor")
-        net.writeEntity( self.Subject )
         net.writeColor( col )
+        net.writeEntity( self.Subject )
         net.send( target )
     end
 end
 
 if CLIENT then
     net.receive("healthBar_setColor", function()
+        local col = net.readColor()
+        
         net.readEntity(function(subject)
             if not HealthBar.Instances[subject] then return end
-            HealthBar.Instances[subject]:setColor( net.readColor() )
+            HealthBar.Instances[subject]:setColor( col )
         end)
     end)
 end
@@ -139,17 +142,19 @@ function HealthBar:setDecayColor( decayCol )
     
     if SERVER and self:isValid() then
         net.start("healthBar_setDecayColor")
-        net.writeEntity( self.Subject )
         net.writeColor( decayCol )
+        net.writeEntity( self.Subject )
         net.send()
     end
 end
 
 if CLIENT then
     net.receive("healthBar_setDecayColor", function()
+        local col = net.readColor()
+        
         net.readEntity(function(subject)
             if not HealthBar.Instances[subject] then return end
-            HealthBar.Instances[subject]:setDecayColor( net.readColor() )
+            HealthBar.Instances[subject]:setDecayColor( col )
         end)
     end)
 end
@@ -163,17 +168,19 @@ function HealthBar:setHealth( health )
     
     if SERVER and self:isValid() then
         net.start("healthBar_setHealth")
-        net.writeEntity( self.Subject )
         net.writeFloat( health )
+        net.writeEntity( self.Subject )
         net.send()
     end
 end
 
 if CLIENT then
     net.receive("healthBar_setHealth", function()
+        local health = net.readFloat()
+        
         net.readEntity(function(subject)
             if not HealthBar.Instances[subject] then return end
-            HealthBar.Instances[subject]:setHealth( net.readFloat() )
+            HealthBar.Instances[subject]:setHealth( health )
         end)
     end)
 end
@@ -186,17 +193,19 @@ function HealthBar:setMaxHealth( maxHealth )
     
     if SERVER and self:isValid() then
         net.start("healthBar_setMaxHealth")
-        net.writeEntity( self.Subject )
         net.writeFloat( maxHealth )
+        net.writeEntity( self.Subject )
         net.send()
     end
 end
 
 if CLIENT then
     net.receive("healthBar_setMaxHealth", function()
+        local maxHealth = net.readFloat()
+        
         net.readEntity(function(subject)
             if not HealthBar.Instances[subject] then return end
-            HealthBar.Instances[subject]:setMaxHealth( net.readFloat() )
+            HealthBar.Instances[subject]:setMaxHealth( maxHealth )
         end)
     end)
 end
@@ -303,7 +312,7 @@ end)
 
 
 -- test v2
---[[if SERVER then
+if SERVER then
     local bar = HealthBar:new( chip(), "asdf", true )
     bar:setColor(Color(144,0,255))
     bar:setDecayColor( Color(255,0,255) )
@@ -316,7 +325,7 @@ end)
     timer.create("asdf", 1, 0, function()
         bar:setHealth( bar.Health - 10 * math.random() )
     end)
-end]]
+end
 
 
 return HealthBar
