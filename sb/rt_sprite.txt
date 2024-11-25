@@ -134,8 +134,11 @@ end
 
 function RTSprite:remove()
     self.Holo:remove()
-    self.Material:destroy()
-    render.destroyRenderTarget(self:getRenderTargetName())
+    
+    if self.Loaded then
+        self.Material:destroy()
+        render.destroyRenderTarget(self:getRenderTargetName())
+    end
     
     RTSprite.Instances[self.ID] = nil
     table.removeByValue(RTSprite.RenderOrder, self)
