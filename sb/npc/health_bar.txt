@@ -2,11 +2,13 @@
 --@author shroobloom
 --@shared
 --@include sb/rt_sprite.txt
+--@include sb/entity_networker.txt
 
 
 
 
 local RTSprite = require("sb/rt_sprite.txt")
+local EntityNetworker = require("sb/entity_networker.txt")
 
 local HealthBar = class("HealthBar", RTSprite)
 HealthBar.BOSS_HEIGHT = 58
@@ -55,27 +57,22 @@ function HealthBar:initialize( Subject, Name, Boss )
     self:setScale( Subject:obbSize():getLength() * 0.025 )
     
     if SERVER then
-        timer.simple(0, function()
-            self:network()
+        EntityNetworker:add( Subject, function( plr )
+            net.start("healthBar_create")
+            net.writeString(self.Name)
+            net.writeFloat(self.Health)
+            net.writeFloat(self.MaxHealth)
+            net.writeColor(self.Color)
+            net.writeColor(self.DecayColor)
+            net.writeBool(self.Boss)
+            net.writeEntity(self.Subject)
+            net.send( plr )
         end)
     end
     
     HealthBar.Instances[Subject] = self
 end
 
-function HealthBar:network( target )
-    if not self:isValid() then return end
-    
-    net.start("healthBar_create")
-    net.writeString(self.Name)
-    net.writeFloat(self.Health)
-    net.writeFloat(self.MaxHealth)
-    net.writeColor(self.Color)
-    net.writeColor(self.DecayColor)
-    net.writeBool(self.Boss)
-    net.writeEntity(self.Subject)
-    net.send( target )
-end
 
 if CLIENT then
     net.receive("healthBar_create", function()
@@ -94,14 +91,6 @@ if CLIENT then
             created:setDecayColor( decay )
             created.Boss = isBoss
         end)
-    end)
-end
-
-if SERVER then
-    hook.add("ClientInitialized", "healthBar_initNetwork", function(plr)
-        for i,v in pairs( HealthBar.Instances ) do
-            v:network( plr )
-        end
     end)
 end
 
@@ -219,6 +208,10 @@ function HealthBar:remove()
     if CLIENT then
         RTSprite.remove( self )
     end
+    
+    if SERVER then
+        EntityNetworker:remove( self.Subject )
+    end
 end
 
 
@@ -227,6 +220,8 @@ end
 
 
 function HealthBar:getFillPercentage()
+    if not isValid(self.Subject) then return 0 end
+    
     if self.Subject:isNPC() then
         return math.clamp(self.Subject:getHealth() / self.Subject:getMaxHealth(), 0, 1)
     end
@@ -238,6 +233,7 @@ end
 
 
 function HealthBar:render()
+    if not isValid(self.Subject) then return end
     
     local pc = self:getFillPercentage()
     
@@ -310,20 +306,31 @@ timer.simple(2, function()
 end)
 ]]
 
---[[
+
 -- test v2
-if SERVER then
-    local bar = HealthBar:new( chip(), "asdf", true )
-    bar:setColor(Color(144,0,255))
-    bar:setDecayColor( Color(255,0,255) )
+--[[if SERVER then
     
     timer.simple(4, function()
-        bar:setColor( Color(0,255,0) )
-        bar:setDecayColor(Color(255,0,0))
-    end)
-    
-    timer.create("asdf", 1, 0, function()
-        bar:setHealth( bar.Health - 10 * math.random() )
+        print("created it")
+        local test = prop.create(Vector(-1000,-1000,-11000), Angle(), "models/hunter/blocks/cube05x05x05.mdl", true)
+        
+        local bar = HealthBar:new( test, "asdf", true )
+        bar:setColor(Color(144,0,255))
+        bar:setDecayColor( Color(255,0,255) )
+        
+        timer.simple(4, function()
+            bar:setColor( Color(0,255,0) )
+            bar:setDecayColor(Color(255,0,0))
+        end)
+        
+        timer.create("asdf", 1, 0, function()
+            bar:setHealth( bar.Health - 10 * math.random() )
+        end)
+        
+        timer.simple(6, function()
+            test:remove()
+            timer.stop("asdf")
+        end)
     end)
 end]]
 

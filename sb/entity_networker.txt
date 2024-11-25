@@ -1,0 +1,124 @@
+--@name Entity Networker
+--@author shroobloom
+--@shared
+
+
+
+local EntityNetworker = {}
+
+
+if SERVER then
+    EntityNetworker.Bindings = {}
+    
+    function EntityNetworker:makeClientsAware( Entity, Player )
+        net.start("entityNetworker_aware")
+        net.writeUInt( Entity:entIndex(), 16 )
+        net.send( Player )
+    end
+    
+    function EntityNetworker:add( Entity, Callback )
+        EntityNetworker.Bindings[Entity] = Callback
+        self:makeClientsAware( Entity )
+    end
+    
+    function EntityNetworker:remove( Entity )
+        EntityNetworker.Bindings[Entity] = nil
+        net.start("entityNetworker_nevermind")
+        net.writeUInt( Entity:entIndex(), 16 )
+        net.send()
+    end
+    
+    hook.add("ClientInitialized", "entityNetworker_aware", function(p)
+        for i,v in pairs( EntityNetworker.Bindings ) do
+            EntityNetworker:makeClientsAware( i, p )
+        end
+    end)
+    
+    net.receive("entityNetworker_entityReceived", function( _, sender )
+        local ent = net.readEntity()
+        local cb = EntityNetworker.Bindings[ent]
+        if not cb then return end --likely it was removed as the client got, and sent it
+        
+        cb( sender )
+    end)
+    
+end
+
+
+if CLIENT then
+    EntityNetworker.Awaiting = {}
+    
+    function EntityNetworker:notifyEntityReceived( ent )
+        net.start("entityNetworker_entityReceived")
+        net.writeEntity(ent)
+        net.send()
+        
+        EntityNetworker.Awaiting[ ent:entIndex() ] = nil --dont ask again, server already knows
+    end
+    
+    net.receive("entityNetworker_aware", function()
+        local idx = net.readUInt(16)
+        EntityNetworker.Awaiting[ idx ] = true
+        
+        if isValid(entity(idx)) then
+            EntityNetworker:notifyEntityReceived( entity(idx) )
+        end
+    end)
+    
+    net.receive("entityNetworker_nevermind", function()
+        local idx = net.readUInt(16)
+        EntityNetworker.Awaiting[ idx ] = nil
+    end)
+    
+    hook.add("NetworkEntityCreated", "entityNetworker_alert", function(ent)
+        if not EntityNetworker.Awaiting[ent:entIndex()] then return end
+        
+        EntityNetworker:notifyEntityReceived( ent )
+    end)
+    
+end
+
+
+--[[
+
+if SERVER then
+    
+    local test = prop.create(Vector(-1000,-1000,-11000), Angle(), "models/hunter/blocks/cube05x05x05.mdl", true)
+    test.rand = math.random()
+    
+    EntityNetworker:add( test, function( plr )
+        print("client ", plr, " got it")
+        
+        net.start("asdf")
+        net.writeFloat(test.rand)
+        net.writeEntity( test )
+        net.send( plr )
+    end)
+end
+
+
+if CLIENT then
+    
+    local ent = nil
+    
+    net.receive("asdf", function()
+        local rand = net.readFloat()
+        
+        net.readEntity(function(e)
+            if not e then return end
+            e.rand = rand
+            
+            print("got entity ", e, " with rand ", e.rand)
+        end)
+    end)
+    
+end
+
+
+]]
+
+
+
+
+return EntityNetworker
+
