@@ -217,16 +217,27 @@ end
 
 
 
+function HealthBar:getHealth()
+    if self.Subject:isNPC() then
+        return self.Subject:getHealth()
+    end
+    
+    return self.Health
+end
+
+function HealthBar:getMaxHealth()
+    if self.Subject:isNPC() then
+        return self.Subject:getMaxHealth()
+    end
+    
+    return self.MaxHealth
+end
 
 
 function HealthBar:getFillPercentage()
     if not isValid(self.Subject) then return 0 end
     
-    if self.Subject:isNPC() then
-        return math.clamp(self.Subject:getHealth() / self.Subject:getMaxHealth(), 0, 1)
-    end
-    
-    return math.clamp(self.Health / self.MaxHealth, 0, 1)
+    return math.clamp(self:getHealth() / self:getMaxHealth(), 0, 1)
 end
 
 
@@ -238,7 +249,12 @@ function HealthBar:render()
     local pc = self:getFillPercentage()
     
     if pc ~= self.LastPercent then
-        self.LastDamage = timer.curtime()
+        local hpDiff = (self.LastPercent - pc) * self:getMaxHealth()
+        
+        if hpDiff > 1 then --mostly to avoid burning from preventing decay
+            self.LastDamage = timer.curtime()
+        end
+        
         self.LastPercent = pc
     end
     
