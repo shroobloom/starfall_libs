@@ -4,8 +4,6 @@
 --@include sb/npc/health_bar.txt
 
 
-print("B")
-
 local HealthBar = require("sb/npc/health_bar.txt")
 
 -- TODO: band-aid fix
