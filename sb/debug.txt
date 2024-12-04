@@ -1,0 +1,64 @@
+--@name Debug
+--@author shroobloom
+--@shared
+
+
+
+local Debug = {}
+Debug.Markers = {}
+Debug.LastPrints = {}
+
+
+function Debug.marker( id, pos, ang, model, scale, color )
+    if not Debug.Markers[id] then
+        local marker = hologram.create( pos or Vector(), ang or Angle(), model or "models/hunter/blocks/cube05x05x05.mdl", scale or Vector(1,1,1) )
+        marker:suppressEngineLighting( true )
+        marker:setColor(color or Color(255,255,255))
+        
+        Debug.Markers[id] = marker
+    end
+    
+    if pos then
+        Debug.Markers[id]:setPos(pos)
+    end
+    
+    if ang then
+        Debug.Markers[id]:setAngles(ang)
+    end
+    
+    if model and Debug.Markers[id]:getModel() ~= model then
+        Debug.Markers[id]:setModel(model)
+    end
+    
+    if scale then
+        Debug.Markers[id]:setScale(scale)
+    end
+    
+    if color then
+        Debug.Markers[id]:setScale(color)
+    end
+    
+    return Debug.Markers[id]
+end
+
+
+
+function Debug.periodicPrint( id, delay, ... )
+    if Debug.LastPrints[id] and timer.curtime() - Debug.LastPrints[id] < delay then return end
+    
+    Debug.LastPrints[id] = timer.curtime()
+    print(...)
+end
+
+function Debug.periodicPrintTable( id, delay, t )
+    if Debug.LastPrints[id] and timer.curtime() - Debug.LastPrints[id] < delay then return end
+    
+    Debug.LastPrints[id] = timer.curtime()
+    printTable(t)
+end
+
+
+
+
+
+return Debug
