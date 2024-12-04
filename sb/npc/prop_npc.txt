@@ -32,9 +32,16 @@ function PropNPC.setup( ent, name, maxHealth, damageCallback )
     
     hook.add("EntityTakeDamage", "PropNPC_DamageDetector_" .. ent:entIndex(), function( victim, attacker, inflictor, amount, dmgType, position )
         if victim ~= ent then return end
-        if ent.Invincible then return end
-        if ent.Health <= 0 then return end
-        if not isValid(attacker) or not attacker:isPlayer() then return end
+        if ent.Invincible then return true end
+        if ent.Health <= 0 then return true end
+        if not isValid(attacker) then return true end
+        
+        if not attacker:isPlayer() then
+            if not isValid(inflictor) then return true end
+            
+            local propOwner = inflictor:getOwner()
+            if not isValid(propOwner) or propOwner:isInBuild() then return true end
+        end
         
         
         --[[ MULTIPLIERS ]]--

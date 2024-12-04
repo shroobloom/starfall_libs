@@ -43,15 +43,17 @@ if SERVER then
     ChatCommands:add({
         Name = "npc",
         Description = "Generic command folder for NPC events.",
+        CanUse = ChatCommands.UsePredicates.ADMIN_ONLY,
         Subcommands = {
             {
                 Name = "info",
                 Description = "Gets info about spawns and such.",
+                CanUse = ChatCommands.UsePredicates.ADMIN_ONLY,
                 Run = function( user )
-                    print(Color(255,144,0), "--------[[ NPC INFO ]]--------")
+                    user:chatPrint(Color(255,144,0), "--------[[ NPC INFO ]]--------")
                     
                     local function addLine( ... )
-                        print( ChatCommands.BULLET_COLOR, ChatCommands.BULLET, Color(255,255,255), " ", Color(255,255,255), ... )
+                        user:chatPrint( ChatCommands.BULLET_COLOR, ChatCommands.BULLET, Color(255,255,255), " ", Color(255,255,255), ... )
                     end
                     
                     addLine("Spawns: ", Color(120 - (#NPC.Instances / NPC.getMax())*120, 1, 1):hsvToRGB(), #NPC.Instances, Color(125,125,125), " / ", Color(255,0,0), NPC.getMax())
@@ -572,7 +574,8 @@ if (Entity) {
     -- Optionally, supply a spawning range (number[2]) for the distance, otherwise it'll use NPC.SpawnDistance
     -- Optionally, supply a max number of spawns to limit how many NPCs are created
     -- Optionally, supply a max number of attempts, default 25
-    function NPC.attemptSpawns( pos, spawnPool, spawnRange, maxSpawns, attempts )
+    -- Optionally, supply a boolean for it to ignore the NPC spawn cap (please only use this sparingly, when NPCs are absolutely necessary to spawn!)
+    function NPC.attemptSpawns( pos, spawnPool, spawnRange, maxSpawns, attempts, ignoreLimit )
         spawnRange = spawnRange or NPC.SpawnDistance
         attempts = attempts or 25
         
@@ -580,7 +583,7 @@ if (Entity) {
         local max = NPC.getMax()
         local id = NPC.pickSpawn( spawnPool )
         
-        while attempts > 0 and spawnsLeft > 0 and (#NPC.Instances + #Spawner.Queue) < max do
+        while attempts > 0 and spawnsLeft > 0 and (ignoreLimit or (#NPC.Instances + #Spawner.Queue) < max) do
             attempts = attempts - 1
             
             local sp = NPC.pickSpawnLocation( id, pos, spawnRange )
