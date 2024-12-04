@@ -18,7 +18,11 @@ if SERVER then
     
     function EntityNetworker:add( Entity, Callback )
         EntityNetworker.Bindings[Entity] = Callback
-        self:makeClientsAware( Entity )
+        
+        for i,v in pairs(find.allPlayers()) do
+            if not v.EntityNetworkerInitialized then continue end
+            self:makeClientsAware( Entity, v )
+        end
     end
     
     function EntityNetworker:remove( Entity )
@@ -29,6 +33,8 @@ if SERVER then
     end
     
     hook.add("ClientInitialized", "entityNetworker_aware", function(p)
+        p.EntityNetworkerInitialized = true
+        
         for i,v in pairs( EntityNetworker.Bindings ) do
             EntityNetworker:makeClientsAware( i, p )
         end
