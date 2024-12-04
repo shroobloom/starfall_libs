@@ -1,16 +1,10 @@
---@name Antlion Hill
+--@name Antlion Nest
 --@author shroobloom
 --@shared
 --@include sb/npc/main.txt
 --@include sb/spawner.txt
 --@include sb/chat_command.txt
-
-
-
-
---[[ TODO ]]--
--- [ ] Vort effect to show antlion guards granting a shield
--- [ ] Mortar shell attack to deal with helicopters and ground units
+--@include sb/npc/registry/boss/antlion_nest.txt
 
 
 --[[ CONFIG ]]--
@@ -26,19 +20,15 @@ if SERVER then
     local ChatCommands = require("sb/chat_command.txt")
     local Spawner = require("sb/spawner.txt")
     
-    
-    local ScoutSpawns = {
+    local SCOUT_SPAWNS = {
         {
             ID = "Antlion",
             Weight = 2
-        },
-        {
-            ID = "AntlionSwarmer",
-            Weight = 1
         }
     }
     
     
+    require("sb/npc/registry/boss/antlion_nest.txt")( NPC )
     
     
     NPC.BeaconWardDistance = 0
@@ -62,7 +52,7 @@ if SERVER then
             if #NPC.Participants == 0 or not isValid(Nest) or DisableScouts then return end
             
             local spawner = table.random(NPC.Participants)
-            NPC.attemptSpawns( spawner:getPos(), ScoutSpawns, {200,600}, 3 )
+            NPC.attemptSpawns( spawner:getPos(), SCOUT_SPAWNS, {200,600}, 3 )
         end)
         
     end)
@@ -119,6 +109,10 @@ if SERVER then
     )
 end
 
+
+if CLIENT then
+    dofile("sb/npc/registry/boss/antlion_nest.txt")
+end
 
 
 
