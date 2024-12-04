@@ -1,10 +1,11 @@
 --@name Antlion Nest
 --@author shroobloom
---@shared
+--@server
 --@include sb/npc/main.txt
 --@include sb/spawner.txt
 --@include sb/chat_command.txt
 --@include sb/npc/registry/boss/antlion_nest.txt
+--@clientmain sb/npc/client_main.txt
 
 
 --[[ CONFIG ]]--
@@ -16,103 +17,96 @@ local DisableScouts = true
 
 local NPC = require("sb/npc/main.txt")
 
-if SERVER then
-    local ChatCommands = require("sb/chat_command.txt")
-    local Spawner = require("sb/spawner.txt")
-    
-    local SCOUT_SPAWNS = {
-        {
-            ID = "Antlion",
-            Weight = 2
-        }
+local ChatCommands = require("sb/chat_command.txt")
+local Spawner = require("sb/spawner.txt")
+
+local SCOUT_SPAWNS = {
+    {
+        ID = "Antlion",
+        Weight = 2
     }
+}
+
+
+require("sb/npc/registry/boss/antlion_nest.txt")( NPC )
+
+
+NPC.BeaconWardDistance = 0
+
+
+--[[ DEBUG BLOCK ]]--
+--[[NPC.Debug = true
+NPC.AutoRegisterParticipants = false
+table.insert(NPC.Participants, owner())]]
+
+
+Spawner.Enqueue(function()
+    
+    local Nest = NPC.spawn( chip():getPos(), "AntlionNest" )
+    chip():setPos(Vector())
+    chip():setMass(50000)
+    chip():setSolid(false)
     
     
-    require("sb/npc/registry/boss/antlion_nest.txt")( NPC )
-    
-    
-    NPC.BeaconWardDistance = 0
-    
-    
-    --[[ DEBUG BLOCK ]]--
-    --[[NPC.Debug = true
-    NPC.AutoRegisterParticipants = false
-    table.insert(NPC.Participants, owner())]]
-    
-    
-    Spawner.Enqueue(function()
+    timer.create("spawnAmbush", 5, 0, function()
+        if #NPC.Participants == 0 or not isValid(Nest) or DisableScouts then return end
         
-        local Nest = NPC.spawn( chip():getPos(), "AntlionNest" )
-        chip():setPos(Vector())
-        chip():setMass(50000)
-        chip():setSolid(false)
-        
-        
-        timer.create("spawnAmbush", 5, 0, function()
-            if #NPC.Participants == 0 or not isValid(Nest) or DisableScouts then return end
-            
-            local spawner = table.random(NPC.Participants)
-            NPC.attemptSpawns( spawner:getPos(), SCOUT_SPAWNS, {200,600}, 3 )
-        end)
-        
+        local spawner = table.random(NPC.Participants)
+        NPC.attemptSpawns( spawner:getPos(), SCOUT_SPAWNS, {200,600}, 3 )
     end)
     
-    
-    
-    local npc_getMax = NPC.getMax
-    
-    function NPC.getMax()
-        local nestCount = #NPC.getAll( "AntlionNest" )
-        return npc_getMax() * (1 + (nestCount-1)*0.5)
-    end
-    
-    
-    function NPC.appendEventInfo( addLine )
-        local nestCount = #NPC.getAll( "AntlionNest" )
-        addLine("Nests: ", Color(120 - math.min(nestCount / 5, 1)*120, 1, 1):hsvToRGB(), nestCount)
-    end
-    
-    
-    
-    ChatCommands:add({
-        Name = "limit",
-        Description = "Modifies the spawn limit multiplier.",
-        Arguments = {
-            {
-                Name = "mul",
-                Type = "number"
-            }
-        },
-        Run = function(user, mul)
-            NPC.SpawnCap = 20 * mul
-            print(Color(80,255,40), "Set spawn cap multiplier to " .. mul .. "x! (" .. math.round(NPC.SpawnCap) .. ")")
-        end
-    })
-    
-    ChatCommands:add({
-        Name = "nest",
-        Description = "Spawns a nest at your aim position.",
-        Arguments = {},
-        Run = function(user, mul)
-            Spawner.Enqueue(function()
-                NPC.spawn( owner():getEyeTrace().HitPos, "AntlionNest" )
-            end)
-        end
-    })
-    
-    
-    NPC.addHints(
-        "Every nearby Antlion Guard grants the nest a 25% damage reduction. Take them out before dealing with the nest!",
-        "Explosives and melee weapons deal much more damage to the Nest.",
-        "Airborne attacks are not very effective!",
-        "Watch out for projectiles from above!"
-    )
+end)
+
+
+
+local npc_getMax = NPC.getMax
+
+function NPC.getMax()
+    local nestCount = #NPC.getAll( "AntlionNest" )
+    return npc_getMax() * (1 + (nestCount-1)*0.5)
 end
 
 
-if CLIENT then
-    dofile("sb/npc/registry/boss/antlion_nest.txt")
+function NPC.appendEventInfo( addLine )
+    local nestCount = #NPC.getAll( "AntlionNest" )
+    addLine("Nests: ", Color(120 - math.min(nestCount / 5, 1)*120, 1, 1):hsvToRGB(), nestCount)
 end
+
+
+
+ChatCommands:add({
+    Name = "limit",
+    Description = "Modifies the spawn limit multiplier.",
+    Arguments = {
+        {
+            Name = "mul",
+            Type = "number"
+        }
+    },
+    Run = function(user, mul)
+        NPC.SpawnCap = 20 * mul
+        print(Color(80,255,40), "Set spawn cap multiplier to " .. mul .. "x! (" .. math.round(NPC.SpawnCap) .. ")")
+    end
+})
+
+ChatCommands:add({
+    Name = "nest",
+    Description = "Spawns a nest at your aim position.",
+    Arguments = {},
+    Run = function(user, mul)
+        Spawner.Enqueue(function()
+            NPC.spawn( owner():getEyeTrace().HitPos, "AntlionNest" )
+        end)
+    end
+})
+
+
+NPC.addHints(
+    "Every nearby Antlion Guard grants the nest a 25% damage reduction. Take them out before dealing with the nest!",
+    "Explosives and melee weapons deal much more damage to the Nest.",
+    "Airborne attacks are not very effective!",
+    "Watch out for projectiles from above!"
+)
 
 
 
