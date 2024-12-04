@@ -38,8 +38,16 @@ local TYPE_COLOURS = {
 
 
 ChatCommand.UsePredicates = {
+    ANYONE = function( user )
+        return true
+    end,
+    
     OWNER_ONLY = function( user )
         return user == owner()
+    end,
+    
+    ADMIN_ONLY = function( user )
+        return user:isAdmin()
     end
 }
 
@@ -47,7 +55,6 @@ ChatCommand.UsePredicates = {
 local CommandDataStructMixin = {
     CanUse = ChatCommand.UsePredicates.OWNER_ONLY
 }
-
 
 
 function ChatCommand:applyCommandDefaults( cmdData )
@@ -174,12 +181,15 @@ end
 
 
 if SERVER then
-    local prefix = "!"
+    local prefixes = {
+        ["!"] = true,
+        ["/"] = true
+    }
     
-    hook.add("PlayerSay", "chatCommandParse", function( ply, text )
-        if not text:startsWith(prefix) then return end
+    hook.add("PlayerSay", "chat_command_parse", function( ply, text )
+        if not prefixes[text:sub(1,1)] then return end
         
-        local cmd, args, err = ChatCommand.Instance:parse( text:sub( prefix:len()+1 ) )
+        local cmd, args, err = ChatCommand.Instance:parse( text:sub( 2 ) )
         if cmd and not cmd.CanUse( ply ) then return end
         
         if err then
