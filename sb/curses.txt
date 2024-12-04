@@ -1,0 +1,1123 @@
+--@name Curse Database
+--@author shroobloom
+--@shared
+
+
+
+--[[ Curse Database ]]--
+-- A starfall index of every curse, as well as their compatibilities and such.
+-- TODO: ability to get if a curse is compatible, given a list of current curses maybe? might be too niche
+
+
+local Curses = {}
+
+
+local function addCurse( Data )
+    Curses[Data.Name] = Data
+end
+
+
+
+
+addCurse({
+    Name = "AimSensitivity",
+    IncompatibleEffects = {},
+    Groups = {
+        "MouseSensitivity",
+    },
+    IncompatibleGroups = {
+        "MouseSensitivity",
+    }
+})
+
+
+addCurse({
+    Name = "Ball",
+    IncompatibleEffects = {},
+    Groups = {
+        "Transformative",
+    },
+    IncompatibleGroups = {
+        "Transformative",
+        "AddedMovement",
+        "Teleportation",
+        "Death",
+    },
+})
+
+
+addCurse({
+    Name = "Blindness",
+    IncompatibleEffects = {},
+    Groups = {
+        "VisualOnly",
+        "Fog",
+    },
+    IncompatibleGroups = {
+        "Fog",
+    },
+})
+
+
+addCurse({
+    Name = "Butterfingers",
+    IncompatibleEffects = {
+        "WeaponIndecision",
+        "NoInteract",
+    },
+    Groups = {},
+    IncompatibleGroups = {},
+})
+
+
+addCurse({
+    Name = "CantStopWontStop",
+    IncompatibleEffects = {},
+    Groups = {
+        "AddedMovement",
+        "BlockNoclip",
+        "Death",
+        "Friction",
+    },
+    IncompatibleGroups = {
+        "Friction",
+    },
+})
+
+
+addCurse({
+    Name = "ChromaticAberration",
+    IncompatibleEffects = {
+        "MotionSight",
+    },
+    Groups = {
+        "VisualOnly",
+        "ScreenOverlay",
+    },
+    IncompatibleGroups = {
+        "HaltRenderScene",
+    },
+})
+
+
+addCurse({
+    Name = "Clumsy",
+    IncompatibleEffects = {},
+    Groups = {
+        "Transformative",
+    },
+    IncompatibleGroups = {
+        "Transformative",
+    },
+})
+
+
+addCurse({
+    Name = "ColorModify",
+    IncompatibleEffects = {
+        "MotionSight",
+    },
+    Groups = {
+        "VisualOnly",
+        "PP",
+        "PPColorModify"
+    },
+    IncompatibleGroups = {
+        "HaltRenderScene",
+        "PPColorModify",
+    },
+})
+
+
+addCurse({
+    Name = "ColorModifyContinuous",
+    IncompatibleEffects = {
+        "MotionSight",
+    },
+    Groups = {
+        "VisualOnly",
+        "PP",
+        "PPColorModify"
+    },
+    IncompatibleGroups = {
+        "HaltRenderScene",
+        "PPColorModify",
+    },
+})
+
+
+addCurse({
+    Name = "Crab",
+    IncompatibleEffects = {
+        "TheseBootsAreMadeForWalking",
+    },
+    Groups = {
+        "Input",
+        "WS",
+    },
+    IncompatibleGroups = {
+        "WS",
+    },
+})
+
+
+addCurse({
+    Name = "Crouch",
+    IncompatibleEffects = {
+        "StankyCrouch",
+    },
+    Groups = {
+        "Input",
+        "Crouch",
+    },
+    IncompatibleGroups = {
+        "Crouch",
+    },
+})
+
+
+addCurse({
+    Name = "Cyberspace",
+    IncompatibleEffects = {
+        "Cyberspace",
+    },
+    Groups = {
+        "VisualOnly",
+        "ScreenOverlay",
+    },
+    IncompatibleGroups = {
+        "HaltRenderScene",
+        "PP",
+    },
+})
+
+
+addCurse({
+    Name = "DisableNoclip",
+    IncompatibleEffects = {
+        "NoclipSpam",
+    },
+    Groups = {
+        "BlockNoclip",
+    },
+    IncompatibleGroups = {
+        "Noclip",
+    },
+})
+
+
+addCurse({
+    Name = "Drunk",
+    IncompatibleEffects = {},
+    Groups = {
+        "ViewAngles",
+    },
+    IncompatibleGroups = {
+        "ViewAngles",
+    },
+})
+
+
+addCurse({
+    Name = "DrunkBlur",
+    IncompatibleEffects = {},
+    Groups = {
+        "VisualOnly",
+        "MotionBlur",
+    },
+    IncompatibleGroups = {
+        "HaltRenderScene",
+        "MotionBlur",
+    },
+})
+
+
+addCurse({
+    Name = "EntJitter",
+    IncompatibleEffects = {
+        "EntMagnet",
+    },
+    Groups = {
+        "AllEntPos",
+        "FullUpdate",
+    },
+    IncompatibleGroups = {
+        "AllEntPos",
+    },
+})
+
+
+addCurse({
+    Name = "EntMagnet",
+    IncompatibleEffects = {
+        "EntJitter",
+    },
+    Groups = {
+        "AllEntPos",
+        "FullUpdate",
+    },
+    IncompatibleGroups = {
+        "AllEntPos",
+    },
+})
+
+
+addCurse({
+    Name = "FilmDevelopment",
+    IncompatibleEffects = {},
+    Groups = {
+        "VisualOnly",
+        "MotionBlur",
+    },
+    IncompatibleGroups = {
+        "HaltRenderScene",
+        "MotionBlur",
+    },
+})
+
+
+addCurse({
+    Name = "FOV",
+    IncompatibleEffects = {},
+    Groups = {
+        "FOV",
+    },
+    IncompatibleGroups = {
+        "FOV",
+    },
+})
+
+
+addCurse({
+    Name = "FreshPaint",
+    IncompatibleEffects = {},
+    Groups = {
+        "FullUpdate",
+    },
+    IncompatibleGroups = {
+        "FullUpdate",
+    },
+})
+
+
+addCurse({
+    Name = "HealthDrain",
+    IncompatibleEffects = {},
+    Groups = {
+        "Health",
+        "Death",
+    },
+    IncompatibleGroups = {
+        "Health",
+    },
+})
+
+
+addCurse({
+    Name = "HealthObfuscate",
+    IncompatibleEffects = {
+        "HealthScramble",
+        "NoHud",
+    },
+    Groups = {
+        "CHudHealth",
+    },
+    IncompatibleGroups = {
+        "CHudHealth",
+    },
+})
+
+
+addCurse({
+    Name = "HealthScramble",
+    IncompatibleEffects = {
+        "HealthObfuscate",
+    },
+    Groups = {
+        "Health",
+        "Armor",
+    },
+    IncompatibleGroups = {
+        "Health",
+        "Armor",
+    },
+})
+
+
+addCurse({
+    Name = "InputDelay",
+    IncompatibleEffects = {
+        "InputDrop",
+    },
+    Groups = {
+        "Input",
+        "ViewAngles",
+    },
+    IncompatibleGroups = {
+        "ViewAngles",
+    },
+})
+
+
+addCurse({
+    Name = "InputDrop",
+    IncompatibleEffects = {
+        "InputDelay", -- Curses that make the client think it can left click cause issues.
+    },
+    Groups = {
+        "Input",
+    },
+    IncompatibleGroups = {},
+})
+
+
+addCurse({
+    Name = "InvertedAim",
+    IncompatibleEffects = {
+        "RotatedAim",
+    },
+    Groups = {
+        "ViewAngles",
+    },
+    IncompatibleGroups = {
+        "ViewAngles",
+    },
+})
+
+
+addCurse({
+    Name = "InvertedColors",
+    IncompatibleEffects = {},
+    Groups = {
+        "VisualOnly",
+    },
+    IncompatibleGroups = {},
+})
+
+
+addCurse({
+    Name = "Isometric",
+    IncompatibleEffects = {
+        "Cyberspace",
+        "SuperCyberspace",
+        "ResidentEvil",
+        "TopDown",
+    },
+    Groups = {
+        "CalcView",
+    },
+    IncompatibleGroups = {
+        "CalcView",
+    },
+})
+
+
+addCurse({
+    Name = "Jittery",
+    IncompatibleEffects = {
+        "Rubberband",
+    },
+    Groups = {
+        "Teleportation",
+        "AddedMovement",
+    },
+    IncompatibleGroups = {
+        "Teleportation",
+    },
+})
+
+
+addCurse({
+    Name = "JumpExplode",
+    IncompatibleEffects = {
+        "Jumpy",
+        "NoJump",
+    },
+    Groups = {
+        "Death",
+    },
+    IncompatibleGroups = {},
+})
+
+
+addCurse({
+    Name = "Jumpy",
+    IncompatibleEffects = {
+        "JumpExplode",
+        "NoJump",
+    },
+    Groups = {},
+    IncompatibleGroups = {},
+})
+
+
+addCurse({
+    Name = "Lidar",
+    IncompatibleEffects = {
+        "ScreenScroll",
+        "Sunbeams",
+    },
+    Groups = {
+        "VisualOnly",
+        "ScreenOverlay",
+        "HaltRenderScene",
+    },
+    IncompatibleGroups = {
+        "HaltRenderScene",
+        "ScreenOverlay",
+        "PP",
+    },
+})
+
+
+addCurse({
+    Name = "MirrorWorld",
+    IncompatibleEffects = {},
+    Groups = {
+        "ScreenOverlay",
+        "Input",
+        "ViewAngles",
+        "AD",
+    },
+    IncompatibleGroups = {
+        "HaltRenderScene",
+        "ViewAngles",
+        "AD",
+    },
+})
+
+
+addCurse({
+    Name = "ModelShuffle",
+    IncompatibleEffects = {},
+    Groups = {
+        "Wrap:Entity:SetModel()",
+        "Wrap:Entity:GetModel()",
+    },
+    IncompatibleGroups = {
+        "Wrap:Entity:SetModel()",
+        "Wrap:Entity:GetModel()",
+    },
+})
+
+
+addCurse({
+    Name = "MotionBlur",
+    IncompatibleEffects = {},
+    Groups = {
+        "VisualOnly",
+        "MotionBlur",
+    },
+    IncompatibleGroups = {
+        "HaltRenderScene",
+        "MotionBlur",
+    },
+})
+
+
+addCurse({
+    Name = "MotionSight",
+    IncompatibleEffects = {
+        "ChromaticAberration",
+        "ColorModify",
+        "ColorModifyContinuous",
+        "DrunkBlur",
+        "FilmDevelopment",
+        "MotionBlur",
+        "ScreenMirror",
+        "ScreenScroll",
+        "ScreenShuffle",
+    },
+    Groups = {
+        "VisualOnly",
+        "ScreenOverlay",
+        "Wrap:Halo.Add"
+    },
+    IncompatibleGroups = {
+        "ScreenOverlay",
+        "Wrap:Halo.Add",
+        "HaltRenderScene",
+        "MotionBlur",
+    },
+})
+
+
+addCurse({
+    Name = "NoHud",
+    IncompatibleEffects = {
+        "HealthObfuscate",
+    },
+    Groups = {},
+    IncompatibleGroups = {},
+})
+
+
+addCurse({
+    Name = "NoInteract",
+    IncompatibleEffects = {
+        "Butterfingers",
+    },
+    Groups = {
+        "Input",
+    },
+    IncompatibleGroups = {},
+})
+
+
+addCurse({
+    Name = "NoJump",
+    IncompatibleEffects = {
+        "JumpExplode",
+        "Jumpy",
+    },
+    Groups = {},
+    IncompatibleGroups = {},
+})
+
+
+addCurse({
+    Name = "NoclipSpam",
+    IncompatibleEffects = {
+        "DisableNoclip",
+    },
+    Groups = {
+        "Noclip",
+    },
+    IncompatibleGroups = {
+        "BlockNoclip",
+    },
+})
+
+
+addCurse({
+    Name = "OffsetAim",
+    IncompatibleEffects = {},
+    Groups = {
+        "ViewAngles",
+    },
+    IncompatibleGroups = {
+        "ViewAngles",
+    },
+})
+
+
+addCurse({
+    Name = "Pixelated",
+    IncompatibleEffects = {
+        "PixelatedEnts",
+    },
+    Groups = {
+        "VisualOnly",
+        "ScreenOverlay",
+    },
+    IncompatibleGroups = {
+        "HaltRenderScene",
+        "MotionBlur",
+        "PP",
+    },
+})
+
+
+addCurse({
+    Name = "PixelatedEnts",
+    IncompatibleEffects = {
+        "Pixelated",
+    },
+    Groups = {
+        "VisualOnly",
+        "ScreenOverlay",
+    },
+    IncompatibleGroups = {
+        "HaltRenderScene",
+        "PP",
+    },
+})
+
+
+addCurse({
+    Name = "RandomSounds",
+    IncompatibleEffects = {},
+    Groups = {
+        "Wrap:Sound",
+    },
+    IncompatibleGroups = {
+        "Wrap:Sound",
+    },
+})
+
+
+addCurse({
+    Name = "Rapture",
+    IncompatibleEffects = {},
+    Groups = {
+        "AddedMovement",
+    },
+    IncompatibleGroups = {},
+})
+
+
+addCurse({
+    Name = "ResidentEvil",
+    IncompatibleEffects = {
+        "Isometric",
+        "TopDown",
+    },
+    Groups = {
+        "CalcView",
+    },
+    IncompatibleGroups = {
+        "CalcView",
+    },
+})
+
+
+addCurse({
+    Name = "Respawn",
+    IncompatibleEffects = {},
+    Groups = {
+        "Death",
+    },
+    IncompatibleGroups = {
+        "Death",
+    },
+})
+
+
+addCurse({
+    Name = "ReverseAimbot",
+    IncompatibleEffects = {},
+    Groups = {
+        "ViewAngles",
+    },
+    IncompatibleGroups = {
+        "ViewAngles",
+    },
+})
+
+
+addCurse({
+    Name = "ReverseControls",
+    IncompatibleEffects = {
+        "RotatedControls",
+        "Swagger",
+    },
+    Groups = {
+        "Input",
+        "WS",
+        "AD",
+    },
+    IncompatibleGroups = {
+        "WS",
+        "AD",
+    },
+})
+
+
+addCurse({
+    Name = "RollAim",
+    IncompatibleEffects = {
+        "RollAimIncremental",
+    },
+    Groups = {
+        "ViewAngles",
+    },
+    IncompatibleGroups = {
+        "ViewAngles",
+    },
+})
+
+
+addCurse({
+    Name = "RollAimIncremental",
+    IncompatibleEffects = {
+        "RollAim",
+    },
+    Groups = {
+        "ViewAngles",
+    },
+    IncompatibleGroups = {
+        "ViewAngles",
+    },
+})
+
+
+addCurse({
+    Name = "RotatedAim",
+    IncompatibleEffects = {
+        "InvertedAim",
+    },
+    Groups = {
+        "ViewAngles",
+    },
+    IncompatibleGroups = {
+        "ViewAngles",
+    },
+})
+
+
+addCurse({
+    Name = "RotatedControls",
+    IncompatibleEffects = {
+        "ReverseControls",
+        "Swagger",
+    },
+    Groups = {
+        "Input",
+        "WS",
+        "AD",
+    },
+    IncompatibleGroups = {
+        "WS",
+        "AD",
+    },
+})
+
+
+addCurse({
+    Name = "Rubberband",
+    IncompatibleEffects = {
+        "Ball",
+        "Jittery",
+    },
+    Groups = {
+        "Teleportation",
+    },
+    IncompatibleGroups = {
+        "Teleportation",
+    },
+})
+
+
+addCurse({
+    Name = "SanFransisco",
+    IncompatibleEffects = {},
+    Groups = {
+        "VisualOnly",
+    },
+    IncompatibleGroups = {},
+})
+
+
+addCurse({
+    Name = "Schizophrenia",
+    IncompatibleEffects = {},
+    Groups = {
+        "VisualOnly",
+    },
+    IncompatibleGroups = {},
+})
+
+
+addCurse({
+    Name = "ScreenMirror",
+    IncompatibleEffects = {
+        "MotionSight",
+    },
+    Groups = {
+        "VisualOnly",
+        "ScreenOverlay",
+    },
+    IncompatibleGroups = {
+        "HaltRenderScene",
+    },
+})
+
+
+addCurse({
+    Name = "ScreenScroll",
+    IncompatibleEffects = {
+        "MotionSight",
+    },
+    Groups = {
+        "VisualOnly",
+        "ScreenOverlay",
+    },
+    IncompatibleGroups = {
+        "HaltRenderScene",
+    },
+})
+
+
+addCurse({
+    Name = "ScreenShuffle",
+    IncompatibleEffects = {
+        "MotionSight",
+        "Pixelated",
+        --"PixelatedEnts", -- Scuffed as hell, but hilarious.
+    },
+    Groups = {
+        "VisualOnly",
+        "ScreenOverlay",
+    },
+    IncompatibleGroups = {
+        "HaltRenderScene",
+    },
+})
+
+
+addCurse({
+    Name = "SeeingDouble",
+    IncompatibleEffects = {},
+    Groups = {
+        "VisualOnly",
+    },
+    IncompatibleGroups = {},
+})
+
+
+addCurse({
+    Name = "SoundShuffle",
+    IncompatibleEffects = {},
+    Groups = {
+        "Wrap:Sound",
+    },
+    IncompatibleGroups = {
+        "Wrap:Sound",
+    },
+})
+
+
+addCurse({
+    Name = "SpeedHacks",
+    IncompatibleEffects = {},
+    Groups = {
+        "Speed",
+    },
+    IncompatibleGroups = {
+        "Speed",
+    },
+})
+
+
+addCurse({
+    Name = "Spin",
+    IncompatibleEffects = {},
+    Groups = {
+        "ViewAngles",
+    },
+    IncompatibleGroups = {
+        "ViewAngles",
+    },
+})
+
+
+addCurse({
+    Name = "SpineBreak",
+    IncompatibleEffects = {},
+    Groups = {
+        "ViewAngles",
+    },
+    IncompatibleGroups = {
+        "ViewAngles",
+    },
+})
+
+
+addCurse({
+    Name = "SprintExplode",
+    IncompatibleEffects = {},
+    Groups = {
+        "Death",
+    },
+    IncompatibleGroups = {},
+})
+
+
+addCurse({
+    Name = "StaggeredAim",
+    IncompatibleEffects = {},
+    Groups = {
+        "ViewAngles",
+    },
+    IncompatibleGroups = {
+        "ViewAngles",
+    },
+})
+
+
+addCurse({
+    Name = "StankyCrouch",
+    IncompatibleEffects = {
+        "Crouch",
+    },
+    Groups = {
+        "Input",
+        "Crouch",
+        "Walk",
+    },
+    IncompatibleGroups = {
+        "Crouch",
+        "Walk",
+    },
+})
+
+
+addCurse({
+    Name = "Sunbeams",
+    IncompatibleEffects = {},
+    Groups = {
+        "VisualOnly",
+    },
+    IncompatibleGroups = {
+        "HaltRenderScene",
+    },
+})
+
+
+addCurse({
+    Name = "Swagger",
+    IncompatibleEffects = {
+        "RotatedControls",
+        "ReverseControls",
+    },
+    Groups = {
+        "Input",
+        "AD",
+    },
+    IncompatibleGroups = {
+        "AD",
+    },
+})
+
+
+addCurse({
+    Name = "TextScramble",
+    IncompatibleEffects = {},
+    Groups = {
+        "Wrap:Surface.DrawText",
+    },
+    IncompatibleGroups = {
+        "Wrap:Surface.DrawText",
+    },
+})
+
+
+addCurse({
+    Name = "TextureShuffle",
+    IncompatibleEffects = {},
+    Groups = {
+        "Textures",
+    },
+    IncompatibleGroups = {
+        "Textures",
+    },
+})
+
+
+addCurse({
+    Name = "ThanosSnap",
+    IncompatibleEffects = {},
+    Groups = {
+        "FullGameUpdate"
+    },
+    IncompatibleGroups = {},
+})
+
+
+addCurse({
+    Name = "TheFloorIsLava",
+    IncompatibleEffects = {},
+    Groups = {
+        "Death",
+    },
+    IncompatibleGroups = {},
+})
+
+
+addCurse({
+    Name = "TheMiniOrb",
+    IncompatibleEffects = {},
+    Groups = {
+        "Death",
+    },
+    IncompatibleGroups = {},
+})
+
+
+addCurse({
+    Name = "TheseBootsAreMadeForWalking",
+    IncompatibleEffects = {
+        "Crab",
+    },
+    Groups = {
+        "Input",
+        "WS",
+    },
+    IncompatibleGroups = {
+        "WS",
+    },
+})
+
+
+addCurse({
+    Name = "TopDown",
+    IncompatibleEffects = {
+        "Cyberspace",
+        "SuperCyberspace",
+        "Isometric",
+        "ResidentEvil",
+    },
+    Groups = {
+        "CalcView",
+    },
+    IncompatibleGroups = {
+        "CalcView",
+    },
+})
+
+
+addCurse({
+    Name = "Trainfuck",
+    IncompatibleEffects = {},
+    Groups = {
+        "Death",
+    },
+    IncompatibleGroups = {},
+})
+
+
+addCurse({
+    Name = "TrashRain",
+    IncompatibleEffects = {},
+    Groups = {
+        "VisualOnly",
+    },
+    IncompatibleGroups = {},
+})
+
+
+addCurse({
+    Name = "ViewPummel",
+    IncompatibleEffects = {},
+    Groups = {},
+    IncompatibleGroups = {},
+})
+
+
+addCurse({
+    Name = "WeaponIndecision",
+    IncompatibleEffects = {
+        "Butterfingers",
+    },
+    Groups = {
+        "SelectWeapon",
+    },
+    IncompatibleGroups = {
+        "SelectWeapon",
+    },
+})
+
+
+addCurse({
+    Name = "WorldOffset",
+    IncompatibleEffects = {},
+    Groups = {},
+    IncompatibleGroups = {
+        "HaltRenderScene",
+    },
+})
+
+
+
+
+return Curses
