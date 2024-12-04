@@ -1,6 +1,7 @@
 --@name Antlion Nest Registry
 --@author shroobloom
 --@shared
+--@include sb/util.txt
 --@include sb/spawner.txt
 --@include sb/npc/main.txt
 --@include sb/npc/prop_npc.txt
@@ -17,19 +18,8 @@ if SERVER then
     local Solver = require("sb/physics_solver.txt")
     local NPC = require("sb/npc/main.txt")
     local PropNPC = require("sb/npc/prop_npc.txt")
+    local Util = require("sb/util.txt")
     local Spawner = require("sb/spawner.txt")
-    
-    Spawner.Enqueue(function()
-        Damager = E2VM:new([[
-@name [VM] Damager
-@inputs Amount:number DamageType:number Attacker:entity Target:entity
-@trigger Target
-
-if (Target) {
-    Target:admAttack( Amount, Attacker, Attacker, DamageType, vec(), Attacker:pos())
-}
-        ]])
-    end)
     
     
     local SCOUTS_ON_DAMAGE_MIN_DISTANCE = 1200
@@ -46,7 +36,11 @@ if (Target) {
     local BOSS_SPAWN_POOL = {
         {
             ID = "AntlionGuard",
-            Weight = 10
+            Weight = 1
+        },
+        {
+            ID = "FireAnt",
+            Weight = 1
         },
         {
             ID = "ArmoredAntlion",
@@ -54,25 +48,17 @@ if (Target) {
         },
         {
             ID = "Antlion",
-            Weight = 7
+            Weight = 12
         }
     }
     
     
-    local function damage( ent, amount, attacker, dmgType )
-        if not Damager then return end
-        
-        Damager:fireInput("Amount", amount)
-        Damager:fireInput("Attacker", attacker)
-        Damager:fireInput("DamageType", dmgType)
-        Damager:fireInput("Target", ent)
-    end
     
     local function getNearbyGuards( npc )
         local Out = {}
         
         for i,v in pairs(NPC.Instances) do
-            if v:getClass() == "npc_antlionguard" and v:getPos():getDistanceSqr( npc:getPos() ) < GUARD_PROTECTION_RANGE^2 then
+            if v.ID == "AntlionGuard" and v:getPos():getDistanceSqr( npc:getPos() ) < GUARD_PROTECTION_RANGE^2 then
                 table.insert(Out, v)
             end
         end
@@ -446,7 +432,7 @@ if (Target) {
                                     proj:removeCollisionListener()
                                     
                                     if isValid(data.HitEntity) then
-                                        damage( data.HitEntity, 1000, proj, DAMAGE.BLAST )
+                                        NPC.applyDamage( data.HitEntity, 1000, proj, DAMAGE.BLAST )
                                         --data.HitEntity:applyDamage(1000, chip(), proj, DAMAGE.BLAST, proj:getPos())
                                     end
                                     
@@ -491,7 +477,7 @@ if (Target) {
                                         
                                         if dmg <= 0 then continue end
                                         
-                                        damage( v, dmg, proj, DAMAGE.BLAST )
+                                        NPC.applyDamage( v, dmg, proj, DAMAGE.BLAST )
                                         --v:applyDamage(dmg, chip(), proj, DAMAGE.BLAST, proj:getPos())
                                     end
                                     
@@ -512,20 +498,11 @@ if (Target) {
     
 end
 
-
-
-
-
-if CLIENT then
+net.receive("nest_gib", function()
+    if not effect.canCreate() then return end
     
-    net.receive("nest_gib", function()
-        if not effect.canCreate() then return end
-        
-        local ef = effect.create()
-        ef:setOrigin(net.readVector())
-        ef:play("AntlionGib")
-    end)
-    
-end
-
+    local ef = effect.create()
+    ef:setOrigin(net.readVector())
+    ef:play("AntlionGib")
+end)
 
