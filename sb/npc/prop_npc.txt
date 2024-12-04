@@ -41,6 +41,8 @@ function PropNPC.setup( ent, name, maxHealth, damageCallback )
             
             local propOwner = inflictor:getOwner()
             if not isValid(propOwner) or propOwner:isInBuild() then return true end
+            
+            attacker = propOwner
         end
         
         

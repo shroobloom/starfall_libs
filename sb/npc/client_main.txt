@@ -1,0 +1,16 @@
+--@name NPC-Client
+--@author shroobloom
+--@client
+--@include sb/npc/health_bar.txt
+
+
+print("B")
+
+local HealthBar = require("sb/npc/health_bar.txt")
+
+-- TODO: band-aid fix
+hook.add("OnEntityRemoved", "npc_health_bar_removal", function( e )
+    if not e.HealthBar then return end
+    e.HealthBar:remove()
+end)
+
