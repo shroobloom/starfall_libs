@@ -46,7 +46,11 @@ if (Target) {
     local BOSS_SPAWN_POOL = {
         {
             ID = "AntlionGuard",
-            Weight = 1
+            Weight = 10
+        },
+        {
+            ID = "ArmoredAntlion",
+            Weight = 2
         },
         {
             ID = "Antlion",
