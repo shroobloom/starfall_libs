@@ -16,6 +16,8 @@ local DisableScouts = true
 
 
 local NPC = require("sb/npc/main.txt")
+NPC.EventName = "Antlion Hill"
+
 
 local ChatCommands = require("sb/chat_command.txt")
 local Spawner = require("sb/spawner.txt")
@@ -105,7 +107,9 @@ NPC.addHints(
     "Every nearby Antlion Guard grants the nest a 25% damage reduction. Take them out before dealing with the nest!",
     "Explosives and melee weapons deal much more damage to the Nest.",
     "Airborne attacks are not very effective!",
-    "Watch out for projectiles from above!"
+    "Watch out for projectiles from above!",
+    "Armored Antlions take 90% less damage from bullets.",
+    "Watch out for Fire Ants! Their ignition glands allow them to imbue deadly fire into their attacks!"
 )
 
 
