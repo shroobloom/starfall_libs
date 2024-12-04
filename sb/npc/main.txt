@@ -281,7 +281,9 @@ if (Entity) {
         local zmul = data.Ceiling and -1 or 1
         
         -- Find the ground position
-        -- TODO: dont count water as valid ground somehow
+        
+        
+        --[[-- TODO: dont count water as valid ground somehow
         local big = data.BoxSize:getLengthSqr() > Defaults.BoxSize:getLengthSqr()*2
         
         local ground = big and 
@@ -295,7 +297,19 @@ if (Entity) {
                 radiusPos - Vector(0,0,3000*zmul)
             )
         
-        if not ground.Hit or ground.HitNonWorld or ground.HitNoDraw then return --[[print("no ground")]] end
+        if not ground.Hit or ground.HitNonWorld or ground.HitNoDraw then return --[[print("no ground")] ] end]]
+        
+        
+        local ground = trace.hull( 
+                radiusPos, 
+                radiusPos - Vector(0,0,3000*zmul), 
+                -data.BoxSize*Vector(0.5,0.5,0)*(data.Scale or 1), 
+                data.BoxSize*Vector(0.5,0.5,0)*(data.Scale or 1)
+            )
+        
+        if not ground.Hit or ground.HitNonWorld or ground.HitNoDraw or ground.StartSolid then return end
+        
+        
         
         
         -- Make sure its not in water
