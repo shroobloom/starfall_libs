@@ -1,7 +1,10 @@
 --@name Zone Lib
 --@author shrooblooms
 --@shared
+--@include sb/util.txt
 
+
+local Util = require("sb/util.txt")
 
 
 
@@ -12,38 +15,43 @@ Zone.Instances = {}
 
 function Zone:initialize( Min, Max )
     
-    local FixedMin = Vector(
-        math.min( Min.x, Max.x ),
-        math.min( Min.y, Max.y ),
-        math.min( Min.z, Max.z )
-    )
-    
-    local FixedMax = Vector(
-        math.max( Min.x, Max.x ),
-        math.max( Min.y, Max.y ),
-        math.max( Min.z, Max.z )
-    )
-    
-    self.Min = FixedMin
-    self.Max = FixedMax
     self.Inside = {}
     self.Enabled = true
     self.Visualized = false
     
-    self.ID = table.insert(Zone.Instances, self)
+    self:setColor(Color(255,255,255))
+    self:setBounds(Min, Max)
     
-    self:setFilter(function(ply) return true end)
-end
-
-
-function Zone:setFilter( filter )
-    self.Filter = filter
+    table.insert(Zone.Instances, self)
 end
 
 
 function Zone:getPos()
     return (self.Min + self.Max)/2
 end
+
+function Zone:setBounds( Min, Max )
+    self.Min = Util.vectorMin( Min, Max )
+    self.Max = Util.vectorMax( Min, Max )
+    
+    if self.Visualized then
+        self.DebugOuter:setPos( self:getPos() )
+        self.DebugOuter:setSize( self:getSize() )
+        
+        self.DebugNoCull:setPos( self:getPos() )
+        self.DebugNoCull:setSize( -self:getSize() )
+    end
+end
+
+function Zone:setColor( col )
+    self.Color = col:clone():setA(100)
+    
+    if self.Visualized then
+        self.DebugOuter:setColor( self.Color )
+        self.DebugNoCull:setColor( self.Color )
+    end
+end
+
 
 function Zone:getSize()
     return self.Max - self.Min
@@ -57,6 +65,9 @@ end
 function Zone:onPlayerExited( Player )
 end
 
+function Zone:isAllowed( Player )
+    return true
+end
 
 function Zone:setVisualization( State )
     
@@ -72,7 +83,7 @@ function Zone:setVisualization( State )
         Holo2:setMaterial("models/debug/debugwhite")
         Holo2:setParent(Holo1)
         
-        local Col = self.TargetTeam and self.TargetTeam.Color:clone() or Color(255,255,255)
+        local Col = self.Color
         Col.a = 100
         
         Holo:setColor(Col)
@@ -112,7 +123,7 @@ function Zone:remove()
         self:onPlayerExited( v )
     end
     
-    table.remove(Zone.Instances, self.ID)
+    table.removeByValue(Zone.Instances, self)
 end
 
 
@@ -122,16 +133,20 @@ timer.create("Zone_Tick", 0.1, 0, function()
             for _,ply in pairs(find.allPlayers()) do
                 
                 local Pos = ply:obbCenterW()
-                --TODO: maybe dont make being dead disqualify you for being inside a zone, or youll get booted when you die
-                local Inside = self.Filter(ply) and Pos.x > self.Min.x and Pos.y > self.Min.y and Pos.z > self.Min.z and Pos.x < self.Max.x and Pos.y < self.Max.y and Pos.z < self.Max.z
+                
+                local Inside = self:isAllowed(ply) and Pos.x > self.Min.x and Pos.y > self.Min.y and Pos.z > self.Min.z and Pos.x < self.Max.x and Pos.y < self.Max.y and Pos.z < self.Max.z
                 local InsideOld = table.keyFromValue(self.Inside, ply)
                 
                 if not InsideOld and Inside then
-                    table.insert(self.Inside, ply)
-                    self:onPlayerEntered(ply)
+                    table.insert( self.Inside, ply )
+                    self:onPlayerEntered( ply )
                 elseif InsideOld and not Inside then
-                    table.remove(self.Inside, InsideOld)
-                    self:onPlayerExited(ply)
+                    table.remove( self.Inside, InsideOld )
+                    self:onPlayerExited( ply )
+                end
+                
+                if Inside then
+                    self:onPlayerLingered( ply, 0.1 )
                 end
                 
                 if not self.Enabled then break end
