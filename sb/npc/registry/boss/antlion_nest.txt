@@ -95,6 +95,9 @@ if SERVER then
                 Hitbox.HoloParent = Parent
                 Hitbox.Invincible = false
                 
+                Hitbox.LastDamageSpawn = timer.curtime()
+                
+                
                 -- Holos
                 for i=1, 3 do
                     local a = i/3 * 360 + yaw
@@ -225,7 +228,8 @@ if SERVER then
                             ef:play("VortDispel")
                         end
                         
-                        if math.random() < SCOUTS_ON_DAMAGE_CHANCE and attacker:getPos():getDistance(Hitbox:getPos()) > SCOUTS_ON_DAMAGE_MIN_DISTANCE then
+                        if math.random() < SCOUTS_ON_DAMAGE_CHANCE and attacker:getPos():getDistance(Hitbox:getPos()) > SCOUTS_ON_DAMAGE_MIN_DISTANCE and timer.curtime() - Hitbox.LastDamageSpawn > 5 then
+                            Hitbox.LastDamageSpawn = timer.curtime()
                             NPC.attemptSpawns( attacker:getPos(), BOSS_SPAWN_POOL, {200,600}, 3, nil, true )
                         end
                     end
