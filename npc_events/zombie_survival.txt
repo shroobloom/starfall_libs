@@ -1,10 +1,11 @@
 --@name the new event
 --@author shroobloom
---@shared
+--@server
 --@include sb/npc/main.txt
 --@include sb/spawner.txt
 --@include sb/command.txt
 --@include sb/util.txt
+--@clientmain sb/npc/client_main.txt
 
 
 local NPC = require("sb/npc/main.txt")
@@ -34,11 +35,11 @@ if SERVER then
     
     
     
-    --[[
+    --[[ DEBUG BLOCK ]]--
     NPC.Debug = true
     NPC.AutoRegisterParticipants = false
     table.insert(NPC.Participants, owner())
-    ]]
+    
     
     local HordeActive = false
     

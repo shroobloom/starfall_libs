@@ -1,10 +1,10 @@
 --@name Combine Invasion
 --@author shroobloom
---@shared
+--@server
 --@include sb/npc/main.txt
 --@include sb/spawner.txt
 --@include sb/command.txt
-
+--@clientmain sb/npc/client_main.txt
 
 
 
@@ -61,8 +61,11 @@ if SERVER then
     
     
     
+    --[[ DEBUG BLOCK ]]--
+    NPC.Debug = true
+    NPC.AutoRegisterParticipants = false
+    table.insert(NPC.Participants, owner())
     
-    --NPC.Debug = true
     
     timer.create("spawn", 1, 0, function()
         if #NPC.Participants == 0 then return end
