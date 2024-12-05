@@ -14,99 +14,96 @@ local Util = require("sb/util.txt")
 
 
 
-if SERVER then
-    local Spawner = require("sb/spawner.txt")
-    
-    
-    local Spawns = {
-        {
-            ID = "Zombie",
-            Weight = 16
-        },
-        {
-            ID = "FastZombie",
-            Weight = 4
-        },
-        {
-            ID = "PoisonZombie",
-            Weight = 2
-        }
+local Spawner = require("sb/spawner.txt")
+
+
+local Spawns = {
+    {
+        ID = "Zombie",
+        Weight = 16
+    },
+    {
+        ID = "FastZombie",
+        Weight = 4
+    },
+    {
+        ID = "PoisonZombie",
+        Weight = 2
     }
+}
+
+
+
+--[[ DEBUG BLOCK ]]--
+--[[NPC.Debug = true
+NPC.AutoRegisterParticipants = false
+table.insert(NPC.Participants, owner())]]
+
+
+local HordeActive = false
+
+
+-- would be nice to have, idk
+-- TODO
+--[[
+NPC.getMax = Util.stub( NPC.getMax, function( super )
+    return super() * (HordeActive and 3 or 1)
+end)]]
+
+
+NPC.SpawnCap = 40
+NPC.SpawnDistance = {800,1400}
+
+
+timer.create("spawn", 1, 0, function()
+    if #NPC.Participants == 0 then return end
     
-    
-    
-    --[[ DEBUG BLOCK ]]--
-    NPC.Debug = true
-    NPC.AutoRegisterParticipants = false
-    table.insert(NPC.Participants, owner())
-    
-    
-    local HordeActive = false
-    
-    
-    -- would be nice to have, idk
-    -- TODO
-    --[[
-    NPC.getMax = Util.stub( NPC.getMax, function( super )
-        return super() * (HordeActive and 3 or 1)
-    end)]]
-    
-    
-    NPC.SpawnCap = 40
-    NPC.SpawnDistance = {800,1400}
-    
-    
-    timer.create("spawn", 1, 0, function()
-        if #NPC.Participants == 0 then return end
+    local spawner = table.random(NPC.Participants)
+    NPC.attemptSpawns( spawner:getPos(), Spawns )
+end)
+
+
+timer.create("hordeTick", 10, 0, function()
+    if not HordeActive and math.random() < 0.025 then
+        HordeActive = true
         
-        local spawner = table.random(NPC.Participants)
-        NPC.attemptSpawns( spawner:getPos(), Spawns )
-    end)
-    
-    
-    timer.create("hordeTick", 10, 0, function()
-        if not HordeActive and math.random() < 0.025 then
-            HordeActive = true
+        NPC.announceGlobal( Color(100,200,100), "[Zombies]", Color(255,255,255), " A Horde is spawning in ", Color(255,255,144), "30 seconds", Color(255,255,255), "! Take cover!" )
+        
+        coroutine.wrap(function()
+            NPC.SpawnCap = 120
+            Util.wait(120)
+            NPC.announceGlobal( Color(100,200,100), "[Zombies]", Color(255,255,255), "The Horde has subsided. Finish off the rest!" )
             
-            NPC.announceGlobal( Color(100,200,100), "[Zombies]", Color(255,255,255), " A Horde is spawning in ", Color(255,255,144), "30 seconds", Color(255,255,255), "! Take cover!" )
+            NPC.SpawnCap = 40
             
-            coroutine.wrap(function()
-                NPC.SpawnCap = 120
-                Util.wait(120)
-                NPC.announceGlobal( Color(100,200,100), "[Zombies]", Color(255,255,255), "The Horde has subsided. Finish off the rest!" )
-                
-                NPC.SpawnCap = 40
-                
-                Util.wait(10)
-                HordeActive = false
-            end)()
-        end
+            Util.wait(10)
+            HordeActive = false
+        end)()
+    end
+end)
+
+
+hook.add("PlayerDeath", "zombieSurvival_spawnWraith", function( ply, inflictor, attacker )
+    if not isValid(attacker) or not attacker.IsChipNPC or attacker:getClass():sub(1,3) ~= "npc" then return end
+    
+    Spawner.Enqueue(function()
+        NPC.spawn(ply:getPos(), "Wraith")
     end)
     
-    
-    hook.add("PlayerDeath", "zombieSurvival_spawnWraith", function( ply, inflictor, attacker )
-        if not isValid(attacker) or not attacker.IsChipNPC or attacker:getClass():sub(1,3) ~= "npc" then return end
-        
-        Spawner.Enqueue(function()
-            NPC.spawn(ply:getPos(), "Wraith")
-        end)
-        
-        NPC.announce( Color(100,200,100), "[Zombies] ", team.getColor(ply:getTeam()), ply:getName(), Color(255,255,255), " has fallen to the horde! A ", Color(100,100,120), "Wraith", Color(255,255,255), " has taken their place!" )
-    end)
-    
-    
-    -- Revenant test
-    --[[
-    local z = NPC.spawn( chip():getPos(), "Zombie" )
-    timer.simple(1, function()
-        hook.run("PlayerDeath", owner(), nil, z )
-    end)]]
-    
-    
-    
-    NPC.addHints(
-        "If you die, your corpse will be reanimated as a powerful zombie. Beware!",
-        "Headcrabs are extremely weak. Consider using a light weapon to deal with them quickly."
-    )
-    
-end
+    NPC.announce( Color(100,200,100), "[Zombies] ", team.getColor(ply:getTeam()), ply:getName(), Color(255,255,255), " has fallen to the horde! A ", Color(100,100,120), "Wraith", Color(255,255,255), " has taken their place!" )
+end)
+
+
+-- Revenant test
+--[[
+local z = NPC.spawn( chip():getPos(), "Zombie" )
+timer.simple(1, function()
+    hook.run("PlayerDeath", owner(), nil, z )
+end)]]
+
+
+
+NPC.addHints(
+    "If you die, your corpse will be reanimated as a powerful zombie. Beware!",
+    "Headcrabs are extremely weak. Consider using a light weapon to deal with them quickly."
+)
