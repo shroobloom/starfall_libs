@@ -350,24 +350,28 @@ function Projectile:detonate( dontBreak, collision )
     self.Enabled = false
     self.Detonated = true
     
-    local shouldForceTag = collision and isValid(collision.HitEntity) and not collision.HitEntity:isFrozen()
+    local hitUnfrozenProp = collision and isValid(collision.HitEntity) and not collision.HitEntity:isFrozen()
     
     if self.ExplosionPower > 0 then
         Util.spawn(function()
+            local hitTraceInfo = trace.line( self.Instance:getPos(), self.Instance:getPos() + self.Instance:getForward()*1000, self.Instance )
             local origin = self.Instance:getPos()
             local radius = 50*math.sqrt(self.ExplosionPower)
-            local normal = collision and collision.HitNormal or Vector(0,0,1)
+            local normal = collision and hitTraceInfo.HitNormal or Vector(0,0,1)
             
             for i,v in pairs(self.SupplementaryExplosives) do
                 if not isValid(v) then continue end
                 
                 local a = math.random()*360
-                local p = origin + Angle():rotateAroundAxis(normal, a):getForward()*(math.random(20, radius))
+                
+                -- im so sorry for this monstrosity
+                local ang3d = hitUnfrozenProp and Angle(math.random(),math.random(),0)*360 or normal:getAngle():getUp():getAngle():rotateAroundAxis(normal, a)
+                local p = origin + ang3d:getForward()*(math.random(20, radius))
                 
                 v:setParent(nil)
                 v:setPos(p)
                 
-                local tagged = taggedBreak(v, shouldForceTag)
+                local tagged = taggedBreak(v, hitUnfrozenProp)
                 
                 -- wait 0.1s for the explosion ratelimiter
                 -- why does this even exist :despair:
@@ -379,7 +383,7 @@ function Projectile:detonate( dontBreak, collision )
     end
     
     if isValid(self.Instance) and not dontBreak then
-        taggedBreak( self.Instance, shouldForceTag )
+        taggedBreak( self.Instance, hitUnfrozenProp )
     end
     
     if self.ExplosionEffect ~= "" and effect.canCreate() then
