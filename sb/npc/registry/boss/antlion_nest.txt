@@ -228,15 +228,11 @@ if SERVER then
                             ef:play("VortDispel")
                         end
                         
-                        if math.random() < SCOUTS_ON_DAMAGE_CHANCE and attacker:getPos():getDistance(Hitbox:getPos()) > SCOUTS_ON_DAMAGE_MIN_DISTANCE and timer.curtime() - Hitbox.LastDamageSpawn > 5 then
+                        if math.random() < SCOUTS_ON_DAMAGE_CHANCE and attacker:getPos():getDistance(Hitbox:getPos()) > SCOUTS_ON_DAMAGE_MIN_DISTANCE and #NPC.Instances < NPC.getMax()*1.15 then
                             Hitbox.LastDamageSpawn = timer.curtime()
                             NPC.attemptSpawns( attacker:getPos(), BOSS_SPAWN_POOL, {200,600}, 3, nil, true )
                         end
                     end
-                    
-                    --[[if math.random() < 0.25 and amount*mul > 50 then
-                        NPC.attemptSpawns( attacker:getPos(), BOSS_SPAWN_POOL, {200,600}, 3 )
-                    end]]
                     
                     return mul
                 end)
@@ -389,7 +385,7 @@ if SERVER then
                             
                             local Goal = tar:getPos()
                             local dist = LaunchPos:getDistance(Goal)
-                            local steep = not isValid(tar:getVehicle()) --Goal.z < LaunchPos.z or dist < 1000
+                            local steep = not isValid(tar:getVehicle()) or Goal.z < LaunchPos.z or dist < 1000 --not isValid(tar:getVehicle())
                             local speed = steep and (800 + dist/5) or (1600+npc.Phase*300)
                             local ttr = dist/speed
                             Goal = Goal + Vel*ttr * math.random(0.9, 1.1)
