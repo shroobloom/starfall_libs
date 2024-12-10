@@ -2,10 +2,12 @@
 --@author shroobloom
 --@server
 --@include sb/util.txt
+--@include sb/spawner.txt
 
 
 
 local Util = require("sb/util.txt")
+local Spawner = require("sb/spawner.txt")
 
 
 local Projectile = class("Projectile")
@@ -15,10 +17,12 @@ Projectile.Instances = {}
 
 --TODO:
 -- [ ] Missiles should lose their target if they die, also, they'd try to go back to their LaunchAngle, which is bad.
--- [ ] Arc mode, they should do a big arc to reach their target if this is on
--- [ ] (?) (only on collision) Upon hitting a vehicle, missiles should teleport closer to the vehicle's origin to increase damage
+-- [X] Arc mode, they should do a big arc to reach their target if this is on
 -- [X] A ThrustMax and ThrustRampupTime variable to allow the rockets to move faster the longer they're alive for
 -- [X] Projectiles should have a Lifetime property, and explode (or lose fuel?) after they live for long enough
+-- [X] Projectiles should allow for multiple explosives to detonate
+-- [ ] Sometimes guidance screws up and causes the missile to loop around. this is not a quirk of wobble, its likely only when its going straight down and has to change yaw
+-- [~] Fix delta silo to not be explosion ratelimited
 
 
 local PropertyDefaults = {
@@ -61,11 +65,18 @@ local PropertyDefaults = {
         TurnForce = 0 --TODO: implement
     },
     
+    -- If true, the projectile will turn to face its current velocity
+    -- Has no effect on homing projectiles.
+    FinStabilized = true,
+    
     -- If set, causes the missiles to curve to their target instead of flying directly at them at a specific height.
     ArcHeight = nil,
     
     -- After this duration, the projectile will self-destruct
-    Lifetime = 30
+    Lifetime = 30,
+    
+    -- The number of supplementary explosives to spawn
+    ExplosionPower = 0
 }
 
 
@@ -83,15 +94,9 @@ function Projectile:initialize( pos, ang, properties )
     self.Instance:enableDrag( false )
     self.Instance:enableGravity( properties.Gravity )
     self.Instance:doNotDuplicate()
-    self.Instance:setMass(10) --just so impacts dont kill
-    
-    self.Instance:applyForceCenter( ang:getForward() * properties.Speed * self.Instance:getMass() )
+    self.Instance:setMass(1) --just so impacts dont kill
     
     self.Instance.Projectile = self
-    
-    if properties.Trail.Material ~= "" then
-        self.Instance:setTrails(properties.Trail.StartSize, properties.Trail.EndSize, properties.Trail.Length, properties.Trail.Material, properties.Trail.Color, nil, properties.Trail.Additive)
-    end
     
     self.Detonated = false
     self.Target = nil --Either a Vector or an Entity
@@ -99,10 +104,40 @@ function Projectile:initialize( pos, ang, properties )
     --TODO: configuration
     self.WobbleSeed = math.random()*math.pi
     self.WobbleDir = math.sign(math.random()-0.5)
+    self.Ready = self.ExplosionPower == 0
     
     if properties.Enabled then
         self.Enabled = false
         self:fire()
+    end
+    
+    self.SupplementaryExplosives = {}
+    
+    if self.ExplosionPower > 0 then
+        Util.spawn(function()
+            local toSpawn = self.ExplosionPower
+            
+            while toSpawn > 0 do
+                Spawner.Await()
+                if not self:isValid() then break end
+                
+                pcall(function()
+                    -- can't use self.Instance:getModel() because of the explosion ratelimiter, which is 5x more lenient on explosive
+                    -- barrels for some reason, so thats what we'll use (at the cost of a bit of AoE)
+                    local sup = prop.create( Vector(), Angle(), "models/props_c17/oildrum001_explosive.mdl", true )
+                    sup:setNoDraw(true)
+                    sup:setSolid(false)
+                    sup:setNocollideAll(true)
+                    sup:setCollisionGroup(COLLISION_GROUP.IN_VEHICLE)
+                    
+                    table.insert(self.SupplementaryExplosives, sup)
+                    
+                    toSpawn = toSpawn - 1
+                end)
+            end
+            
+            self.Ready = true
+        end)
     end
     
     table.insert(Projectile.Instances, self)
@@ -115,14 +150,28 @@ end
 function Projectile:fire()
     assert(not self.Enabled, "Projectile has already been fired!")
     
+    if isValid(self:getParent()) then
+        self:setParent( nil )
+    end
+    
+    if self:isFrozen() then
+        self:setFrozen( false )
+    end
+    
     self.LaunchTime = timer.curtime()
     self.LaunchPos = self.Instance:getPos()
     self.LaunchAngle = self.Instance:getAngles() - self.ModelAngle
     self.Enabled = true
     
+    self.Instance:applyForceCenter( self:getForward() * self.Speed * self.Instance:getMass() )
+    
+    if self.Trail.Material ~= "" then
+        self.Instance:setTrails(self.Trail.StartSize, self.Trail.EndSize, self.Trail.Length, self.Trail.Material, self.Trail.Color, nil, self.Trail.Additive)
+    end
+    
     self.Instance:addCollisionListener(function( hit )
         if self.Detonated or hit.HitEntity.Projectile then return end
-        self:detonate()
+        self:detonate( nil, hit )
     end)
 end
 
@@ -131,6 +180,28 @@ function Projectile:getTargetPos()
     return type(self.Target) == "Vector" and self.Target or self.Target:obbCenterW()
 end
 
+
+function Projectile:setFrozen( state )
+    self.Instance:setFrozen( state )
+end
+
+function Projectile:isFrozen()
+    return self.Instance:isFrozen()
+end
+
+function Projectile:setParent( ent )
+    self.Instance:setParent( ent )
+end
+
+function Projectile:getParent()
+    return self.Instance:getParent()
+end
+
+
+
+function Projectile:getForward()
+    return self.Instance:localToWorldVector( self.ModelAngle:getForward() )
+end
 
 
 -- Runs 10 times/s to allow for a ton of projectiles and still being performant
@@ -153,7 +224,8 @@ function Projectile:think()
             curThrust = math.lerp(accel, self.Thrust, self.MaxThrust or self.Thrust)
         end
         
-        self.Instance:applyForceCenter( (self.Instance:getForward()*curThrust - self.Instance:getVelocity()*1) * self.Instance:getMass() )
+        
+        self.Instance:applyForceCenter( (self:getForward()*curThrust - self.Instance:getVelocity()*1) * self.Instance:getMass() )
     end
     
     
@@ -177,6 +249,8 @@ function Projectile:think()
         end
         
         targetAngle = (targetPos - self.Instance:getPos()):getAngle()
+    elseif self.FinStabilized then
+        targetAngle = self.Instance:getVelocity():getAngle()
     end
     
     if self.Wobble.Frequency ~= 0 then
@@ -202,15 +276,110 @@ function Projectile:think()
 end
 
 
-function Projectile:detonate( DontBreak )
+
+--[[ Explosion ratelimit patcher ]]--
+
+Projectile.NextDetonation = {}
+Projectile.EXPLOSION_RATELIMIT = {
+    ["models/props_phx/oildrum001_explosive.mdl"] = 0.1,
+    ["models/props_c17/oildrum001_explosive.mdl"] = 0.1
+}
+
+--TODO: make sure server UUID doesnt change with restarts/addon changes
+local IS_CFC = wire.serverUUID() == "1c17c305-2132-4428-840e-3f4cb52f9705"
+local BLAST_RADIUS = 180
+
+local function canDetonate( ent )
+    return not IS_CFC or timer.curtime() > (Projectile.NextDetonation[ent:getModel()] or 0)
+end
+
+-- Breaks a prop while tagging you for the kill credit
+-- Also will not explosion ratelimit you, at the cost of not tagging your kills.
+local function taggedBreak( ent, forceTag )
+    local mdl = ent:getModel()
+    local wasTagged = false
+    
+    if IS_CFC then
+        -- Don't tag if the ratelimiter is on cooldown
+        if canDetonate( ent ) then
+            local actuallyTag = forceTag
+            
+            -- only tag if its near a player
+            if not actuallyTag then
+                for i,v in pairs(find.allPlayers()) do
+                    if v:isAlive() and v:isInPvp() and v:getPos():getDistance( ent:getPos() ) < BLAST_RADIUS then
+                        actuallyTag = true
+                        break
+                    end
+                end
+            end
+            
+            -- okay search for NPCs next
+            if not actuallyTag then
+                for i,v in pairs(find.byClass("npc_*")) do
+                    if v:getHealth() > 0 and v:getPos():getDistance( ent:getPos() ) < BLAST_RADIUS then
+                        actuallyTag = true
+                        break
+                    end
+                end
+            end
+            
+            
+            if actuallyTag then
+                ent:applyDamage(10, owner(), owner(), DAMAGE.BLAST)
+                Projectile.NextDetonation[ent:getModel()] = timer.curtime() + (Projectile.EXPLOSION_RATELIMIT[mdl] or 0.5)
+                wasTagged = true
+            end
+        end
+    else
+        ent:applyDamage(10, owner(), owner(), DAMAGE.BLAST)
+        wasTagged = true
+    end
+    
+    ent:breakEnt()
+    
+    return wasTagged
+end
+
+
+
+
+function Projectile:detonate( dontBreak, collision )
     if self.Detonated then return end
     
     self.Enabled = false
     self.Detonated = true
     
-    if isValid(self.Instance) and not DontBreak then
-        self.Instance:applyDamage(10, owner(), owner(), DAMAGE.BLAST)
-        self.Instance:breakEnt()
+    local shouldForceTag = collision and isValid(collision.HitEntity) and not collision.HitEntity:isFrozen()
+    
+    if self.ExplosionPower > 0 then
+        Util.spawn(function()
+            local origin = self.Instance:getPos()
+            local radius = 50*math.sqrt(self.ExplosionPower)
+            local normal = collision and collision.HitNormal or Vector(0,0,1)
+            
+            for i,v in pairs(self.SupplementaryExplosives) do
+                if not isValid(v) then continue end
+                
+                local a = math.random()*360
+                local p = origin + Angle():rotateAroundAxis(normal, a):getForward()*(math.random(20, radius))
+                
+                v:setParent(nil)
+                v:setPos(p)
+                
+                local tagged = taggedBreak(v, shouldForceTag)
+                
+                -- wait 0.1s for the explosion ratelimiter
+                -- why does this even exist :despair:
+                if tagged then
+                    Util.wait(0.1)
+                end
+            end
+        end)
+    end
+    
+    if isValid(self.Instance) and not dontBreak then
+        taggedBreak( self.Instance, shouldForceTag )
     end
     
     if self.ExplosionEffect ~= "" and effect.canCreate() then
@@ -222,6 +391,10 @@ function Projectile:detonate( DontBreak )
     table.removeByValue(Projectile.Instances, self)
 end
 
+
+function Projectile:isValid()
+    return isValid(self.Instance)
+end
 
 
 function Projectile:remove()
@@ -250,73 +423,6 @@ hook.add("EntityRemoved", "Projectile_Removal", function( e )
     e.Projectile:detonate( true )
 end)
 
-
-
---[[
-timer.simple(1, function()
-    
-    local p = Projectile:new( chip():getPos() + Vector(0,0,60), Angle(-90,0,0), {
-        Model = "models/props_phx/ww2bomb.mdl",
-        ModelAngle = Angle(),
-        Thrust = 1500,
-        MaxThrust = 3000,
-        
-        Gravity = false,
-        
-        ExplosionEffect = "",
-        
-        ArcHeight = 4000,
-        
-        Trail = {
-            Material = "trails/smoke"
-        }
-    })
-    
-    local fins = hologram.create( p.Instance:localToWorld(Vector(0,0,-2.5)), p.Instance:getAngles(), "models/props_phx/amraam.mdl", Vector(0.5,1,1) )
-    fins:setParent(p.Instance)
-    
-    p.Target = chip():localToWorld(Vector(5000,0,0))
-    
-    --local h = hologram.create(chip():localToWorld(Vector(5000,0,0)), Angle(), "models/hunter/blocks/cube1x1x05.mdl")
-    
-    --[[timer.create("", 0.1, 0, function()
-        print(p.Instance:getVelocity():getLength())
-    end)] ]
-    
-end)]]
-
-
---[[
-
---timer.simple(1, function()
-timer.create("hellfire", 0.3, 0, function()
-    
-    local p = Projectile:new( chip():getPos() + Vector(0,0,60), Angle(-90,0,0), {
-        Model = "models/props_phx/ww2bomb.mdl",
-        ModelAngle = Angle(),
-        Speed = 5000,
-        
-        Gravity = false,
-        
-        ExplosionEffect = "",
-        
-        Trail = {
-            Material = "trails/smoke"
-        }
-    })
-    
-    local fins = hologram.create( p.Instance:localToWorld(Vector(0,0,-2.5)), p.Instance:getAngles(), "models/props_phx/amraam.mdl", Vector(0.5,1,1) )
-    fins:setParent(p.Instance)
-    
-end)
-
-
-timer.create("", 0, 0, function()
-    for i,v in pairs(Projectile.Instances) do
-        v.Target = owner():getEyeTrace().HitPos
-    end
-end)
-]]
 
 
 
