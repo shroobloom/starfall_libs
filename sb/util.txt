@@ -119,6 +119,7 @@ end
 
 -- Yields the code for a certain duration
 -- Only works inside a coroutine
+-- DEPRECATED: Please use coroutine.wait instead.
 function Util.wait( duration )
     local cr = coroutine.running()
     
@@ -662,7 +663,7 @@ end
 -- Returns the spawned thread.
 function Util.spawn(callback, ...)
     local payload = {...}
-    local thread = coroutine.wrap(function()
+    local thread = coroutine.create(function()
         local s,e = pcall(callback, unpack(payload))
         
         if not s then
@@ -674,7 +675,7 @@ function Util.spawn(callback, ...)
         end
     end)
     
-    thread()
+    coroutine.resume(thread)
     return thread
 end
 
