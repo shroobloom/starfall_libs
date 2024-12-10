@@ -333,7 +333,7 @@ local function taggedBreak( ent, forceTag )
         end
     else
         ent:applyDamage(10, owner(), owner(), DAMAGE.BLAST)
-        wasTagged = true
+        wasTagged = false
     end
     
     ent:breakEnt()
