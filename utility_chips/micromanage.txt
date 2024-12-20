@@ -413,6 +413,23 @@ end)
 
 enableHud( player(), true )
 
+
+
+Util.bindPress("c", function()
+    if not isMicromanageAllowed() then return end
+    
+    input.enableCursor(true)
+end)
+
+
+Util.bindRelease("c", function()
+    if not isMicromanageAllowed() then return end
+    
+    input.enableCursor(false)
+end)
+
+
+
 hook.add("drawhud", "Micromanage_HUD", function()
     if not input.isKeyDown( 13 ) then return end --C
     if not isMicromanageAllowed() then return end
