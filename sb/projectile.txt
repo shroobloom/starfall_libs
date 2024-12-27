@@ -35,6 +35,10 @@ local PropertyDefaults = {
     -- The max speed for a projectile is equal to physenv.getPerformanceSettings().MaxVelocity, which is ~2966 at the time of writing on CFC.
     Speed = 0,
     
+    -- The amount to randomly spread shots on fire
+    -- In degrees
+    Spread = 0,
+    
     -- Constant thrust - the projectile will try to maintain this speed
     Thrust = 0,
     
@@ -90,7 +94,9 @@ function Projectile:initialize( pos, ang, properties )
     end
     
     
-    self.Instance = prop.create( pos, ang + properties.ModelAngle, properties.Model, false )
+    local _, effectiveAng = localToWorld( Vector(), self.ModelAngle, Vector(), ang )
+    
+    self.Instance = prop.create( pos, effectiveAng, properties.Model, false )
     self.Instance:enableDrag( false )
     self.Instance:enableGravity( properties.Gravity )
     self.Instance:doNotDuplicate()
@@ -111,6 +117,9 @@ function Projectile:initialize( pos, ang, properties )
         self:fire()
     end
     
+    table.insert(Projectile.Instances, self)
+    
+    
     self.SupplementaryExplosives = {}
     
     if self.ExplosionPower > 0 then
@@ -118,10 +127,10 @@ function Projectile:initialize( pos, ang, properties )
             local toSpawn = self.ExplosionPower
             
             while toSpawn > 0 do
-                Spawner.Await()
+                Spawner.await()
                 if not self:isValid() then break end
                 
-                pcall(function()
+                local s,e = pcall(function()
                     -- can't use self.Instance:getModel() because of the explosion ratelimiter, which is 5x more lenient on explosive
                     -- barrels for some reason, so thats what we'll use (at the cost of a bit of AoE)
                     local sup = prop.create( Vector(), Angle(), "models/props_c17/oildrum001_explosive.mdl", true )
@@ -129,21 +138,35 @@ function Projectile:initialize( pos, ang, properties )
                     sup:setSolid(false)
                     sup:setNocollideAll(true)
                     sup:setCollisionGroup(COLLISION_GROUP.IN_VEHICLE)
+                    sup:doNotDuplicate()
                     
                     table.insert(self.SupplementaryExplosives, sup)
                     
                     toSpawn = toSpawn - 1
                 end)
+                
+                if not s then
+                    if owner():isInBuild() then error(e) end
+                    Util.wait(0.1)
+                end
             end
             
             self.Ready = true
+            
+            if self.AwaitingSupplementaryThread then
+                coroutine.resume(self.AwaitingSupplementaryThread)
+            end
         end)
     end
-    
-    table.insert(Projectile.Instances, self)
-    
 end
 
+
+function Projectile:awaitSupplementarySpawns()
+    if self.Ready then return end
+    
+    self.AwaitingSupplementaryThread = coroutine.running()
+    coroutine.yield()
+end
 
 
 
@@ -151,7 +174,12 @@ function Projectile:fire()
     assert(not self.Enabled, "Projectile has already been fired!")
     
     if isValid(self:getParent()) then
+        local Parent = self:getParent()
+        local LocalPos = Parent:worldToLocal(self.Instance:getPos())
         self:setParent( nil )
+        self.Instance:setPos(Parent:localToWorld(LocalPos))
+        
+        self.Instance:setVelocity(Parent:getVelocity())
     end
     
     if self:isFrozen() then
@@ -160,10 +188,22 @@ function Projectile:fire()
     
     self.LaunchTime = timer.curtime()
     self.LaunchPos = self.Instance:getPos()
-    self.LaunchAngle = self.Instance:getAngles() - self.ModelAngle
+    self.LaunchAngle = self.Instance:getAngles() + self.ModelAngle
     self.Enabled = true
     
-    self.Instance:applyForceCenter( self:getForward() * self.Speed * self.Instance:getMass() )
+    local dir = self:getForward()
+    
+    if self.Spread ~= 0 then
+        --dir = (dir:getAngle() + Angle(math.random()-0.5, math.random()-0.5, math.random()-0.5) * 2 * self.Spread):getForward()
+        local dirAng = dir:getAngle()
+        local off = Angle(math.random()-0.5, math.random()-0.5, math.random()-0.5) * 2 * self.Spread
+        local _, newAngle = localToWorld(Vector(), dirAng, Vector(), off)
+        
+        dir = newAngle:getForward()
+        self.Instance:setAngles( newAngle - self.ModelAngle )
+    end
+    
+    self.Instance:applyForceCenter( dir * self.Speed * self.Instance:getMass() )
     
     if self.Trail.Material ~= "" then
         self.Instance:setTrails(self.Trail.StartSize, self.Trail.EndSize, self.Trail.Length, self.Trail.Material, self.Trail.Color, nil, self.Trail.Additive)
@@ -250,7 +290,7 @@ function Projectile:think()
         
         targetAngle = (targetPos - self.Instance:getPos()):getAngle()
     elseif self.FinStabilized then
-        targetAngle = self.Instance:getVelocity():getAngle()
+        targetAngle = self.Instance:getVelocity():getAngle() - self.ModelAngle
     end
     
     if self.Wobble.Frequency ~= 0 then
@@ -354,10 +394,17 @@ function Projectile:detonate( dontBreak, collision )
     
     if self.ExplosionPower > 0 then
         Util.spawn(function()
-            local hitTraceInfo = trace.line( self.Instance:getPos(), self.Instance:getPos() + self.Instance:getForward()*1000, self.Instance )
             local origin = self.Instance:getPos()
+            local normal = Vector(0,0,1)
+            
+            if collision then
+                local hitTraceInfo = trace.line( self.Instance:getPos(), self.Instance:getPos() + (collision.HitPos - self.Instance:getPos())*2, self.Instance )
+                
+                origin = hitTraceInfo.HitPos
+                normal = hitTraceInfo.HitNormal
+            end
+            
             local radius = 50*math.sqrt(self.ExplosionPower)
-            local normal = collision and hitTraceInfo.HitNormal or Vector(0,0,1)
             
             for i,v in pairs(self.SupplementaryExplosives) do
                 if not isValid(v) then continue end
@@ -393,6 +440,7 @@ function Projectile:detonate( dontBreak, collision )
     end
     
     table.removeByValue(Projectile.Instances, self)
+    hook.run("ProjectileRemoved", self)
 end
 
 
@@ -410,6 +458,8 @@ function Projectile:remove()
     self.Enabled = false
     
     table.removeByValue(Projectile.Instances, self)
+    
+    hook.run("ProjectileRemoved", self)
 end
 
 
