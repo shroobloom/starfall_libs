@@ -1,0 +1,407 @@
+--@name Target Finder
+--@author shrooblooms
+--@shared
+--@include sb/util.txt
+
+
+
+-- TODO
+-- [?] Players in parachutes are counted as a valid Vehicle target?
+--      - could also just be cuz they ejected and the target finder didnt remove them, shoddy code is replaced now
+-- [ ] Priority - Relationships with a higher priority should be considered first
+
+
+
+local Util = require("sb/util.txt")
+
+
+
+local TargetFinder = class("TargetFinder")
+TargetFinder.Instances = {}
+
+
+
+
+function TargetFinder:initialize()
+    
+    -- Read-only: What this target finder is currently targetting. If the target finder can find multiple targets, this will be its first target.
+    self.Target = nil
+    
+    -- Read-only: A list of this target finder's targets
+    self.Targets = {}
+    
+    -- How many targets the Target Finder should be able to find and track at once
+    self.MaxTargets = 1
+    
+    -- For use with LoS and distance checks
+    self.Eye = chip()
+    
+    -- The direction that the eye is facing.
+    -- Only matters if FoV is set. (1,0,0) = Forward, (0,0,1) = Up, (0,1,0) = Right
+    self.EyeDir = Vector(1,0,0)
+    
+    -- Whether or not the target finder is active
+    self.Enabled = true
+    
+    -- Timers
+    self.LastTargetTime = 0
+    
+    -- Refer to :addRelationship()
+    self.Relationships = {}
+    self.RelationshipsByClass = {}
+    
+    table.insert(TargetFinder.Instances, self)
+    
+end
+
+
+
+
+
+
+local RelationshipStruct = {
+    -- Distance constraints for this target
+    MinDistance = 0,
+    MaxDistance = 1000,
+    
+    -- Class to search for, supports wildcards
+    Class = nil,
+    
+    -- Whether or not the eye must see this target
+    RequiresLoS = true,
+    
+    -- If present, requires the FoV to 
+    FoV = nil,
+    
+    -- Filter
+    Filter = function(ent)
+        return true
+    end,
+    
+    -- Whether or not this relationship should be active
+    Enabled = true
+}
+
+
+function TargetFinder:addRelationship( Data )
+    
+    Util.applyDefaults(Data, RelationshipStruct)
+    
+    self.RelationshipsByClass[Data.Class] = Data
+    table.insert(self.Relationships, Data)
+    table.sortByMember(self.Relationships, "Priority")
+    
+    return Data
+    
+end
+
+
+--TODO: make this work for multiple target finders
+function TargetFinder:bindToPvp()
+    self.Enabled = owner():isInPvp()
+    
+    hook.add("PlayerEnterPvp", "targetModule_bindToPvp", function(plr)
+        if plr ~= owner() then return end
+        self.Enabled = true
+    end)
+    
+    hook.add("PlayerExitPvp", "targetModule_bindToPvp", function(plr)
+        if plr ~= owner() then return end
+        self.Enabled = false
+    end)
+end
+
+
+
+function TargetFinder:onTargetFound( target )
+end
+
+function TargetFinder:onTargetLost( target )
+end
+
+--TODO: reimpleiment
+function TargetFinder:onTargetChanged()
+end
+
+
+
+function TargetFinder:hasLoS( Target )
+    local tr = trace.line( self.Eye:obbCenterW(), Target:obbCenterW(), function( e )
+        return isValid(e:getPhysicsObject()) and e:isFrozen() and not isValid(e:getParent()) and e ~= self.Eye and e ~= chip()
+    end)
+    
+    if not tr.Hit or tr.Entity == Target then
+        return true
+    end
+    
+    return false
+end
+
+
+
+function TargetFinder:hasTarget( test )
+    return table.hasValue(self.Targets, test)
+end
+
+
+-- Checks whether or not a target is "valid" based on the config.
+-- Returns the distance squared if it is, false otherwise.
+function TargetFinder:isValidTarget( Target )
+    
+    -- Don't count dead ppl/NPCs as valid targets
+    if (Target:isPlayer() or Target:isNPC()) and Target:getHealth() <= 0 then
+        return false
+    end
+    
+    
+    local Relationship = self:getRelationship( Target )
+    if not Relationship.Enabled then return false end
+    
+    -- Don't target things out of the range clamp
+    local dist = self:getEyePos():getDistance( Target:obbCenterW() )
+    
+    if dist < Relationship.MinDistance or dist > Relationship.MaxDistance then
+        return false
+    end
+    
+    -- Don't target things out of the FoV, if present
+    if Relationship.FoV then
+        if not isValid(self.Eye) then return false end
+        
+        local dir = (Target:obbCenterW() - self:getEyePos()):getNormalized()
+        
+        if dir:dot( self.Eye:localToWorldVector( self.EyeDir ) ) < math.abs(math.cos(Relationship.FoV)) then
+            return false
+        end
+    end
+    
+    -- Do not target things according to the filter
+    if Relationship.Filter and not Relationship.Filter( Target ) then
+        return false
+    end
+    
+    -- Do not target things not in line-of-sight, if applicable
+    if Relationship.RequiresLoS and not self:hasLoS( Target ) then
+        return false
+    end
+    
+    return dist
+end
+
+
+function TargetFinder:getRelationship( Entity )
+    local simple = self.RelationshipsByClass[Entity:getClass()]
+    if simple then return simple end
+    
+    local wildcard = Entity:getClass():sub(1, Entity:getClass():find("%*"))
+    
+    for i,v in pairs(self.Relationships) do
+        local totalLen = v.Class:len()
+        local len = v.Class:sub(totalLen, totalLen) == "*" and totalLen-1 or totalLen
+        
+        if Entity:getClass():sub(1, len) .. "*" == v.Class then
+            return v
+        end
+    end
+    
+    error("Could not find relationship for entity " .. tostring(Entity) .. "!")
+end
+
+
+
+function TargetFinder:sortTargets( Pool )
+    local CachedDistance = {}
+    
+    for i,v in pairs(Pool or self.Targets) do
+        CachedDistance[v] = v:getPos():getDistanceSqr(self:getEyePos())
+    end
+    
+    table.sort(Pool or self.Targets, function( e1, e2 )
+        return CachedDistance[e1] < CachedDistance[e2]
+    end)
+    
+    --[[table.sort(Pool or self.Targets, function( e1, e2 )
+        return self:getRelationship(e1).Priority > self:getRelationship(e2).Priority
+    end)]]
+end
+
+
+
+function TargetFinder:clearTargets()
+    for i,v in pairs(self.Targets) do
+        self:removeTarget(v)
+    end
+end
+
+
+function TargetFinder:getEyePos()
+    return isValid(self.Eye) and self.Eye:obbCenterW() or chip():obbCenterW()
+end
+
+
+
+
+if SERVER then
+    --local test = TargetFinder:new()
+    --test.MaxTargets = math.huge
+    
+    --[[test:addRelationship({
+        Class = "player",
+        MaxDistance = math.huge
+    })
+    
+    test:addRelationship({
+        Class = "npc_*",
+        MaxDistance = math.huge
+    })]]
+    
+    --[[test:addRelationship({
+        Class = "prop_vehicle_prisoner_pod",
+        MaxDistance = math.huge,
+        Filter = function(e)
+            return isValid(e:getDriver())
+        end
+    })]]
+    
+    --test.Eye = find.playersByName("Hexodile")[1]
+    
+    --[[function test:onTargetFound( new )
+        timer.simple(0, function()
+            print("----------------------")
+            for i,v in pairs(self.Targets) do
+                print(i .. ". " .. (v:isPlayer() and v:getName() or tostring(v)) .. " - " .. v:getPos():getDistance(self:getEyePos()) .. "u")
+            end
+        end)
+    end]]
+end
+
+
+
+
+function TargetFinder:findTarget()
+    if not self.Enabled then
+        return self:clearTargets()
+    end
+    
+    
+    -- first, accumulate a list of targets
+    local NewTargets = {}
+    
+    for i,v in pairs(self.Relationships) do
+        local pool = find.byClass(v.Class)
+        
+        for i,candidate in pairs(pool) do
+            if self:isValidTarget( candidate ) then
+                table.insert(NewTargets, candidate)
+            end
+        end
+        
+        -- no point in continuing if there's already enough targets to completely fill the list:
+        if #NewTargets >= self.MaxTargets then break end
+    end
+    
+    -- sort them by priority (doesnt seem to be implemented) and distance:
+    self:sortTargets(NewTargets)
+    
+    for i,v in pairs(self.Targets) do
+        local existingIdx = table.keyFromValue( NewTargets, v )
+        
+        -- if their rank on the list is > the max target count (), remove them entirely
+        if not existingIdx or existingIdx > self.MaxTargets then
+            self:removeTarget(v)
+        end
+    end
+    
+    -- now, insert new targets:
+    for i,v in pairs(NewTargets) do
+        local has = self:hasTarget(v)
+        
+        if not has then
+            self:addTarget(v)
+        end
+        
+        if i == self.MaxTargets then break end
+    end
+    
+    -- now, make sure they're all ordered properly:
+    self:sortTargets()
+    
+    --printTable(self.Targets)
+    
+    if #self.Targets > 0 then
+        self.LastTargetTime = timer.curtime()
+    end
+    
+end
+
+
+
+-- TODO: remove last target if this is called manually
+function TargetFinder:addTarget( newTarget )
+    table.insert(self.Targets, newTarget)
+    
+    self.Target = newTarget
+    self:onTargetFound( newTarget )
+end
+
+function TargetFinder:removeTarget( target )
+    table.removeByValue(self.Targets, target)
+    
+    if self.Target == target then
+        self.Target = self.Targets[1]
+    end
+    
+    self:onTargetLost( target )
+end
+
+
+
+
+function TargetFinder:getTimeSinceTarget()
+    return timer.systime() - self.LastTargetTime
+end
+
+
+-- anti minmax
+local getGrandparent
+
+local function getGrandparent( Ent )
+    local p = Ent:getParent()
+    
+    if p:isValid() then
+        return getGrandparent(p)
+    else
+        return Ent
+    end
+end
+
+function TargetFinder:getTargetVelocity()
+    if self.Target:isNPC() or not self.Target:getVehicle():isValid() then
+        return self.Target:getVelocity()
+    end
+    
+    -- Vehicle
+    return getGrandparent( self.Target:getVehicle() ):getVelocity()
+end
+
+
+
+timer.create("TargetFinder_Tick", 0.25, 0, function()
+    for i,v in pairs(TargetFinder.Instances) do
+        v:findTarget()
+    end
+end)
+
+
+--TODO: reacquire targets right away so zero downtime?
+hook.add("EntityRemoved", "TargetFinder_ClearTargets", function( e )
+    for i,v in pairs(TargetFinder.Instances) do
+        if v:hasTarget(e) then
+            v:removeTarget(e)
+        end
+    end
+end)
+
+
+
+return TargetFinder
