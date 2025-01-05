@@ -1,0 +1,91 @@
+--@name Asset Query
+--@author shroobloom
+--@shared
+--@include sb/chat_command.txt
+
+
+
+local ChatCommands = require("sb/chat_command.txt")
+
+
+
+local YELLOW = Color(255,255,144)
+local WHITE = Color(255,255,255)
+local TAG_COLOR = Color(255,0,255)
+
+
+if SERVER then
+    
+    local querying = false
+    
+    ChatCommands:add({
+        Name = "assetquery",
+        Description = "Queries who has this asset.",
+        Aliases = {"aq"},
+        Arguments = {
+            {
+                Name = "Asset",
+                Type = "string",
+                Optional = true
+            }
+        },
+        Run = function( user, asset )
+            
+            if querying then
+                return ChatCommands.Error("Already querying! Please wait...")
+            end
+            
+            if not asset and isValid(user:getEyeTrace().Entity) then
+                asset = user:getEyeTrace().Entity:getModel()
+            end
+            
+            if not asset then
+                return ChatCommands.Error("No entity found for querying! Make sure you specify a path or look at an entity to query it's model.")
+            end
+            
+            querying = true
+            user:chatPrint(TAG_COLOR, "[AssetQuery] ", WHITE, "Querying ", YELLOW, asset, Color(255,255,255), "...")
+            
+            local Responses = 0
+            local Yes = 0
+            
+            net.receive("Response", function(_, plr)
+                Responses = Responses + 1
+                
+                if net.readBool() then
+                    Yes = Yes + 1
+                end
+            end)
+            
+            net.start("AssetQuery")
+            net.writeString(asset)
+            net.send()
+            
+            timer.simple(2, function()
+                user:chatPrint(TAG_COLOR, "[AssetQuery] ", WHITE, "Clients that have this: ", YELLOW, Yes, WHITE, " out of ", YELLOW, Responses, WHITE, ". (", YELLOW, math.round(Yes/Responses * 1000) / 10 .. "%", WHITE, ")")
+                querying = false
+                net.receive("Response", function() end)
+            end)
+            
+        end
+    })
+    
+end
+
+
+
+if CLIENT then
+    
+    net.receive("AssetQuery", function()
+        local asset = net.readString()
+        
+        net.start("Response")
+        net.writeBool( sound.exists(asset) or game.modelExists(asset) )
+        net.send()
+    end)
+    
+end
+
+
+
+
