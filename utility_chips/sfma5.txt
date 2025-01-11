@@ -5,7 +5,11 @@
 --@include sb/chat_command.txt
 
 
-local AutoSpectate = false
+
+
+local SFMA = {}
+
+SFMA.AutoSpectate = false
 
 
 local ChatCommands = require("sb/chat_command.txt")
@@ -14,19 +18,19 @@ local ChatCommands = require("sb/chat_command.txt")
 
 
 
-function ConsoleLog( ... )
+function SFMA.consoleLog( ... )
     printConsole( Color(231, 55, 62), "[SFMA v5] ", Color(255,255,255), ... )
 end
 
-function ChatLog( ... )
+function SFMA.chatLog( ... )
     print( Color(231, 55, 62), "[SFMA v5] ", Color(255,255,255), ... )
 end
 
-function getColor( plr )
+local function getColor( plr )
     return team.getColor(plr:getTeam())
 end
 
-function getName( plr )
+local function getName( plr )
     return "<" .. plr:getSteamID() .. "> " .. plr:getName()
 end
 
@@ -41,23 +45,23 @@ local TRUSTED = {
 }
 
 
-function isTrusted( plr )
+function SFMA.isTrusted( plr )
     return TRUSTED[plr:getTeamName()]
 end
 
 
 
 
-local lastOffender = nil
+SFMA.lastOffender = nil
 
-function logOffender( plr, ping )
+function SFMA.logOffender( plr, ping )
     if ping == nil then ping = false end
     
-    lastOffender = plr
+    SFMA.lastOffender = plr
     
     timer.stop("SFMA_clearLastOffender")
     timer.create("SFMA_clearLastOffender", 30, 1, function()
-        lastOffender = nil
+        SFMA.lastOffender = nil
     end)
     
     
@@ -68,7 +72,7 @@ function logOffender( plr, ping )
         net.send(owner())
     end
     
-    if SERVER and AutoSpectate and ping then
+    if SERVER and SFMA.AutoSpectate and ping then
         concmd("fspectate \"" .. plr:getName() .. "\"")
     end
 end
@@ -84,15 +88,15 @@ ChatCommands:add({
     Run = function( user )
         if user ~= owner() then return end
         
-        AutoSpectate = not AutoSpectate
-        ChatLog("AutoSpectate is now ", AutoSpectate and Color(50,255,50) or Color(255,50,50), AutoSpectate and "on" or "off", Color(255,255,255), ".")
+        SFMA.AutoSpectate = not SFMA.AutoSpectate
+        SFMA.chatLog("AutoSpectate is now ", SFMA.AutoSpectate and Color(50,255,50) or Color(255,50,50), SFMA.AutoSpectate and "on" or "off", Color(255,255,255), ".")
     end
 })
 
 
 
 
-local AFKWatch = {}
+SFMA.AFKWatch = {}
 
 
 ChatCommands:add({
@@ -109,10 +113,10 @@ ChatCommands:add({
         if user ~= owner() then return end
         
         if SERVER then
-            AFKWatch[Target] = true
+            SFMA.AFKWatch[Target] = true
         end
         
-        ChatLog("Awaiting the return of ", getColor(Target), getName(Target), Color(255,255,255), "...")
+        SFMA.chatLog("Awaiting the return of ", getColor(Target), getName(Target), Color(255,255,255), "...")
     end
 })
 
@@ -132,7 +136,18 @@ if owner():isAdmin() then
             end
             
             owner():setPos( skyCamera:getPos() )
-            ChatLog("Teleported to the Skybox.")
+            SFMA.chatLog("Teleported to the Skybox.")
+        end
+    })
+    
+    ChatCommands:add({
+        Name = "spawn",
+        Description = "Teleports you to spawn.",
+        Run = function( user, Target )
+            if user ~= owner() then return end
+            
+            owner():spawn()
+            SFMA.chatLog("Teleported to spawn.")
         end
     })
 end
@@ -141,7 +156,7 @@ end
 
 --[[ HOST MODE ]]--
 
-local HostMode = false
+SFMA.EventHostMode = false
 
 ChatCommands:add({
     Name = "eventhost",
@@ -151,7 +166,7 @@ ChatCommands:add({
         if not SERVER then return end
         
         local state = not user:hasGodMode()
-        HostMode = state
+        SFMA.EventHostMode = state
         
         concmd( "ulx " .. (state and "god" or "ungod") .. " \"$" .. user:getSteamID() .. "\"" )
         concmd( "ulx " .. (state and "cloak" or "uncloak") .. " \"$" .. user:getSteamID() .. "\"" )
@@ -161,7 +176,7 @@ ChatCommands:add({
             concmd("ulx noclip \"$" .. user:getSteamID() .. "\"")
         end
         
-        ChatLog("Event host mode ", state and Color(0,255,0) or Color(255,0,0), state and "enabled" or "disabled", Color(255,255,255), ".")
+        SFMA.chatLog("Event host mode ", state and Color(0,255,0) or Color(255,0,0), state and "enabled" or "disabled", Color(255,255,255), ".")
     end
 })
 
@@ -174,11 +189,11 @@ if SERVER then
     
     
     hook.add("KeyPress", "SFMA_AFKWatch", function( plr, key )
-        if not AFKWatch[plr] then return end
+        if not SFMA.AFKWatch[plr] then return end
         
-        AFKWatch[plr] = nil
-        ChatLog(getColor(plr), getName(plr), Color(255,255,255), " is back!")
-        logOffender( plr, true )
+        SFMA.AFKWatch[plr] = nil
+        SFMA.chatLog(getColor(plr), getName(plr), Color(255,255,255), " is back!")
+        SFMA.logOffender( plr, true )
     end)
     
     
@@ -230,7 +245,7 @@ if SERVER then
                 table.insert(payload, Color(255,255,255))
                 table.insert(payload, ".")
                 
-                ConsoleLog(getColor(entOwner), getName(entOwner), Color(255,255,255), " spawned ", unpack(payload))
+                SFMA.consoleLog(getColor(entOwner), getName(entOwner), Color(255,255,255), " spawned ", unpack(payload))
             end
         end)
     end)
@@ -238,6 +253,7 @@ if SERVER then
     
     
     --TODO: remove, the simfphys limit is only 1 now
+    --TODO: remove, we have glide now
     local simfphysAlertCooldown = {}
     
     local function isSimfphys( ent )
@@ -246,7 +262,7 @@ if SERVER then
     
     hook.add("OnEntityCreated", "SFMA_detectSimfphysSpam", function( ent )
         if not isValid(ent) or not isValid(ent:getOwner()) or simfphysAlertCooldown[ent:getOwner()] then return end
-        if isTrusted( ent:getOwner() ) then return end
+        if SFMA.isTrusted( ent:getOwner() ) then return end
         if not isSimfphys(ent) then return end
         
         local Min, Max = ent:worldSpaceAABB()
@@ -258,8 +274,8 @@ if SERVER then
         if #NearbySimfphys > 1 then
             local carOwner = ent:getOwner()
             
-            ChatLog(getColor(carOwner), getName(carOwner), Color(255,255,255), " spawned multiple simfphys cars inside eachother!")
-            logOffender( carOwner, true )
+            SFMA.chatLog(getColor(carOwner), getName(carOwner), Color(255,255,255), " spawned multiple simfphys cars inside eachother!")
+            SFMA.logOffender( carOwner, true )
             simfphysAlertCooldown[carOwner] = true
             
             timer.simple(5, function()
@@ -275,7 +291,10 @@ if SERVER then
         "propspam",
         "stop",
         "admin",
-        "fuck off"
+        "fuck off",
+        "dick",
+        "penis",
+        "swastika"
     }
     
     hook.add("PlayerSay", "SFMA_detectMention", function( speaker, msg )
@@ -289,7 +308,7 @@ if SERVER then
         
         for i,v in pairs(Keywords) do
             if msg:lower():find(v) then
-                return logOffender( speaker, true )
+                return SFMA.logOffender( speaker, true )
             end
         end
     end)
@@ -305,7 +324,7 @@ if SERVER then
         
         local propOwner = ent:getOwner()
         if not isValid(propOwner) then return end
-        if isTrusted( propOwner ) then return end
+        if SFMA.isTrusted( propOwner ) then return end
         
         if propOwner.PS_LastSpawn == ent:getModel() and (timer.curtime() - propOwner.PS_LastSpawnTime) < 1 then
             propOwner.PS_SpawnCount = (propOwner.PS_SpawnCount or 0) + 1
@@ -331,7 +350,7 @@ if SERVER then
     
     
     
-    local tracked = {}
+    local trackedProppushProps = {}
     local proppushAlertCooldown = {}
     
     local PP_BLACKLIST = {
@@ -339,27 +358,20 @@ if SERVER then
         prop_ragdoll = true
     }
     
-    local function checkHolding( ply )
-        local ent = tracked[ply]
-        if not (isValid(ent) and isValid(ply)) then tracked[ply] = nil return end
-        
+    local function checkHolding( ent )
+        if not isValid(ent) then return table.removeByValue(trackedProppushProps, ent) end
         if ent:getCollisionGroup() == COLLISION_GROUP.WORLD then return end
-        if not ply:keyDown(1) then return end
-        if proppushAlertCooldown[ply] then return end
-        if ply:getActiveWeapon() ~= ply:getWeapon("weapon_physgun") then return end
-        
-        --pickupper chip (TODO: better way of patching)
-        if ent:getModel() == "models/hunter/misc/shell2x2.mdl" then return end
+        if proppushAlertCooldown[ent.LastHolder] then return end
         
         local aabb_min, aabb_max = ent:worldSpaceAABB()
-        local vel = ent:getVelocity() * timer.frametime()
+        local lookahead = ent:getVelocity() * 0.1
         
-        local pushing = find.inBox( aabb_min + vel, aabb_max + vel, function( e )
+        local pushing = find.inBox( aabb_min + lookahead, aabb_max + lookahead, function( e )
             if not isValid( e ) then return end
-            if e == ent or e == ply then return end
+            if e == ent or e == ent.LastHolder then return end
             
             local owner = e:getOwner()
-            if owner == ply then return end
+            if owner == ent.LastHolder then return end
             
             if e:isPlayer() then
                 if e:isNoclipped() then return end
@@ -375,12 +387,11 @@ if SERVER then
         end)
         
         if #pushing > 0 then
-            ChatLog("Detected ", getColor(ply), getName(ply), Color(255,255,255), " prop pushing!")
-            logOffender( ply , true )
-            proppushAlertCooldown[ply] = true
+            SFMA.chatLog("Detected ", getColor(ent.LastHolder), getName(ent.LastHolder), Color(255,255,255), " prop pushing!")
+            SFMA.logOffender( ent.LastHolder , true )
+            proppushAlertCooldown[ent.LastHolder] = true
             
-            printConsole("wp: ", ply:getActiveWeapon())
-            printConsole("tracked: ", tracked[ply])
+            printConsole("wp: ", ent.LastHolder:getActiveWeapon())
             printConsole("src ent: ", ent)
             printConsole("src held?: ", ent:isPlayerHolding())
             printConsole("pped ent: ")
@@ -388,37 +399,45 @@ if SERVER then
                 printConsole(tostring(i) .. ". " .. tostring(v) .. " - ", v:getOwner(), " - " .. (v:getPos():getDistance(ent:getPos()) .. "u"))
             end
             
-            timer.simple(20, function()
-                proppushAlertCooldown[ply] = nil
+            timer.simple(30, function()
+                proppushAlertCooldown[ent.LastHolder] = nil
             end)
         end
     end
     
     timer.create( "SFMA_proppushDetection", 0.25, 0, function()
-        if table.isEmpty(tracked) then return end
+        if #trackedProppushProps == 0 then return end
         
-        for ply, _ in pairs(tracked) do
-            pcall(function() checkHolding( ply ) end)-- gmod continue :vomit:
+        for _, ent in pairs(trackedProppushProps) do
+            checkHolding(ent)
         end
     end)
     
     hook.add( "PhysgunPickup", "SFMA_propPickup", function( ply, ent )
-        if isTrusted( ply ) then return end
+        if SFMA.isTrusted( ply ) then return end
         if ent:isPlayer() then return end --idfk
-        tracked[ply] = ent
+        
+        ent.LastHolder = ply
+        
+        if not table.hasValue( trackedProppushProps, ent ) then
+            table.insert( trackedProppushProps, ent )
+        end
+        
+        timer.stop("SFMA_propDrop_" .. ent:entIndex())
     end)
     
     hook.add( "PhysgunDrop", "SFMA_propDrop", function( ply, ent )
-        --if tracked[ply] ~= ent then return end
+        if not table.hasValue(trackedProppushProps, ent) then return end
         
-        tracked[ply] = nil
+        timer.create("SFMA_propDrop_" .. ent:entIndex(), 1.5, 1, function()
+            table.removeByValue( trackedProppushProps, ent )
+        end)
     end)
-    
     
     
     
     hook.add("OnPhysgunReload", "SFMA_detectUnfreeze", function( _, ply )
-        if isTrusted(ply) then return end
+        if SFMA.isTrusted(ply) then return end
         
         local ent = ply:getEyeTrace().Entity
         local allEnts = ent:getAllConstrained()
@@ -433,7 +452,7 @@ if SERVER then
         
         if #allEnts == 0 then return end
         
-        ConsoleLog( getColor(ply), getName(ply), Color(255,255,255), " unfroze ", Color(255,255,144), #allEnts, Color(255,255,255), " entities!" )
+        SFMA.consoleLog( getColor(ply), getName(ply), Color(255,255,255), " unfroze ", Color(255,255,144), #allEnts, Color(255,255,255), " entities!" )
     end)
     
 end
@@ -445,7 +464,7 @@ end
 if CLIENT then
     
     net.receive("SFMA_logOffender", function()
-        net.readEntity(logOffender)
+        net.readEntity(SFMA.logOffender)
         
         if net.readBool() then
             --concmd("fspectate \"" .. lastOffender:getSteamID() .. "\"")
@@ -459,7 +478,7 @@ if CLIENT then
     hook.add("inputPressed", "SFMA_quickSpectate", function( key )
         if input.getKeyName(key) ~= "y" then return end
         
-        if not lastOffender then
+        if not SFMA.lastOffender then
             return ChatLog("There is no recent offender to spectate!")
         end
         
@@ -469,10 +488,19 @@ if CLIENT then
             return ChatLog("Double tap Y to spectate...")
         end
         
-        ChatLog("Spectating ", getColor(lastOffender), getName(lastOffender), Color(255,255,255), ".")
-        concmd("fspectate \"" .. lastOffender:getSteamID() .. "\"")
+        ChatLog("Spectating ", getColor(SFMA.lastOffender), getName(SFMA.lastOffender), Color(255,255,255), ".")
+        concmd("fspectate \"" .. SFMA.lastOffender:getSteamID() .. "\"")
     end)
+    
+    
+    
+    
+    
     
 end
 
+
+
+
+return SFMA
 
