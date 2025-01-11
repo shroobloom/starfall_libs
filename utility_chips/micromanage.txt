@@ -91,6 +91,25 @@ Micromanage.Options = {}
 Micromanage.ChoosableOptions = {}
 
 
+
+local OptionStruct = {
+    -- The callback to use when drawing, arguments self, Player, x, and y
+    Draw = Micromanage.defaultDraw,
+    
+    -- The callback to use when the option is clicked, arguments self and Player
+    Use = Micromanage.useOption,
+    
+    -- The callback to use to determine whether or not this option should be displayed.
+    ShouldDisplay = function( Player ) return true end,
+    
+    -- The string rank to restrict it to. See PermissionLevels.
+    Restrict = nil,
+    
+    -- A path to the image to use (use silkicons: https://wiki.facepunch.com/gmod/silkicons)
+    Icon = nil
+}
+
+
 function Micromanage:addOption( Data, Pos )
     
     if Pos then
@@ -100,18 +119,7 @@ function Micromanage:addOption( Data, Pos )
     end
     
     Data.SelectionLerp = 0
-    
-    if not Data.Draw then
-        Data.Draw = Micromanage.defaultDraw
-    end
-    
-    if not Data.Use then
-        Data.Use = Micromanage.useOption
-    end
-    
-    if not Data.Predicate then
-        Data.Predicate = function() return true end
-    end
+    Util.applyDefaults(Data, OptionStruct)
     
     if Data.Icon then
         Data.Icon = material.createFromImage(Data.Icon, "")
@@ -302,7 +310,7 @@ Micromanage:addOption({
     Use = function( self, plr )
         concmd("say_team .course " .. plr:getName())
     end,
-    Predicate = function()
+    ShouldDisplay = function()
         return #find.byClass("gmod_wire_expression2", function(e)
             return e:getOwner() == owner() and e:getChipName() == PP_COURSE_E2_NAME
         end) > 0
@@ -351,7 +359,7 @@ Util.bindPress("MOUSE2", function()
     
     for i,v in pairs(Micromanage.Options) do
         if v.Restrict and PermissionLevels[v.Restrict] > PermissionLevel then continue end
-        if not v.Predicate() then continue end
+        if not v.ShouldDisplay( Micromanage.Selection ) then continue end
         
         if v.Initialize then
             v:Initialize( bestPlayer )

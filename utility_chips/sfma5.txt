@@ -3,16 +3,22 @@
 --@shared
 --@owneronly
 --@include sb/chat_command.txt
+--@include sb/util.txt
+
+
+
+local ChatCommands = require("sb/chat_command.txt")
+local Util = require("sb/util.txt")
 
 
 
 
 local SFMA = {}
 
-SFMA.AutoSpectate = false
 
 
-local ChatCommands = require("sb/chat_command.txt")
+--[[ CONFIG ]]--
+SFMA.SpectateKey = "y"
 
 
 
@@ -53,6 +59,7 @@ end
 
 
 SFMA.lastOffender = nil
+SFMA.autoSpectate = false
 
 function SFMA.logOffender( plr, ping )
     if ping == nil then ping = false end
@@ -72,7 +79,7 @@ function SFMA.logOffender( plr, ping )
         net.send(owner())
     end
     
-    if SERVER and SFMA.AutoSpectate and ping then
+    if SERVER and SFMA.autoSpectate and ping then
         concmd("fspectate \"" .. plr:getName() .. "\"")
     end
 end
@@ -88,8 +95,8 @@ ChatCommands:add({
     Run = function( user )
         if user ~= owner() then return end
         
-        SFMA.AutoSpectate = not SFMA.AutoSpectate
-        SFMA.chatLog("AutoSpectate is now ", SFMA.AutoSpectate and Color(50,255,50) or Color(255,50,50), SFMA.AutoSpectate and "on" or "off", Color(255,255,255), ".")
+        SFMA.autoSpectate = not SFMA.autoSpectate
+        SFMA.chatLog("AutoSpectate is now ", SFMA.autoSpectate and Color(50,255,50) or Color(255,50,50), SFMA.autoSpectate and "on" or "off", Color(255,255,255), ".")
     end
 })
 
@@ -302,7 +309,7 @@ if SERVER then
         
         for i,v in pairs(find.allPlayers()) do
             if msg:find(v:getName(), nil, true) then
-                return logOffender( v )
+                return SFMA.logOffender( v )
             end
         end
         
@@ -337,8 +344,8 @@ if SERVER then
         
         
         if not propspamAlertCooldown[propOwner] and propOwner.PS_SpawnCount >= 5 then
-            ChatLog(getColor(propOwner), getName(propOwner), Color(255,255,255), " is propspamming ", Color(255,255,144), ent:getModel(), Color(255,255,255), "!")
-            logOffender( propOwner, true )
+            SFMA.chatLog(getColor(propOwner), getName(propOwner), Color(255,255,255), " is propspamming ", Color(255,255,144), ent:getModel(), Color(255,255,255), "!")
+            SFMA.logOffender( propOwner, true )
             propspamAlertCooldown[propOwner] = true
             
             timer.simple(15, function()
@@ -473,29 +480,24 @@ if CLIENT then
     end)
     
     
-    local lastYPress = 0
+    local lastSpectateBindPress = 0
     
     hook.add("inputPressed", "SFMA_quickSpectate", function( key )
-        if input.getKeyName(key) ~= "y" then return end
+        if input.getKeyName(key) ~= SFMA.SpectateKey then return end
         
         if not SFMA.lastOffender then
-            return ChatLog("There is no recent offender to spectate!")
+            return SFMA.chatLog("There is no recent offender to spectate!")
         end
         
         -- Require a double-tap when in PvP mode
-        if owner():isInPvp() and timer.curtime() - lastYPress > 0.35 then
-            lastYPress = timer.curtime()
-            return ChatLog("Double tap Y to spectate...")
+        if owner():isInPvp() and timer.curtime() - lastSpectateBindPress > 0.35 then
+            lastSpectateBindPress = timer.curtime()
+            return SFMA.chatLog("Double tap " .. SFMA.SpectateKey:upper() .. " to spectate...")
         end
         
-        ChatLog("Spectating ", getColor(SFMA.lastOffender), getName(SFMA.lastOffender), Color(255,255,255), ".")
+        SFMA.chatLog("Spectating ", getColor(SFMA.lastOffender), getName(SFMA.lastOffender), Color(255,255,255), ".")
         concmd("fspectate \"" .. SFMA.lastOffender:getSteamID() .. "\"")
     end)
-    
-    
-    
-    
-    
     
 end
 
