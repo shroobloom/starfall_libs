@@ -16,31 +16,30 @@ end
 
 -- Calculates the launch angle Theta of a projectile with initial velocity v0 and direction Dir.
 -- If Shallow is supplied, it will return either the steep (true) or shallow (false) angle. Otherwise, it returns both.
-
-function PhysicsSolver.getLaunchAngle( v0, Dir, Steep )
-    
-    local Horizontal = Vector(Dir.x, Dir.y, 0)
+function PhysicsSolver.getLaunchAngle( v0, diff, steep )
+    local Horizontal = Vector(diff.x, diff.y, 0)
     local Dist = Horizontal:getLength()
     
-    if math.abs(Dir.z) < PhysicsSolver.Z_THRESHOLD then
-        if Steep == false then
-            return 0.5*math.asin((G()*Dist)/(v0^2))
-        elseif Steep == true then
-            return 0.5*math.acos((G()*Dist)/(v0^2))
+    if math.abs(diff.z) < PhysicsSolver.Z_THRESHOLD then
+        
+        local angle = 0.5*math.asin((G()*Dist)/(v0^2))
+        
+        if steep == false then
+            return angle
+        elseif steep == true then
+            return math.pi/2 - angle
         else
-            local a = (G()*Dist)/(v0^2)
-            
             return {
-                0.5*math.acos(a),
-                0.5*math.asin(a)
+                angle,
+                math.pi/2 - angle
             }
         end
     else
-        local Root = math.sqrt(v0^4 - G()*(G()*Dist^2 + 2*Dir.z*v0^2))
+        local Root = math.sqrt(v0^4 - G()*(G()*Dist^2 + 2*diff.z*v0^2))
         
-        if Steep == false then
+        if steep == false then
             return math.atan( (v0^2 - Root) / (G()*Dist) )
-        elseif Steep == true then
+        elseif steep == true then
             return math.atan( (v0^2 + Root) / (G()*Dist) )
         else
             return {
@@ -53,18 +52,38 @@ function PhysicsSolver.getLaunchAngle( v0, Dir, Steep )
 end
 
 
+-- Calculates the speed required for the projectile to hit a given target with a given launch angle
+-- TODO: doesnt seem to be possible
+--[[function PhysicsSolver.getInitialSpeed( theta, diff )
+    local Horizontal = Vector(diff.x, diff.y, 0)
+    local Dist = Horizontal:getLength()
+    
+    return 0.5*G()*
+end]]
+
+
+-- Calculates how far a projectile will travel given an initial speed and a launch angle. Assumes the target is on the same level as the shooter.
+function PhysicsSolver.getLaunchDistance( v0, theta )
+    return v0^2 * math.sin(2 * theta) / G()
+end
+
+
+-- Calculates the max range a projectile can go, given an initial speed. Assumes the target is on the same level as the shooter.
+function PhysicsSolver.getMaxRange( v0 )
+    return PhysicsSolver.getLaunchDistance( v0, math.pi/4 )
+end
+
 
 -- Calculates how long a projectile will stay in the air for, given an initial velocity v0, a direction Dir, and a launch angle Theta.
 -- If Dir is not specified, it will assume the Y difference is 0.
-
 function PhysicsSolver.getFlightTime( v0, Theta, Dir )
     local v0z = math.sin(Theta) * v0
     
     if not Dir or math.abs(Dir.y) < PhysicsSolver.Z_THRESHOLD then
-        return 2*v0z/-physenv.getGravity()
+        return 2*v0z/G()
     else
         local Root = math.sqrt(v0z^2 + 2*G()*Dir.z)
-        return (-v0z - Root) / physenv.getGravity()
+        return (-v0z - Root) / -G()
     end
 end
 
