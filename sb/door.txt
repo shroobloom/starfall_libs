@@ -18,12 +18,13 @@ Door.Instances = {}
 Door.HeldOpen = {}
 
 
+-- Deprecated, just use the strings, but this still exists for backwards compatibility when it used numbers.
 Door.ActuatorType = {
     -- Opens around a hinge, like a traditional door
-    ANGULAR = 1,
+    ANGULAR = "Angular",
     
     -- Opens along a linear axis, like a sliding door
-    LINEAR = 2
+    LINEAR = "Linear"
     
     --TODO: garage? idk itd be cool .w.
 }
@@ -31,8 +32,8 @@ Door.ActuatorType = {
 
 
 --[[ TODO ]]--
--- [ ] Don't create a second prop if Clip is true and ActuatorType is LINEAR (to save on CPU time) (also so its easier to close doors shutter)
--- [ ] Make doors solid and toolgunnable when closed
+-- [ ] (?) Don't create a second prop if Clip is true and ActuatorType is LINEAR (to save on CPU time) (also so its easier to close doors shutter)
+-- [ ] Native button library support, and removal of proxies
 
 
 
@@ -66,8 +67,19 @@ Door.SoundPresets = {
         Close = "doors/garage_stop1.wav",
         Move = "doors/garage_move1.wav"
     },
+    FENCE = {
+        Close = "doors/door_chainlink_close2.wav",
+        Move = "doors/door_chainlink_move1.wav",
+        Locked = "doors/handle_pushbar_open1.wav"
+    },
+    ELECTRIC = {
+        Close = "doors/doorstop4.wav",
+        Move = "doors/doormove2.wav",
+        Locked = "doors/garage_stop1.wav"
+    },
     
     -- Proxies; see Door::addProxy
+    -- Deprecated, refer to the Button library.
     BUTTON = {
         Interact = "buttons/button9.wav",
         Locked = "buttons/button2.wav"
@@ -145,7 +157,8 @@ local DoorDataStruct = {
     Clip = false,
     
     -- Sound table, you can set this to a Door.SoundPresets value or make your own table.
-    Sounds = Door.SoundPresets.WOOD,
+    -- Default: Door.SoundPresets.WOOD
+    Sounds = nil,
     
     -- A function that returns a boolean for whether or not a passed Player can open the door.
     -- Preset lock functions exist in Door.Locks.
@@ -154,12 +167,16 @@ local DoorDataStruct = {
     end,
     
     -- If set to true, the door will automatically close when the opener is far enough away.
-    AutoClose = true
+    AutoClose = true,
+    
+    -- The radius in which you need to leave to automatically shut the door.
+    AutoCloseRadius = 72
     
 }
 
 
 
+-- Spawns a prop; make sure you Spawner.Enqueue this.
 function Door:initialize( Prop, Data )
     
     Data = Data or {}
@@ -169,9 +186,12 @@ function Door:initialize( Prop, Data )
         self[i] = v
     end
     
-    self.Prop = Prop
+    -- to avoid applyDefaults treating Door.SoundPresets.WOOD as a struct instead of an enum
+    if not self.Sounds then
+        self.Sounds = Door.SoundPresets.WOOD
+    end
     
-    self.Initialized = false
+    self.Prop = Prop
     
     self.Brother = nil
     self.Busy = false
@@ -182,20 +202,16 @@ function Door:initialize( Prop, Data )
     
     self.Proxies = {}
     
-    Spawner.Enqueue(function()
-        local closedPos, closedAng = self:getHoloLocation( 0 )
-        
-        self.PhysHull = prop.create( closedPos, closedAng, Prop:getModel(), true )
-        self.PhysHull:doNotDuplicate()
-        self.PhysHull:setMass(50000)
-        self.PhysHull:setColor(Color(0,0,0,0))
-        
-        Door.FromProp[self.PhysHull] = self
-        
-        self.Initialized = true
-    end)
+    local closedPos, closedAng = self:getHoloLocation( 0 )
     
+    self.PhysHull = prop.create( closedPos, closedAng, Prop:getModel(), true )
+    self.PhysHull:doNotDuplicate()
+    self.PhysHull:setMass(50000)
+    self.PhysHull:setColor(Color(0,0,0,0))
+    --self.PhysHull:setParent(self.Prop)
+    --self.Prop:setParent(self.PhysHull)
     
+    Door.FromProp[self.PhysHull] = self
     
     self.Holo = Util.cloneAsHolo( Prop )
     
@@ -218,6 +234,7 @@ function Door:initialize( Prop, Data )
     end
     
     self.Holo:setParent( Prop )
+    
     
     Prop:setNoDraw(true)
     Prop:setSolid(false)
@@ -274,12 +291,21 @@ function Door:stopSound( ID )
     end
 end
 
---TODO: data table support
-function Door.double( Prop1, Prop2 )
-    local d1 = Door:new( Prop1 )
-    local d2 = Door:new( Prop2, {Flipped = true} )
+
+function Door.double( Prop1, Prop2, Properties )
+    
+    local Properties2 = Properties and table.copy(Properties) or {}
+    
+    if not Properties or Properties.ActuatorType == Door.ActuatorType.ANGULAR then
+        Properties2.Flipped = true
+    end
+    
+    local d1 = Door:new( Prop1, Properties )
+    local d2 = Door:new( Prop2, Properties2 )
     
     d1:link( d2 )
+    
+    return d1, d2
 end
 
 
@@ -292,27 +318,9 @@ end
 
 -- Sets up a large array of doors with given properties to apply to all of them
 function Door.quickSetup( Doors, MassProperties )
-    
-    local Created = {}
-    
-    local MirroredMassProperties = MassProperties and table.copy(MassProperties) or {}
-    MirroredMassProperties.Flipped = true
-    
-    for i,v in pairs(Doors) do
-        if Created[v] then continue end
-        
-        local adjacent = trace.line( v:getPos() - v:getRight()*40, v:getPos() - v:getRight()*50, v )
-        
-        Created[v] = Door:new( v, MassProperties )
-        
-        if isValid(adjacent.Entity) and adjacent.Entity:getModel() == v:getModel() then
-            Created[adjacent.Entity] = Door:new( adjacent.Entity, MirroredMassProperties )
-            Created[v]:link( Created[adjacent.Entity] )
-        end
-    end
-    
-    return Created
-    
+    return Door.advancedSetup( Doors, {
+        ["*"] = MassProperties
+    })
 end
 
 
@@ -320,15 +328,32 @@ end
 -- Sets up a large array of doors with given properties, indexed by model path (or * for a "default" property list)
 -- TODO: untested
 -- TODO: double door detection
+-- Deprecated (to be fixed)
 function Door.advancedSetup( Doors, PropertyByModel )
     
     local Created = {}
     
-    for i,v in pairs(Doors) do
-        local new = Door:new( v, PropertyByModel[v:getModel()] or PropertyByModel["*"] )
-        
-        Created[v] = new
-    end
+    Util.spawn(function()
+        for i,v in pairs(Doors) do
+            if Created[v] then continue end
+            Spawner.Await()
+            
+            local properties = PropertyByModel[v:getModel()] or PropertyByModel["*"]
+            local adjacent = trace.line( v:getPos() - v:getRight()*40, v:getPos() - v:getRight()*50, v )
+            
+            Created[v] = Door:new( v, properties )
+            
+            if isValid(adjacent.Entity) and adjacent.Entity:getModel() == v:getModel() then
+                Spawner.Await()
+                local mirroredProperties = properties and table.copy(properties) or {}
+                mirroredProperties.Flipped = true
+                
+                Created[adjacent.Entity] = Door:new( adjacent.Entity, mirroredProperties )
+                Created[v]:link( Created[adjacent.Entity] )
+            end
+        end
+    end)
+    
     
     return Created
     
@@ -340,7 +365,6 @@ end
 
 function Door:setOpen( Open, User )
     if self.Open == Open then return end
-    if not self.Initialized then return end
     
     self.Open = Open
     self.Busy = true
@@ -362,7 +386,7 @@ function Door:setOpen( Open, User )
             table.insert(Door.HeldOpen, self)
             
             self.Holder = User
-            self.HoldDistance = (User:getPos() - self.Prop:getPos()):getLength() + 48
+            self.HoldDistance = math.max(self.AutoCloseRadius, (User:getPos() - self.Prop:getPos()):getLength() + 48)
         end
     else
         self:emitSound("CloseStart")
@@ -388,11 +412,19 @@ end
 
 function Door:open()
     self:setOpen(true)
+    
+    if self.Brother then
+        self.Brother:setOpen(true)
+    end
 end
 
 
 function Door:close()
     self:setOpen(false)
+    
+    if self.Brother then
+        self.Brother:setOpen(false)
+    end
 end
 
 
@@ -476,10 +508,21 @@ end)
 
 -- Undoes all changes made to door props
 hook.add("Removed", "Door_RevertOnChipRemoved", function()
-    for i,v in pairs(Door.Instances) do
-        v.Prop:setSolid(true)
-        v.Prop:setNocollideAll(false)
-        v.Prop:setNoDraw(false)
+    if owner():isInBuild() then
+        for i,v in pairs(Door.Instances) do
+            v.Prop:setSolid(true)
+            v.Prop:setNocollideAll(false)
+            v.Prop:setNoDraw(false)
+            
+            for i,c in pairs(v.Prop:getChildren()) do
+                c:setSolid(true)
+                c:setNoDraw(false)
+            end
+        end
+    else
+        for i,v in pairs(Door.Instances) do
+            v:remove()
+        end
     end
 end)
 
@@ -498,7 +541,7 @@ hook.add("PlayerUse", "Door_Interact", function( play, e )
     local d = Door.FromProp[e] or Door.Proxies[e]
     local isProxy = Door.Proxies[e] ~= nil
     
-    if d and not d.Busy and d.Initialized then
+    if d and not d.Busy then
         
         if d:isLockedTo( play ) then
             if isProxy then
