@@ -706,6 +706,16 @@ end
 
 
 
+-- Returns the highest-most parented prop (in case of nested parenting)
+function Util.getGrandparent( ent )
+    if not isValid(ent:getParent()) then
+        return ent
+    end
+    
+    return Util.getGrandparent( ent:getParent() )
+end
+
+
 
 
 return Util
