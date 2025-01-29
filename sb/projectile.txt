@@ -173,13 +173,19 @@ end
 function Projectile:fire()
     assert(not self.Enabled, "Projectile has already been fired!")
     
+    -- Correct position/velocity
     if isValid(self:getParent()) then
         local Parent = self:getParent()
         local LocalPos = Parent:worldToLocal(self.Instance:getPos())
         self:setParent( nil )
         self.Instance:setPos(Parent:localToWorld(LocalPos))
         
-        self.Instance:setVelocity(Parent:getVelocity())
+        local Grandparent = Util.getGrandparent( Parent )
+        
+        timer.simple(0, function()
+            if not isValid(Grandparent) or not self:isValid() then return end
+            self.Instance:getPhysicsObject():addVelocity(Grandparent:getPhysicsObject():getVelocityAtPoint( self.Instance:getPos() ))
+        end)
     end
     
     if self:isFrozen() then
