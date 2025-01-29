@@ -14,6 +14,7 @@ function Debug.marker( id, pos, ang, model, scale, color )
         local marker = hologram.create( pos or Vector(), ang or Angle(), model or "models/hunter/blocks/cube05x05x05.mdl", scale or Vector(1,1,1) )
         marker:suppressEngineLighting( true )
         marker:setColor(color or Color(255,255,255))
+        marker:setMaterial("models/debug/debugwhite")
         
         Debug.Markers[id] = marker
     end
@@ -35,10 +36,34 @@ function Debug.marker( id, pos, ang, model, scale, color )
     end
     
     if color then
-        Debug.Markers[id]:setScale(color)
+        Debug.Markers[id]:setColor(color)
     end
     
     return Debug.Markers[id]
+end
+
+
+function Debug.line( id, p0, p1, color )
+    if not Debug.Markers[id] then
+        Debug.marker( id, Vector(), Angle(), "models/sprops/cylinders/size_5/cylinder_12x12.mdl" )
+    end
+    
+    if color then
+        Debug.Markers[id]:setColor(color)
+    end
+    
+    Debug.Markers[id]:setPos((p0 + p1)/2)
+    Debug.Markers[id]:setAngles((p1-p0):getAngle() + Angle(90,0,0))
+    Debug.Markers[id]:setSize( Vector(3,3,p0:getDistance(p1)) )
+    
+end
+
+
+function Debug.clear()
+    for i,v in pairs(Debug.Markers) do
+        v:remove()
+        Debug.Markers[i] = nil
+    end
 end
 
 
