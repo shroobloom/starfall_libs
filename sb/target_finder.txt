@@ -244,17 +244,19 @@ end
 function TargetFinder:setTarget( target )
     if self.Target == target then return end
     
-    if self.Target then
-        self:onTargetChanged( self.Target, target )
+    if isValid(self.Target) then
+        if isValid(target) then
+            self:onTargetChanged( self.Target, target )
+        else
+            self:onTargetLost( self.Target )
+        end
+    else
+        if isValid(target) then
+            self:onTargetFound( target )
+        end
     end
     
     self.Target = target
-    
-    if target then
-        self:onTargetFound( target )
-    else
-        self:onTargetLost( target )
-    end
 end
 
 
