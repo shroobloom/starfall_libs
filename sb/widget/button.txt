@@ -55,8 +55,17 @@ end
 
 
 function Button:draw( x, y, w, h )
-    local cX, cY = render.cursorPos()
-    local close = player():getEyePos():getDistance( render.getScreenEntity():getPos() ) < Button.INTERACTION_DISTANCE
+    local screen = render.getScreenEntity()
+    
+    local cX, cY
+    
+    if isValid(screen) then
+        cX, cY = render.cursorPos()
+    else
+        cX, cY = input.getCursorPos()
+    end
+    
+    local close = not isValid(screen) or player():getEyePos():getDistance( screen:getPos() ) < Button.INTERACTION_DISTANCE
     local hovering = close and cX and cX >= x and cY >= y and cX <= x+w and cY <= y+h
     local clicking = close and (input.isKeyDown(KEY.E) or input.isMouseDown(MOUSE.LEFT))
     
