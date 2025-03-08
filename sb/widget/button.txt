@@ -1,0 +1,137 @@
+--@name Button
+--@author shroobloom
+--@client
+--@include main.txt
+
+
+local Widget = require("main.txt")
+
+local Button = class("Button", Widget)
+Button.INTERACTION_DISTANCE = 128
+
+
+function Button:initialize()
+    Widget.initialize( self )
+    
+    self.Color = Color(0,0,0)
+    self.BorderColor = Color(255,255,255)
+    self.BorderWidth = 3
+    
+    self.Hovered = false
+    self.Pressed = false
+    self.State = false
+    
+    self.Toggle = false
+end
+
+
+function Button:setState( state )
+    self.State = state
+    
+    if state then
+        self:activate()
+    else
+        self:deactivate()
+    end
+end
+
+
+-- Can only be fired by the user pressing the button
+function Button:press()
+end
+
+function Button:release()
+end
+
+
+
+-- Fired whenever the state changes
+function Button:activate()
+end
+
+function Button:deactivate()
+end
+
+
+
+function Button:draw( x, y, w, h )
+    local cX, cY = render.cursorPos()
+    local close = player():getEyePos():getDistance( render.getScreenEntity():getPos() ) < Button.INTERACTION_DISTANCE
+    local hovering = close and cX and cX >= x and cY >= y and cX <= x+w and cY <= y+h
+    local clicking = close and (input.isKeyDown(KEY.E) or input.isMouseDown(MOUSE.LEFT))
+    
+    if hovering ~= self.Hovered then
+        self.Hovered = hovering
+    end
+    
+    if clicking ~= self.Pressed then
+        if hovering and clicking then
+            self.Pressed = true
+            
+            if not self.Toggle then
+                self:setState( true )
+                self:press()
+            end
+        elseif not clicking then
+            self.Pressed = false
+            
+            if self.Toggle then
+                self:setState( not self.State )
+                
+                if self.State then
+                    self:press()
+                else
+                    self:release()
+                end
+            else
+                self:setState( false )
+                self:release()
+            end
+        end
+    end
+    
+    self.Hovered = hovering
+    
+    --render.setColor( (self.Pressed or self.Hovered) and Widget.getSelectionColor( self.Color, clicking ) or self.Color )
+    render.setColor(self:getColor())
+    render.drawRect( x, y, w, h )
+    
+    --render.setColor( (self.Pressed or self.Hovered) and Widget.getSelectionColor( self.BorderColor, clicking ) or self.BorderColor  )
+    render.setColor(self:getColor( self.BorderColor ))
+    render.drawRectOutline( x, y, w, h, self.BorderWidth )
+    
+end
+
+
+
+function Button:getColor( baseColor )
+    baseColor = baseColor or self.Color
+    local hsv = baseColor:rgbToHSV()
+    local power = self.State and 0.2 or 0
+    
+    if self.Pressed then
+        power = power + 0.25
+    elseif self.Hovered then
+        power = power + 0.175
+    end
+    
+    
+    
+    if hsv[2] < 0.5 then
+        if hsv[3] < 0.5 then
+            hsv[3] = hsv[3] + power
+        else
+            hsv[3] = hsv[3] - power
+        end
+    else
+        hsv[2] = hsv[2] - power
+    end
+    
+    return hsv:hsvToRGB()
+end
+
+
+
+
+
+return Button

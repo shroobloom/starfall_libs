@@ -1,0 +1,38 @@
+--@name Widget
+--@author
+--@client
+
+
+
+local Widget = class("Widget")
+
+
+function Widget:initialize()
+end
+
+
+function Widget:draw( x, y )
+end
+
+
+function Widget.getSelectionColor( baseColor, pressed )
+    local hsv = baseColor:rgbToHSV()
+    local power = pressed and 0.4 or 0.2
+    
+    if hsv[2] < 0.5 then
+        if hsv[3] < 0.5 then
+            hsv[3] = hsv[3] + power
+        else
+            hsv[3] = hsv[3] - power
+        end
+    else
+        hsv[2] = hsv[2] - power
+    end
+    
+    return hsv:hsvToRGB()
+end
+
+
+
+
+return Widget
