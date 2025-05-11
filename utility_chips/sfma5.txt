@@ -117,8 +117,6 @@ ChatCommands:add({
         }
     },
     Run = function( user, Target )
-        if user ~= owner() then return end
-        
         if SERVER then
             SFMA.AFKWatch[Target] = true
         end
@@ -134,8 +132,6 @@ if owner():isAdmin() then
         Description = "Teleports you to the skybox.",
         Aliases = {"sb"},
         Run = function( user, Target )
-            if user ~= owner() then return end
-            
             local skyCamera = find.byClass("sky_camera")[1]
             
             if not skyCamera then
@@ -151,13 +147,46 @@ if owner():isAdmin() then
         Name = "spawn",
         Description = "Teleports you to spawn.",
         Run = function( user, Target )
-            if user ~= owner() then return end
-            
             owner():spawn()
             SFMA.chatLog("Teleported to spawn.")
         end
     })
 end
+
+
+
+
+local holosEnabled = false
+
+ChatCommands:add({
+    Name = "holos",
+    Description = "Sets or toggles holo ownership visibility.",
+    Aliases = {"h", "holo"},
+    Arguments = {
+        {
+            Name = "State",
+            Type = "bool",
+            Optional = true
+        }
+    },
+    Run = function( user, state )
+        local newState
+        
+        if state == nil then
+            newState = not holosEnabled
+        else
+            newState = state
+        end
+        
+        holosEnabled = newState
+        
+        concmd("sf_holograms_display_owners " .. (holosEnabled and "1" or "0"))
+        concmd("wire_holograms_display_owners " .. (holosEnabled and "1" or "0"))
+        
+        SFMA.chatLog("Hologram display is ", holosEnabled and Color(50,255,50) or Color(255,50,50), holosEnabled and "enabled" or "disabled", Color(255,255,255), ".")
+    end
+})
+
 
 
 
@@ -344,7 +373,7 @@ if SERVER then
         
         
         if not propspamAlertCooldown[propOwner] and propOwner.PS_SpawnCount >= 5 then
-            SFMA.chatLog(getColor(propOwner), getName(propOwner), Color(255,255,255), " is propspamming ", Color(255,255,144), ent:getModel(), Color(255,255,255), "!")
+            SFMA.chatLog(getColor(propOwner), getName(propOwner), Color(255,255,255), " is propspamming ", Color(255,255,144), ent:getModel(), Color(255,255,255), "! (" .. propOwner.PS_SpawnCount .. ")")
             SFMA.logOffender( propOwner, true )
             propspamAlertCooldown[propOwner] = true
             
@@ -366,7 +395,7 @@ if SERVER then
     }
     
     local function checkHolding( ent )
-        if not isValid(ent) then return table.removeByValue(trackedProppushProps, ent) end
+        if not isValid(ent) or not ent:isPlayerHolding() then return table.removeByValue(trackedProppushProps, ent) end
         if ent:getCollisionGroup() == COLLISION_GROUP.WORLD then return end
         if proppushAlertCooldown[ent.LastHolder] then return end
         

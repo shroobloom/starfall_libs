@@ -174,7 +174,7 @@ Micromanage:addOption({
 Micromanage:addOption({
     Name = "Freeze",
     Restrict = "Moderator",
-    Icon = "icon16/wand.png",
+    Icon = "icon16/stop.png",
     Draw = function( self, plr, buttonX, buttonY )
         Micromanage.drawOption( self.Icon, plr:isFrozen() and "Unfreeze" or "Freeze", false, buttonX, buttonY )
     end,
@@ -185,6 +185,15 @@ Micromanage:addOption({
         else
             Micromanage.useCommandOn( "ulx unfreeze", plr )
         end
+    end
+})
+
+Micromanage:addOption({
+    Name = "Freeze Props",
+    Restrict = "Moderator",
+    Icon = "icon16/wand.png",
+    Use = function( self, plr )
+        Micromanage.useCommandOn( "ulx freezeprops", plr )
     end
 })
 
@@ -287,7 +296,7 @@ timer.simple(2, function()
 end)]]
 
 
-
+--[[
 Micromanage:addOption({
     Name = "Ragdoll",
     Restrict = "Moderator",
@@ -298,7 +307,7 @@ Micromanage:addOption({
     Use = function( self, plr )
         Micromanage.useCommandOn( Micromanage.isRagdolled(plr) and "ulx unragdoll" or "ulx ragdoll", plr )
     end
-})
+})]]
 
 
 
@@ -425,13 +434,15 @@ enableHud( player(), true )
 
 Util.bindPress("c", function()
     if not isMicromanageAllowed() then return end
+    if not render.isHUDActive() then return end
     
     input.enableCursor(true)
 end)
 
 
 Util.bindRelease("c", function()
-    if not isMicromanageAllowed() then return end
+    --if not isMicromanageAllowed() then return end
+    if not render.isHUDActive() then return end
     
     input.enableCursor(false)
 end)
@@ -536,6 +547,14 @@ hook.add("drawhud", "Micromanage_HUD", function()
         
     end
     
+end)
+
+
+
+hook.add("PlayerDisconnect", "Micromanage_RemoveTargetOnDisconnect", function(_, _, plr)
+    if Micromanage.Selection == plr then
+        Micromanage.Selection = nil
+    end
 end)
 
 

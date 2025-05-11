@@ -17,8 +17,8 @@ local Util = require("sb/util.txt")
 
 
 --[[ CONFIG ]]--
-local BURST_SIZE = 10
-local BURST_INTERVAL = 0.15
+local BURST_SIZE = 4
+local BURST_INTERVAL = 0
 local GUIDED = false
 --[[ CONFIG END ]]--
 

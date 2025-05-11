@@ -1,8 +1,46 @@
 --@name Respawn At Deathpos
 --@author shrooblooms
 --@server
+--@include sb/chat_command.txt
+
 
 -- Forces your respawn point to be where you died (in buildmode)
+
+local RAD_COLOR = Color(255,44,20)
+local Mode = "normal"
+
+local ChatCommands = require("sb/chat_command.txt")
+
+
+ChatCommands:add({
+    Name = "rad",
+    Description = "Modifies Respawn At Deathpos",
+    Arguments = {
+        {
+            Name = "mode",
+            Type = "string",
+            Validator = ChatCommands.Validators.Choice("normal", "force", "off"),
+            Optional = true
+        }
+    },
+    Run = function( user, modeIn )
+        if user ~= owner() then return end
+        
+        if modeIn then
+            Mode = modeIn
+            user:chatPrint(RAD_COLOR, "[RAD] ", Color(255,255,255), "Set mode to ", Color(255,255,144), modeIn, Color(255,255,255), "!")
+        else
+            user:chatPrint(RAD_COLOR, "[RAD] ", Color(255,255,255), "Mode is currently ", Color(255,255,144), Mode, Color(255,255,255), ".")
+        end
+    end
+})
+
+hook.add("PlayerEnterPvp", "RAD_Reminder", function(ply)
+    if ply ~= owner() or Mode ~= "force" then return end
+    ply:chatPrint(RAD_COLOR, "[RAD] ", Color(255,100,100), "WARNING! RESPAWN AT DEATHPOS IS SET TO ", Color(255,255,144), "FORCE", Color(255,100,100), " MODE! Recommended mode ", Color(255,255,144), "off", Color(255,100,100), " to avoid admin aboos.")
+end)
+
+
 
 local DeathPos = nil
 local DeathAng = nil
@@ -23,7 +61,8 @@ end)
 hook.add("PlayerSpawn", "RAD_Spawn", function( ply )
     if ply ~= owner() then return end
     if not DeathPos then return end
-    if not owner():isInBuild() then return end
+    if Mode == "off" then return end
+    if Mode ~= "force" and not owner():isInBuild() then return end
     
     ply:setPos(DeathPos)
     ply:setEyeAngles(DeathAng)

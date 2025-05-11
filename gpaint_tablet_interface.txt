@@ -44,8 +44,12 @@ if CLIENT then
     local h2 = hologram.create(Vector(), Angle(), "models/hunter/blocks/cube025x025x025.mdl", Vector(0.5,2,0.5))
     h2:setColor(Color(255,0,0))
     
+    local other = false
+    
     hook.add("drawhud", "", function()
         if not isValid(Screen) then return end
+        other = not other
+        if not other then return end
         
         local ratio = Screen:obbSize().x / Screen:obbSize().y
         local x, y = input.getCursorPos()
@@ -58,8 +62,8 @@ if CLIENT then
         local targetAng = (targetPos - player():getEyePos()):getAngle()
         local _, diff = worldToLocal( Vector(), player():getEyeAngles(), Vector(), targetAng )
         
-        concmd("cl_yawspeed " .. math.clamp(diff.y, -20, 20) * 8)
-        concmd("cl_pitchspeed " .. math.clamp(diff.p, -20, 20) * 8)
+        concmd("cl_yawspeed " .. math.clamp(diff.y, -5, 5) * 30)
+        concmd("cl_pitchspeed " .. math.clamp(diff.p, -5, 5) * 30)
         
     end)
     
