@@ -1,0 +1,36 @@
+--@name Sentinel Transmitter v2
+--@author shroobloom
+--@server
+--@include sb/shared_table.txt
+
+
+
+local SharedTable = require("sb/shared_table.txt")
+local SharedPatrolNodes = SharedTable:new( "SentinelPatrolNodes" )
+
+
+local SentinelTransmitter = {}
+SentinelTransmitter.PatrolNodes = SharedPatrolNodes
+
+
+function SentinelTransmitter:addNode( ID, Data )
+    -- Search through my Next list to see if these nodes exist yet, if so, add myself to their Next list:
+    for i,v in pairs(Data.Next) do
+        local linkTo = SharedPatrolNodes[v]
+        if linkTo and not table.hasValue(linkTo.Next, ID) then
+            table.insert(linkTo.Next, ID)
+        end
+    end
+    
+    -- Search all patrol nodes to see if any have me as an adjacent node, if so, add them into my Next list:
+    for i,v in pairs(SharedPatrolNodes.Contents) do
+        if table.hasValue(v.Next, ID) and not table.hasValue(Data.Next, i) then
+            table.insert(Data.Next, i)
+        end
+    end
+    
+    SharedPatrolNodes[ID] = Data
+end
+
+
+return SentinelTransmitter

@@ -1,0 +1,41 @@
+--@name
+--@author
+--@shared
+--@include libs/camera.txt
+
+dofile "libs/camera.txt"
+
+
+WeightedCamera = class("WeightedCamera", Camera)
+
+
+function WeightedCamera:initialize()
+    
+    Camera.initialize( self )
+    
+    -- How high of a weight the camera angles has compared to the parent's angles
+    -- A weight of 0 will make it function like a wire eye pod
+    -- A weight of 0.5 will make it function like an LFS camera
+    -- A weight of 1 will make it function like an ordinary camera
+    self.Weight = 0.5
+    
+    -- The parent's "forward" direction. Can be "Forward", "Right", or "Up", and can optionally be prefixed with a - for negative.
+    self.Direction = "-Right"
+    
+end
+
+
+
+
+function WeightedCamera:getViewAngles()
+    local EyeAng = Camera.getAngles( self )
+    
+    local Prefix = string.sub( self.Direction, 1, 1 )
+    local Mul = Prefix == "-" and -1 or 1
+    local Left = (Prefix == "-" or Prefix == "+") and string.sub( self.Direction, 2 ) or string.sub( self.Direction, 1 )
+    
+    local ParentDir = (isValid(self.Parent) and self.Parent["get" .. Left]( self.Parent ) or Vector(-1,0,0)) * Mul
+    
+    return (EyeAng:getForward()*self.Weight + ParentDir * (1-self.Weight)):getAngle()
+end
+

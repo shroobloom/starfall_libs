@@ -1,0 +1,201 @@
+--@name HoloNPC Lib
+--@author
+--@shared
+--@include sb/spawner.txt
+
+
+
+local Spawner = require("sb/spawner.txt")
+
+
+local HoloNPC = class("HoloNPC")
+HoloNPC.Reference = {}
+HoloNPC.NonSleeping = {}
+
+
+HoloNPC.DialogSounds = {
+    male = {
+        "vo/npc/male01/busy02.wav",
+        "vo/npc/male01/hi01.wav",
+        "vo/npc/male01/hi02.wav",
+        "vo/npc/male01/heydoc01.wav",
+        "vo/npc/male01/heydoc02.wav",
+        "vo/npc/male01/pardonme01.wav",
+    },
+    female = {
+        "vo/npc/female01/busy02.wav",
+        "vo/npc/female01/hi01.wav",
+        "vo/npc/female01/hi02.wav",
+        "vo/npc/female01/heydoc01.wav",
+        "vo/npc/female01/heydoc02.wav",
+        "vo/npc/female01/pardonme01.wav",
+    }
+}
+
+
+HoloNPC.DefaultNames = {
+    male = "Man",
+    female = "Woman",
+    voidpunk = "Person"
+}
+
+
+
+function HoloNPC:initialize( Model, Pos, Ang )
+    
+    self.Instance = hologram.create( Pos, Ang, Model, Vector(1,1,1) )
+    self.Instance:setAnimation("idle_all_01")
+    self.Instance:setPose( "Smile", 0 ) --TODO: open the damn eyes
+    
+    -- assume their gender
+    self.Gender = string.find( Model, "female" ) and "female" or (string.find(Model, "male") and "male" or "voidpunk")
+    
+    self.Name = HoloNPC.DefaultNames[self.Gender]
+    self.NameColor = Color( 255,255,180 )
+    
+    self.SpeakingRange = 200
+    
+    -- use a prop to maximize performance
+    Spawner.Enqueue(function()
+        self.Hitbox = prop.create( Pos + Vector(0,0,self.Instance:obbSize().z/2), Ang + Angle(0,0,90), "models/hunter/blocks/cube05x2x05.mdl", true )
+        self.Hitbox:setColor(Color(0,0,0,0))
+        self.Hitbox:doNotDuplicate()
+        self.Hitbox:setSolid(false) --might mess some stuff up
+        self.Hitbox:setMass(50000)
+        self:setCollidable( false )
+        
+        self.Instance:setParent(self.Hitbox)
+        
+        HoloNPC.Reference[self.Hitbox] = self
+    end)
+    
+end
+
+
+function HoloNPC.getRandomModel()
+    local c = math.random()
+    
+    if c < 0.25 then
+        -- Male
+        return string.format("models/player/Group01/male_%02d.mdl", math.random(9)) 
+    elseif c < 0.5 then
+        -- Female
+        return string.format("models/player/Group01/female_%02d.mdl", math.random(6))
+    elseif c < 0.75 then
+        -- Male Medic
+        return string.format("models/player/Group03m/male_%02d.mdl", math.random(9))
+    else
+        -- Female Medic
+        return string.format("models/player/Group03m/female_%02d.mdl", math.random(6))
+    end
+    
+end
+
+
+function HoloNPC:setCollidable( State )
+    self.Hitbox:setNocollideAll( not State )
+end
+
+-- ideally either "male" or "female" but i wont judge if you put something else down
+function HoloNPC:setGender( Gender )
+    self.Gender = Gender
+end
+
+function HoloNPC:gesture( Gesture )
+    self.Instance:setAnimation("gesture_" .. Gesture)
+end
+
+
+
+function HoloNPC:say( Message, Gesture, Recipient )
+    if Gesture then self:gesture( Gesture ) end
+    
+    if self.Gender ~= "voidpunk" then
+        local Pool = HoloNPC.DialogSounds[self.Gender]
+        self.Instance:emitSound( Pool[math.random(#Pool)] )
+    end
+    
+    for i,v in pairs(Recipient and {Recipient} or find.allPlayers()) do
+        if Recipient or v:getPos():getDistanceSqr(self.Instance:getPos()) < self.SpeakingRange^2 then
+            v:chatPrint( Color(44,44,44), "[", self.NameColor, self.Name, Color(44,44,44), "]: ", Color(255,255,255), Message )
+        end
+    end
+end
+
+
+
+function HoloNPC:addProximitySensor( Radius, OnEnter, OnExit )
+    local rSquared = Radius*Radius
+    local Nearby = {}
+    
+    timer.create( "HoloNPC_ProxSensor_" .. self.Hitbox:entIndex(), 0.5, 0, function()
+        for i,v in pairs(find.allPlayers()) do
+            local WithinRadius = v:getPos():getDistanceSqr( self.Instance:getPos() ) < rSquared
+            
+            if WithinRadius and not Nearby[v] then
+                Nearby[v] = true
+                OnEnter(v)
+            elseif not WithinRadius and Nearby[v] then
+                Nearby[v] = nil
+                if OnExit then OnExit(v) end
+            end
+        end
+    end)
+    
+end
+
+
+
+function HoloNPC:lookAt( Entity )
+    self.LookingAt = Entity
+    
+    if not Entity then
+        HoloNPC.NonSleeping[self] = nil
+    else
+        HoloNPC.NonSleeping[self] = true
+    end
+end
+
+function HoloNPC:clearLookTarget( Previous )
+    if self.LookingAt == Previous or Previous == nil then
+        self:lookAt( nil )
+    end
+end
+
+
+
+if SERVER then
+    hook.add("KeyPress", "HoloNPC_DetectInteraction", function( ply, key )
+        if key ~= 32 then return end
+        
+        local e = ply:getEyeTrace().Entity
+        local npc = HoloNPC.Reference[e]
+        
+        if npc and npc.interact then
+            npc:interact(ply)
+        end
+    end)
+    
+    local throt = false
+    hook.add("Tick", "HoloNPC_Tick", function()
+        throt = not throt
+        if throt then return end
+        
+        for v in pairs(HoloNPC.NonSleeping) do
+            
+            if isValid(v.LookingAt) then
+                local diff = (v.LookingAt:getPos() - v.Instance:getPos()):getNormalized()
+                
+                -- do a proper ang subtraction because gmod doesnt know how
+                local headAng = diff:getAngle() - v.Instance:getAngles()
+                headAng.y = headAng.y + ((headAng.y > 180) and -360 or ((headAng.y < -180) and 360 or 0))
+                
+                v.Instance:setPose( "head_yaw", headAng.y )
+            end
+            
+        end
+    end)
+end
+
+
+return HoloNPC

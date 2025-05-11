@@ -151,7 +151,7 @@ end
 
 
 
-function CommandParser:cast( value, type )
+function CommandParser:cast( value, type, executor )
     local casted = nil
     
     if type == "string" then
@@ -168,7 +168,49 @@ function CommandParser:cast( value, type )
         if TRUTHY[value] then return true end
         if FALSY[value] then return false end
     elseif type == "player" then
-        return find.playersByName(value)[1]
+        if value:startsWith("$") then
+            return Util.getPlayerFromSteamID( value:sub(2) )
+        end
+        
+        return value == "^" and executor or find.playersByName(value)[1]
+    elseif type == "players" then
+        local queries = value:split(",") --TODO: allow spaces (i don't think split supports patterns...)
+        local output = {}
+        
+        for i,v in pairs(queries) do
+            local invert = false
+            if v:startsWith("!") then
+                invert = true
+                v = v:sub(2)
+            end
+            
+            local token = {}
+            
+            if v:startsWith("$") then
+                token = {Util.getPlayerFromSteamID( v:sub(2) )}
+            elseif v:startsWith("%") then
+                token = find.allPlayers(function(p)
+                    return p:getTeamName():lower() == v:sub(2):lower()
+                end)
+            elseif v == "^" and executor then
+                token = {executor}
+            elseif v == "*" then
+                token = find.allPlayers()
+            else
+                token = {find.playersByName(v)[1]}
+            end
+            
+            if invert then
+                token = Util.everyoneExcept(unpack(token))
+            end
+            
+            for i,v in pairs(token) do
+                if table.hasValue(output, v) then continue end
+                table.insert(output, v)
+            end
+        end
+        
+        return output
     end
     
     return casted
@@ -185,7 +227,7 @@ end
 -- 2. The parsed arguments for said command
 -- 3. The CommandParser.Error, if one was thrown
 
-function CommandParser:parse( text, subCommand )
+function CommandParser:parse( text, subCommand, executor )
     
     local argsIn = text:split(" ")
     
@@ -206,7 +248,7 @@ function CommandParser:parse( text, subCommand )
     end
     
     if #command.Subcommands > 0 then
-        local subcmd, subArgs, err = self:parse( table.concat(argsIn, " "), command )
+        local subcmd, subArgs, err = self:parse( table.concat(argsIn, " "), command, executor )
         if not subcmd and not command.Run then return nil, castedArgs, CommandParser.Error("Subcommand not found.") end
         if err then return nil, castedArgs, err end
         
@@ -231,7 +273,7 @@ function CommandParser:parse( text, subCommand )
         end
         
         if inp ~= nil then
-            local casted = self:cast( inp, argInfo.Type )
+            local casted = self:cast( inp, argInfo.Type, executor )
             
             if casted == nil then
                 return command, castedArgs, CommandParser.Error( "Could not cast " .. argInfo.Name .. " to " .. argInfo.Type .. "." )

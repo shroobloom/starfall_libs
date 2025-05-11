@@ -1,0 +1,267 @@
+--@name VOX-Announcer
+--@author
+--@shared
+--@include sb/util.txt
+
+local Util = require("sb/util.txt")
+
+
+
+
+local vox = {}
+vox.Proxy = nil
+vox.Queue = {}
+vox.PATH = "unknown/delta/announcer/"
+vox.PATH_EXT = "unknown/delta/announcer_extended/"
+
+
+-- A list of random replacement sounds to play in case HL:S is not mounted.
+vox.GenericReplacements = {
+    "npc/overwatch/cityvoice/f_confirmcivilstatus_1_spkr.wav",
+    "npc/overwatch/cityvoice/f_evasionbehavior_2_spkr.wav",
+    "npc/overwatch/cityvoice/f_protectionresponse_1_spkr.wav",
+    "npc/overwatch/cityvoice/f_protectionresponse_4_spkr.wav",
+    "npc/overwatch/cityvoice/f_protectionresponse_5_spkr.wav"
+}
+
+local nums = {
+    [0] = "zero", [1] = "one", [2] = "two", [3] = "three", [4] = "four",
+    [5] = "five", [6] = "six", [7] = "seven", [8] = "eight", [9] = "nine"
+}
+
+local augments = {
+    ss = true, sz = true, ing = true, ed = true, er = true, un = true, th = true, re = true, ly = true
+}
+
+
+function vox.splitSounds( message )
+    message = message:lower()
+    message = message:gsub(",", " _comma")
+    message = message:gsub("%.", " _period")
+    
+    local words = message:split(" ")
+    
+    for i,v in pairs(words) do
+        if tonumber(v) and nums[tonumber(v)] then
+            words[i] = nums[tonumber(v)]
+        end
+    end
+    
+    return words
+end
+
+
+
+local function getEmitter()
+    return isValid(vox.Proxy) and vox.Proxy or chip()
+end
+
+
+-- Proxy networking
+function vox.setProxy( Proxy )
+    vox.Proxy = Proxy
+    
+    if SERVER then
+        net.start("vox_setProxy")
+            net.writeEntity( Proxy )
+        net.send()
+    end
+end
+
+
+function vox.getSound( word )
+    return sound.exists(vox.PATH .. word .. ".wav") and vox.PATH .. word .. ".wav" or vox.PATH_EXT .. word .. ".wav"
+end
+
+
+function vox.hasResourcesMounted()
+    return sound.exists(vox.PATH .. "_period.wav")
+end
+
+
+if CLIENT then
+    net.receive("vox_setProxy", function()
+        net.readEntity(vox.setProxy)
+    end)
+end
+
+
+
+
+-- Type is either:
+-- - INFO: For unimportant notifications/status updates.
+-- - ALERT: For concerning information, but not necessarily dangerous.
+-- - CRITICAL: Requiring urgent attention, catastrophe or possibility for great damage imminent.
+
+-- Message must contain only words from vox/*.wav. Case-insensitive.
+function vox.announce(type, message)
+    if SERVER then
+        net.start("vox_announce")
+            net.writeString(type)
+            net.writeString(message)
+        net.send()
+    else
+        table.insert(vox.Queue, {Type = type, Message = message})
+        
+        if not vox.Playing then
+            coroutine.wrap(vox.playNextInQueue)()
+        end
+    end
+end
+
+
+-- Empties the queue
+function vox.clearQueue()
+    if SERVER then
+        net.start("vox_clearQueue")
+        net.send()
+    else
+        table.empty(vox.Queue)
+    end
+end
+
+
+
+if SERVER then
+    
+    hook.add("ClientInitialized", "vox_initialNetwork", function( p )
+        if not isValid(vox.Proxy) then return end
+        
+        net.start("vox_setProxy")
+            net.writeEntity( vox.Proxy )
+        net.send( p )
+    end)
+    
+    
+    -- You can also call the remote hook with header "vox_announce" and a Type and Message to cause this chip to call vox.announce.
+    --[[hook.add("remote", "vox_externalAnnouncement", function( Sender, Owner, Header, Type, Message )
+        if Owner ~= owner() then return end
+        if Header ~= "vox_announce" then return end
+        
+        vox.announce( Type, Message )
+    end)]]
+    
+    -- Two-way channel
+    Util.bindRemote("vox_announce", vox.announce)
+    
+end
+
+
+
+if CLIENT then
+    
+    -- more reliable than isMounted because for some reason you can disable chips checking your mounted games.
+    --if sound.duration("vox/_period.wav") == 0 then error("You must have Half-Life: Source mounted.") end
+    
+    local TypeSounds = {
+        Info = {
+            Sound = "buttons/bell1.wav",
+            Delay = 1.25
+        },
+        Important = {
+            Sound = "vox/buzwarn.wav",
+            Delay = 1
+        }
+    }
+    
+    
+    
+    if not hasPermission("entities.emitSound", chip()) then
+        setupPermissionRequest({"entities.emitSound"}, "To hear announcements, you will need this permission enabled.", true)
+    end
+    
+    
+    
+    vox.Playing = false
+    
+    function vox.playNextInQueue()
+        
+        vox.Playing = true
+        
+        --local letters = 0
+        --local seconds = 0
+        
+        local Current = table.remove( vox.Queue, 1 )
+        
+        local words = vox.splitSounds( Current.Message )
+        
+        local PingData = TypeSounds[Current.Type]
+        
+        local Ping = sound.create(getEmitter(), PingData.Sound)
+        Ping:setSoundLevel( 90 )
+        Ping:play()
+        
+        Util.fireRemote("vox_announce", Current.Type, Current.Message)
+        hook.run("vox_announce", Current.Type, Current.Message)
+        
+        Util.wait(PingData.Delay)
+        
+        if vox.hasResourcesMounted() then
+            for i=1, #words do
+                local soundPath = vox.getSound( words[i] )
+                
+                getEmitter():emitSound(soundPath, 90)
+                
+                --[[if words[i] ~= "_period" and words[i] ~= "_comma" then
+                    letters=letters+words[i]:len()+1 --space
+                    seconds=seconds+sound.duration( soundPath )
+                end]]
+                
+                if words[i+1] and augments[words[i+1]] then
+                    Util.wait( sound.duration( soundPath ) - 0.15 )
+                else
+                    Util.wait( sound.duration( soundPath ) )
+                end
+                
+            end
+        else
+            local soundPath = vox.GenericReplacements[math.random(#vox.GenericReplacements)]
+            
+            getEmitter():emitSound(soundPath, 90)
+            Util.wait( sound.duration( soundPath ))
+            getEmitter():stopSound(soundPath, 90)
+        end
+        
+        
+        if Ping:isPlaying() then
+            Ping:stop()
+            Ping:destroy() --TODO: verify this doesnt cancel out the fade-out effect (i dont think there even is one?)
+        end
+        
+        
+        
+        if #vox.Queue == 0 or vox.Queue[1].Type ~= Current.Type then
+            getEmitter():emitSound("npc/turret_floor/click1.wav", 90)
+            getEmitter():emitSound("buttons/button5.wav", 90)
+        end
+        
+        if #vox.Queue > 0 then
+            coroutine.wrap( vox.playNextInQueue )()
+        else
+            vox.Playing = false
+        end
+        
+        --print(letters/seconds)
+        
+    end
+    
+    
+    net.receive("vox_announce", function()
+        if not hasPermission("entities.emitSound", chip()) then return end
+        
+        local Type = net.readString()
+        local Message = net.readString()
+        
+        vox.announce( Type, Message )
+    end)
+    
+    net.receive("vox_clearQueue", vox.clearQueue)
+    
+end
+
+
+
+
+return vox
+
+

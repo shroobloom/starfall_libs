@@ -3,15 +3,18 @@
 --@server
 --@include sb/util.txt
 --@include sb/spawner.txt
+--@include sb/precacher.txt
 
 
 
 local Util = require("sb/util.txt")
 local Spawner = require("sb/spawner.txt")
+local Precacher = require("sb/precacher.txt")
 
 
 local Projectile = class("Projectile")
 Projectile.Instances = {}
+Projectile.ExplosivePrecacher = Precacher:new( "models/props_c17/oildrum001_explosive.mdl", 0 ) --Change this object's "Size" variable to precache explosives
 
 
 
@@ -23,10 +26,12 @@ Projectile.Instances = {}
 -- [X] Projectiles should allow for multiple explosives to detonate
 -- [ ] Sometimes guidance screws up and causes the missile to loop around. this is not a quirk of wobble, its likely only when its going straight down and has to change yaw
 -- [~] Fix delta silo to not be explosion ratelimited
+-- [ ] Particles (for rocket trails) (also ensure they have a clientmain or something?) (also make it possible to load existing particle systems?)
+
 
 
 local PropertyDefaults = {
-    Model = "models/props_c17/canister02a.mdl",
+    Model = "models/props_c17/oildrum001_explosive.mdl",
     ModelAngle = Angle(90,0,0),
     
     Enabled = true,
@@ -49,7 +54,24 @@ local PropertyDefaults = {
     
     Gravity = true,
     
-    ExplosionEffect = "lfs_missile_explosion",
+    -- Explosion effect
+    -- Change the properties to know
+    ExplosionEffect = {
+        Name = "glide_explosion",
+        Scale = 1,
+        Radius = 1,
+        Magnitude = 1
+    },
+    
+    -- Override to change behaviour
+    playExplosionEffect = function( self )
+        local ef = effect.create()
+        ef:setOrigin( self.Instance:getPos() )
+        ef:setScale( self.ExplosionEffect.Scale )
+        ef:setRadius( self.ExplosionEffect.Radius )
+        ef:setMagnitude( self.ExplosionEffect.Magnitude )
+        ef:play( self.ExplosionEffect.Name )
+    end,
     
     Trail = {
         Material = "", --trails/smoke
@@ -60,11 +82,13 @@ local PropertyDefaults = {
         Additive = false
     },
     
+    -- Causes the projectile to spiral as it flies through the air. (TODO: rename?)
     Wobble = {
         Speed = 0,
         Power = 0
     },
     
+    -- Homing properties (TODO: UNIMPLEMENTED)
     Homing = {
         TurnForce = 0 --TODO: implement
     },
@@ -80,7 +104,45 @@ local PropertyDefaults = {
     Lifetime = 30,
     
     -- The number of supplementary explosives to spawn
-    ExplosionPower = 0
+    -- NOTE: Allow some time after creating the projectile for these explosives to be created
+    -- You may check if all supplementary explosives are spawned by reading "Ready"
+    ExplosionPower = 0,
+    
+    -- The number of times this projectile can bounce
+    MaxBounce = 0,
+    
+    -- The max angle this projectile can bounce from, 0-90, 0 = perpendicular, 90 = parallel
+    -- TODO: Unimplemented
+    MaxBounceAngle = 90,
+    
+    -- Override to determine whether or not the projectile should bounce
+    shouldBounce = function( self, hit )
+        if self.BouncesLeft == 0 then return false end
+        
+        local angle = 0 --TODO
+        
+        return true
+    end,
+    
+    -- Override to replace the default bounce and impact behaviour.
+    onCollide = function( self, hit )
+        if self:shouldBounce( hit ) then
+            self.BouncesLeft = self.BouncesLeft - 1
+            
+            local curVel = hit.OurOldVelocity --self.Instance:getVelocity()
+            local reflected = curVel - 2 * (curVel:dot(hit.HitNormal)) * hit.HitNormal
+            
+            self.Instance:setAngles( reflected:getAngle() - self.ModelAngle )
+            self.Instance:getPhysicsObject():setVelocity( reflected  )
+            self.Instance:setAngleVelocity( Vector() )
+            
+            return
+        end
+        
+        --if true then return end
+        
+        self:detonate( nil, hit )
+    end
 }
 
 
@@ -102,6 +164,11 @@ function Projectile:initialize( pos, ang, properties )
     self.Instance:doNotDuplicate()
     self.Instance:setMass(1) --just so impacts dont kill
     
+    self.Instance:setPhysMaterial("gmod_bouncy") --TODO: test
+    
+    --local obbSize = self.Instance:obbSize()
+    --self.Instance:enableSphere( true, math.max(obbSize.x, obbSize.y, obbSize.z)/2 )
+    
     self.Instance.Projectile = self
     
     self.Detonated = false
@@ -111,6 +178,8 @@ function Projectile:initialize( pos, ang, properties )
     self.WobbleSeed = math.random()*math.pi
     self.WobbleDir = math.sign(math.random()-0.5)
     self.Ready = self.ExplosionPower == 0
+    
+    self.BouncesLeft = properties.MaxBounce
     
     if properties.Enabled then
         self.Enabled = false
@@ -124,34 +193,14 @@ function Projectile:initialize( pos, ang, properties )
     
     if self.ExplosionPower > 0 then
         Util.spawn(function()
-            local toSpawn = self.ExplosionPower
-            
-            while toSpawn > 0 do
-                Spawner.await()
-                if not self:isValid() then break end
-                
-                local s,e = pcall(function()
-                    -- can't use self.Instance:getModel() because of the explosion ratelimiter, which is 5x more lenient on explosive
-                    -- barrels for some reason, so thats what we'll use (at the cost of a bit of AoE)
-                    local sup = prop.create( Vector(), Angle(), "models/props_c17/oildrum001_explosive.mdl", true )
-                    sup:setNoDraw(true)
-                    sup:setSolid(false)
-                    sup:setNocollideAll(true)
-                    sup:setCollisionGroup(COLLISION_GROUP.IN_VEHICLE)
-                    sup:doNotDuplicate()
-                    
-                    table.insert(self.SupplementaryExplosives, sup)
-                    
-                    toSpawn = toSpawn - 1
-                end)
-                
-                if not s then
-                    if owner():isInBuild() then error(e) end
-                    Util.wait(0.1)
-                end
-            end
+            Projectile.ExplosivePrecacher:takePropsAsync( self.ExplosionPower, function( ent )
+                if not self:isValid() then return true end
+                table.insert(self.SupplementaryExplosives, ent)
+            end)
             
             self.Ready = true
+            
+            print("precache async done, total props: ", #self.SupplementaryExplosives)
             
             if self.AwaitingSupplementaryThread then
                 coroutine.resume(self.AwaitingSupplementaryThread)
@@ -217,7 +266,7 @@ function Projectile:fire()
     
     self.Instance:addCollisionListener(function( hit )
         if self.Detonated or hit.HitEntity.Projectile then return end
-        self:detonate( nil, hit )
+        self:onCollide( hit )
     end)
 end
 
@@ -439,10 +488,8 @@ function Projectile:detonate( dontBreak, collision )
         taggedBreak( self.Instance, hitUnfrozenProp )
     end
     
-    if self.ExplosionEffect ~= "" and effect.canCreate() then
-        local ef = effect.create()
-        ef:setOrigin(self.Instance:getPos())
-        ef:play(self.ExplosionEffect)
+    if effect.canCreate() then
+        self:playExplosionEffect()
     end
     
     table.removeByValue(Projectile.Instances, self)

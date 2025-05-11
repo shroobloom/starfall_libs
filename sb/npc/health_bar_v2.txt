@@ -1,0 +1,192 @@
+--@name Health Bar v2
+--@author shroobloom
+--@shared
+--@include sb/rt_sprite.txt
+
+
+
+
+
+
+if SERVER then
+    --TODO: also send health in case it's not an NPC (and replace the npc/nextbot check with an IsChipNPC check)
+    hook.add("PostNPCTakeDamage", "npc_healthBar2_networkDamage", function( victim, attacker, inflictor, amount )
+        --if not isValid(victim) or (not victim:isNPC() or not victim:isNextBot()) then return end
+        --if not isValid(victim) or not victim.IsChipNPC then return end
+        --if not isValid(attacker) or not attacker:isPlayer() then return end
+        
+        net.start("npc_healthBar2_damage")
+            net.writeEntity(victim)
+            net.writeEntity(attacker)
+            
+            if (not victim:isNPC() and not victim:isNextBot()) or victim:getClass() == "npc_barnacle" then --engine bug: barnacle health isn't networked
+                net.writeFloat(victim:isNPC() and victim:getHealth() or victim.Health)
+                net.writeFloat(victim:isNPC() and victim:getMaxHealth() or victim.MaxHealth)
+            end
+        net.sendPVS(victim:getPos(), true)
+    end)
+    
+    --[[timer.simple(1, function()
+        net.start("npc_healthBar2_damage")
+        net.writeEntity(chip())
+        net.writeFloat( 60 )
+        net.writeFloat( 100 )
+        net.send(owner())
+    end)]]
+end
+
+
+
+if CLIENT then
+    local RTSprite = require("sb/rt_sprite.txt")
+    local HealthBars = {}
+    
+    local HealthBar = class("HealthBar", RTSprite)
+    
+    function HealthBar:initialize( ent )
+        RTSprite.initialize( self )
+        
+        -- Removed Health and MaxHealth initializers
+        
+        self.HealthPercentLerped = 1
+        self.LastPercent = 1
+        self.DecayLevel = 1
+        self.LastDamage = timer.curtime()
+        
+        self:setIgnoreZ( true )
+        self:setParent( ent )
+    end
+    
+    function HealthBar:getHealth()
+        return self.Health or self.Parent:getHealth()
+        
+        --[[if self.Parent:isNPC() or self.Parent:isNextBot() then
+            return self.Parent:getHealth()
+        end
+        
+        return self.Health]]
+    end
+    
+    function HealthBar:getMaxHealth()
+        return self.MaxHealth or self.Parent:getMaxHealth()
+        
+        --[[if self.Parent:isNPC() or self.Parent:isNextBot() then
+            return self.Parent:getMaxHealth()
+        end
+        
+        return self.MaxHealth]]
+    end
+    
+    function HealthBar:getPercent()
+        return self:getHealth() / self:getMaxHealth()
+    end
+    
+    -- multiplier
+    function HealthBar:getLength()
+        return math.sqrt(self:getMaxHealth()) * 0.15
+    end
+    
+    function HealthBar:getLife()
+        return (timer.curtime() - self.LastDamage)/3
+    end
+    
+    function HealthBar:render()
+        
+        local length = self:getLength()
+        local pc = self:getPercent()
+        --self.HealthPercentLerped = math.lerp( timer.frametime()*2, self.HealthPercentLerped, pc )
+        
+        if pc ~= self.LastPercent then
+            --local hpDiff = (self.LastPercent - pc) * self:getMaxHealth()
+            
+            --if hpDiff > 1 then --mostly to avoid burning from preventing decay
+                self.LastDamage = timer.curtime()
+            --end
+            
+            self.LastPercent = pc
+        end
+        
+        if self.DecayLevel < pc then
+            self.DecayLevel = pc
+        end
+        
+        render.clear(Color(0,0,0,0))
+        
+        render.setColor(Color(0,0,0,144))
+        local h = 50/length
+        render.drawRect( 8, 512 - h/2, 1008, h )
+        
+        if pc ~= self.DecayLevel or pc == 0 then
+            render.setColor(Color(255,144,0))
+            render.drawRect( 8, 512 - h/2, 1008 * self.DecayLevel, h)
+            
+            local shake = pc == 0 and 1 or math.clamp((self.DecayLevel - pc)*18, 0, 1)
+            
+            self:setPos(Vector(math.random()-0.5, math.random()-0.5, math.random()-0.5) * 2 * shake)
+            self:setScale( length )
+            
+            if timer.curtime() - self.LastDamage > 0.25 then
+                self.DecayLevel = math.lerp(0.035, self.DecayLevel, pc)
+                
+                if math.abs(self.DecayLevel - pc) < 0.0001 then
+                    self.DecayLevel = pc
+                end
+            end
+        end
+        
+        
+        render.setColor(Color(255,0,0))
+        render.drawRect( 8, 512 - h/2, 1008 * pc, h )
+        
+        local life = self:getLife()
+        local fade = math.clamp((life-0.8)*5, 0, 1)
+        self.Holo:setColor(Color(255,255,255,(1-fade)*255))
+        
+    end
+    
+    
+    hook.add("EntityRemoved", "npc_healthBar2_removeDeadHealthbars", function(ent)
+        if not HealthBars[ent] then return end
+        
+        HealthBars[ent]:remove()
+        HealthBars[ent] = nil
+    end)
+    
+    timer.create("npc_healthBar2_removeOldHealthbars", 0.25, 0, function()
+        for ent,v in pairs(HealthBars) do
+            if v:getLife() < 1 then continue end
+            
+            v:remove()
+            HealthBars[ent] = nil
+        end
+    end)
+    
+    --TODO: resort render priority when a new health bar is created so it doesn't get delayed
+    net.receive("npc_healthBar2_damage", function()
+        local e = net.readEntity()
+        if not isValid(e) then return end
+        
+        local attacker = net.readEntity()
+        
+        local hp = net.readFloat()
+        local hpMax = net.readFloat()
+        
+        if HealthBars[e] then
+            HealthBars[e].Health = hp
+            HealthBars[e].MaxHealth = hpMax
+        elseif attacker == player() then
+            local pc = hp/hpMax
+            
+            local new = HealthBar:new( e )
+            new.Health = hp
+            new.MaxHealth = hpMax
+            new.HealthPercentLerped = pc
+            new.LastPercent = pc
+            new.DecayLevel = pc
+            
+            new:setScale( new:getLength() )
+            
+            HealthBars[e] = new
+        end
+    end)
+end

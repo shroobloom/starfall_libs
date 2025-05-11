@@ -1,0 +1,47 @@
+--@name AngularPhysicsSimulator
+--@author shroobloom
+--@shared
+
+
+
+local AngularPhysicsSimulator = class("AngularPhysicsSimulator")
+
+
+function AngularPhysicsSimulator:initialize()
+    self.Constant = 1
+    self.Damper = 1
+    
+    self.Angles = Angle()
+    self.TargetAngles = Angle()
+    self.AngleVelocity = Angle()
+end
+
+
+function AngularPhysicsSimulator:think( dt )
+    dt = dt or timer.frametime()
+    
+    local angDiff = self:getAngDiff()
+    
+    self.AngDiff = angDiff
+    self.AngleVelocity = self.AngleVelocity*(1-self.Damper*dt) + angDiff*self.Constant*dt
+    self.Angles = self.Angles + self.AngleVelocity * dt
+end
+
+
+function AngularPhysicsSimulator:isRighted( yawThreshold, pitchThreshold )
+    yawThreshold = yawThreshold or 5
+    pitchThreshold = pitchThreshold or yawThreshold
+    
+    return math.abs(self.AngDiff.p) < pitchThreshold and math.abs(self.AngDiff.y) < yawThreshold
+end
+
+
+function AngularPhysicsSimulator:getAngDiff()
+    local _, angDiff = worldToLocal( Vector(), self.TargetAngles, Vector(), self.Angles )
+    angDiff.r = 0
+    
+    return angDiff
+end
+
+
+return AngularPhysicsSimulator

@@ -23,8 +23,6 @@ function Spawner.enqueue( Callback )
     TryEmptyQueue()
 end
 
--- Deprecated
-Spawner.Enqueue = Spawner.enqueue
 
 function Spawner.await()
     if prop.canSpawn() then return end
@@ -38,8 +36,6 @@ function Spawner.await()
     coroutine.yield(cr)
 end
 
--- Deprecated
-Spawner.Await = Spawner.await
 
 
 timer.create("Spawner_Queue", 1/prop.spawnRate(), 0, TryEmptyQueue)

@@ -1,0 +1,206 @@
+--@name Button
+--@author shroobloom
+--@server
+--@include sb/util.txt
+
+
+
+local Util = require("sb/util.txt")
+
+
+
+local Button = class("Button")
+Button.FromProp = {}
+Button.Instances = {}
+
+
+-- Press, Release, Hold
+Button.SoundPresets = {
+    DIGITAL = {
+        Press = "buttons/button9.wav",
+        Release = "buttons/lightswitch2.wav",
+        Locked = "buttons/button2.wav",
+    }
+}
+
+
+-- struct
+local ButtonData = {
+    Sounds = Button.SoundPresets.DIGITAL,
+    
+    Toggle = false,
+    UseHolo = true,
+    
+    Lock = Util.isInMySquad,
+    Activate = function( self ) end,
+    Deactivate = function( self ) end,
+    StateChanged = function( self, state ) end,
+    
+}
+
+
+function Button:initialize( Prop, Data )
+    
+    Data = Data or {}
+    Util.applyDefaults( Data, ButtonData )
+    
+    for i,v in pairs(Data) do
+        self[i] = v
+    end
+    
+    self.Prop = Prop
+    
+    self.State = false
+    
+    if self.UseHolo then
+        self.Holo = Util.cloneAsHolo( self.Prop )
+        self.Holo:setParent( self.Prop )
+        
+        self.Prop:setNoDraw(true)
+    end
+    
+    Button.FromProp[self.Prop] = self
+    table.insert(Button.Instances, self)
+    
+    self.LastFail = 0
+    self.SwitchLerp = 0
+    
+end
+
+
+function Button:setState( state )
+    if self.State == state then return end
+    
+    self.State = state
+    
+    self:emitSound( state and "Press" or "Release" )
+    
+    if self.Holo then
+        local anim = Button.AnimLookup[self.Holo:getModel()]
+        
+        if anim then
+            self.Holo:setAnimation(anim[state and 1 or 2])
+        end
+    end
+    
+    if state then
+        self:emitSound( "Hold" )
+        self.Activate()
+    else
+        self:stopSound( "Hold" )
+        self.Deactivate()
+    end
+    
+    self.StateChanged( state )
+end
+
+
+
+function Button:emitSound( ID )
+    if self.Sounds[ID] then
+        self.Prop:emitSound(self.Sounds[ID])
+    end
+end
+
+function Button:stopSound( ID )
+    if self.Sounds[ID] then
+        self.Prop:stopSound(self.Sounds[ID])
+    end
+end
+
+
+function Button:remove()
+    Button.FromProp[self.Prop] = nil
+    table.removeByValue(Button.Instances, self)
+end
+
+
+function Button:think()
+    local Goal = self.State and 1 or 0
+    
+    self.SwitchLerp = math.approach( self.SwitchLerp, Goal, timer.frametime()*10 )
+    
+    if self.Holo then
+        self.Holo:setPose("switch", Util.smoothCurve( self.SwitchLerp ))
+    end
+end
+
+
+
+Button.AnimLookup = {
+    -- ["model"] = { on_anim, off_anim }
+    ["models/props/switch001.mdl"] = { 2, 1 },
+    ["models/props_combine/combinebutton.mdl"] = { 3, 2 },
+    ["models/props_mining/control_lever01.mdl"] = { 1, 4 },
+    ["models/props_mining/freightelevatorbutton01.mdl"] = { 1, 2 },
+    ["models/props_mining/freightelevatorbutton02.mdl"] = { 1, 2 },
+    ["models/props_mining/switch01.mdl"] = { 1, 2 },
+    ["models/bull/buttons/rocker_switch.mdl"] = { 1, 2 },
+    ["models/bull/buttons/toggle_switch.mdl"] = { 1, 2 },
+    ["models/bull/buttons/key_switch.mdl"] = { 1, 2 },
+    ["models/props_mining/switch_updown01.mdl"] = { 2, 3 },
+}
+
+
+
+
+
+hook.add("KeyPress", "Button_Interact", function( plr, key )
+    if key ~= IN_KEY.USE then return end
+    
+    local e = plr:getEyeTrace().Entity
+    local bt = Button.FromProp[e]
+    if not bt then return end
+    
+    if plr:getEyeTrace().HitPos:getDistance(plr:getEyePos()) > 100 then return end
+    
+    if bt.Lock and not bt.Lock(plr) then
+        if (timer.curtime() - bt.LastFail) > 0.5 then
+            bt:emitSound("Locked")
+            bt.LastFail = timer.curtime()
+        end
+        
+        return
+    end
+    
+    if bt.Toggle then
+        bt:setState( not bt.State )
+    else
+        bt:setState( true )
+        plr.Holding = bt
+    end
+end)
+
+
+hook.add("KeyRelease", "Button_Interact", function( plr, key )
+    if key ~= IN_KEY.USE then return end
+    if not plr.Holding then return end
+    
+    plr.Holding:setState( false )
+    plr.Holding = nil
+end)
+
+
+hook.add("think", "Button_Tick", function()
+    for i,self in pairs(Button.Instances) do
+        self:think()
+    end
+end)
+
+
+hook.add("EntityRemoved", "Button_CleanupOnRemove", function( ent )
+    local bt = Button.FromProp[ent]
+    if not bt then return end
+    
+    bt:remove()
+end)
+
+
+--[[
+local p = prop.create( chip():getPos() + Vector(0,0,40), Angle(90,0,0), "models/maxofs2d/button_03.mdl", true )
+local test = Button:new( p, {
+    Toggle = false
+})]]
+
+
+return Button

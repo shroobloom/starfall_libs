@@ -52,6 +52,10 @@ function RTSprite:initialize()
     end]]
     
     self.ScalingMode = RTSprite.ScalingMode.WORLD
+    
+    if CLIENT then
+        RTSprite.Reorder()
+    end
 end
 
 
@@ -147,38 +151,7 @@ end
 
 if CLIENT then
     
-    timer.create("sb_rtsprite_reorder", 1, 0, function()
-        --[[
-        local split = {}
-        local renderPriorities = {}
-        
-        for i,v in pairs(RTSprite.RenderOrder) do
-            if not renderPriorities[v.RenderPriority] then
-                local idx = table.insert(split, {})
-                renderPriorities[v.RenderPriority] = idx
-            end
-            
-            table.insert(split[renderPriorities[v.RenderPriority] ], v)
-        end
-        ]]
-        
-        --[[local newOrder = {}
-        
-        
-        for i=#priorities, 1, -1 do
-            local priority = priorities[i]
-            local v = split[priority]
-            
-            table.sort( v, function( a, b )
-                return a:getPos():getDistance( render.getEyePos() ) / a.RenderPriority < b:getPos():getDistance( render.getEyePos() ) / b.RenderPriority
-            end)
-            
-            table.add(newOrder, v)
-        end
-        
-        
-        RTSprite.RenderOrder = newOrder]]
-        
+    function RTSprite.Reorder()
         -- if it works it aint stupid
         table.sort(RTSprite.RenderOrder, function( a, b )
             return a:getPos():getDistance( render.getEyePos() ) / a.RenderPriority < b:getPos():getDistance( render.getEyePos() ) / b.RenderPriority
@@ -189,7 +162,9 @@ if CLIENT then
             local self = RTSprite.RenderOrder[i]
             self:setLoaded( i <= RTSprite.MaxRTs )
         end
-    end)
+    end
+    
+    timer.create("sb_rtsprite_reorder", 1, 0, RTSprite.Reorder)
     
     hook.add("renderoffscreen", "sb_rtsprite_render", function()
         for i,self in pairs(RTSprite.RenderOrder) do

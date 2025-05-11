@@ -6,6 +6,10 @@
 
 
 
+--TODO: Make ^ a valid input for player
+--TODO: players type which allows multi-selection
+
+
 local CommandParser = require("sb/command_parser.txt")
 local Util = require("sb/util.txt")
 
@@ -24,16 +28,17 @@ hook.add("playersay", "", function(plr, msg)
     for i=1, msg:len() do
         print(string.byte(msg:sub(1,1)))
     end
-end)
-]]
+end)]]
+
 
 local TYPE_COLOURS = {
-    ["string"] = Color(255,255,144),
-    ["number"] = Color(90,200,255),
-    ["int"]    = Color(140,240,255),
-    ["player"] = Color(90,255,100),
-    ["bool"]   = Color(200,144,255),
-    ["any"]    = Color(255,120,100)
+    ["string"]  = Color(255,255,144),
+    ["number"]  = Color(90,200,255),
+    ["int"]     = Color(140,240,255),
+    ["player"]  = Color(90,255,100),
+    ["players"] = Color(140,255,90),
+    ["bool"]    = Color(200,144,255),
+    ["any"]     = Color(255,120,100)
 }
 
 
@@ -180,6 +185,7 @@ end
 
 
 
+--TODO: allow for clientside commands too?
 if SERVER then
     local prefixes = {
         ["!"] = true,
@@ -189,12 +195,12 @@ if SERVER then
     hook.add("PlayerSay", "chat_command_parse", function( ply, text )
         if not prefixes[text:sub(1,1)] then return end
         
-        local cmd, args, err = ChatCommand.Instance:parse( text:sub( 2 ) )
+        local cmd, args, err = ChatCommand.Instance:parse( text:sub( 2 ), nil, ply )
         if cmd and not cmd.CanUse( ply ) then return end
         
         if err then
             timer.simple(0, function()
-                print(ChatCommand.BULLET_COLOR, ChatCommand.BULLET, Color(234,60,40), " Syntax Error: ", Color(255,120,120), err.Message)
+                ply:chatPrint(ChatCommand.BULLET_COLOR, ChatCommand.BULLET, Color(234,60,40), " Syntax Error: ", Color(255,120,120), err.Message)
             end)
             
             return ""
@@ -206,7 +212,7 @@ if SERVER then
                 
                 if err then
                     timer.simple(0, function()
-                        print(ChatCommand.BULLET_COLOR, ChatCommand.BULLET, Color(234,60,40), " Command Error: ", Color(255,120,120), err.Message)
+                        ply:chatPrint(ChatCommand.BULLET_COLOR, ChatCommand.BULLET, Color(234,60,40), " Command Error: ", Color(255,120,120), err.Message)
                     end)
                 end
             end

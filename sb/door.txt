@@ -296,7 +296,7 @@ function Door.double( Prop1, Prop2, Properties )
     
     local Properties2 = Properties and table.copy(Properties) or {}
     
-    if not Properties or Properties.ActuatorType == Door.ActuatorType.ANGULAR then
+    if not Properties or not Properties.ActuatorType or Properties.ActuatorType == Door.ActuatorType.ANGULAR then
         Properties2.Flipped = true
     end
     

@@ -1,4 +1,4 @@
---@name Database V2
+--@name Database v2
 --@author shroobloom
 --@shared
 --@owneronly
@@ -23,7 +23,7 @@ local Util = require("sb/util.txt")
 
 
 --TODO:
--- [ ] SharedTable support for automatic networking and remote replication
+-- [ ] SharedTable delegate support for automatic networking and remote replication
 
 
 
@@ -84,7 +84,7 @@ function Database:__newindex( key, value )
         key = key:getSteamID()
     end
     
-    if rawget(self, "AppendPlayerMetadata") and key:startWith("STEAM_0:") then
+    if rawget(self, "AppendPlayerMetadata") and key:startsWith("STEAM_0:") then
         Database.appendPlayerMetadata( value, Util.getPlayerFromSteamID( key ) )
     end
     
@@ -151,6 +151,26 @@ end
 
 
 
+--TODO: optimize so it only runs a sort operation on the top X results
+function Database:getSorted( Member, MaxResults )
+    local Copy = {}
+    
+    for i,v in pairs(self.Contents) do
+        table.insert(Copy, v)
+    end
+    
+    table.sortByMember(Copy, Member)
+    
+    -- Trim excess
+    while #Copy > MaxResults do
+        table.remove(Copy, #Copy)
+    end
+    
+    return Copy
+end
+
+
+
 
 if SERVER then
     
@@ -179,6 +199,23 @@ if SERVER then
             for i,v in pairs(data) do
                 if not rawget(self.Contents, i) then
                     rawset(self.Contents, i, v)
+                end
+            end
+            
+            -- Refresh any data about players
+            if rawget(self, "AppendPlayerMetadata") then
+                for key,value in pairs(self.Contents) do
+                    if key:startsWith("STEAM_0:") then
+                        local onlinePlayer = Util.getPlayerFromSteamID( key )
+                        
+                        if isValid(onlinePlayer) then
+                            local Changed = Database.appendPlayerMetadata( value, onlinePlayer )
+                            
+                            if Changed then
+                                self:markDirty()
+                            end
+                        end
+                    end
                 end
             end
             

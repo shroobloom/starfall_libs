@@ -568,6 +568,14 @@ end
 
 
 
+-- Returns angular inertia, for use with applyAngForce
+function Util.getAngularInertia( ent )
+    local inertia = ent:getInertia()
+    return Angle( inertia.y, inertia.z, inertia.x )
+end
+
+
+
 if CLIENT then
     -- Runs a callback whenever a string key is pressed.
     -- > Example: Util.bindPress( "a", function() print("the left movement key was pressed!" ) end)
@@ -699,6 +707,7 @@ end
 
 
 -- Remaps value to use a new range
+-- DEPRECATED: math.remap is a thing
 function Util.remap( value, oldRangeMin, oldRangeMax, newRangeMin, newRangeMax )
     local pc = (value - oldRangeMin) / (oldRangeMax - oldRangeMin)
     return newRangeMin + pc*(newRangeMax-newRangeMin)
@@ -715,6 +724,21 @@ function Util.getGrandparent( ent )
     return Util.getGrandparent( ent:getParent() )
 end
 
+
+function Util.setSpeedMultiplier( plr, mul )
+    plr:setSlowWalkSpeed( 100 * mul )
+    plr:setWalkSpeed( 200 * mul )
+    plr:setRunSpeed( 400 * mul )
+end
+
+
+-- Returns the right and up vectors, given a forward direction
+function Util.getVectorSystem( forward )
+    local right = math.abs(forward.z) == 1 and Vector(0,math.sign(forward.z),0) or forward:cross(Vector(0,0,1)):getNormalized()
+    local up = forward:cross(-right)
+    
+    return right, up
+end
 
 
 

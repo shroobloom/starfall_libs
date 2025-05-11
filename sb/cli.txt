@@ -101,7 +101,7 @@ function CLI:log( message, loopback )
             net.writeString( message )
         net.send( loopback and find.allPlayers() or Util.everyoneExcept(CLI.User) )
     else
-        CLI.update()
+        CLI.redraw()
     end
     
     --table.insert(CLI.Lines, message)
@@ -113,7 +113,7 @@ function CLI:clear( loopback )
     table.empty(CLI.Lines)
     
     if CLIENT then
-        CLI.update()
+        CLI.redraw()
     else
         net.start("CLI_setLines")
             net.writeTable({})
@@ -180,7 +180,7 @@ if CLIENT then
             table.insert(CLI.Lines, v)
         end
         
-        CLI.update()
+        CLI.redraw()
     end)
     
     
@@ -200,7 +200,7 @@ if CLIENT then
     end]]
     
     
-    local function renderCLI()
+    function renderCLI()
         
         render.clear(Color(0,0,0,0))
         
@@ -276,7 +276,6 @@ if CLIENT then
         render.drawSimpleText(sX*0.025, sY*0.975, "[Alt] Exit", nil, TEXT_ALIGN.BOTTOM)
         render.drawSimpleText(sX*0.975, sY*0.975, os.date( "%I:%M %p" ):upper(), TEXT_ALIGN.RIGHT, TEXT_ALIGN.BOTTOM)
         
-        
         if CLI.CommandThread ~= nil then return end
         if not isValid(CLI.LastUser) then return end --TODO?
         
@@ -296,7 +295,7 @@ if CLIENT then
     
     Util.createRenderTarget( "main", renderCLI)
     
-    function CLI.update()
+    function CLI.redraw()
         Util.modifyRenderTarget( "main", renderCLI)
     end
     
@@ -307,7 +306,7 @@ if CLIENT then
         ScreenEntity = render.getScreenEntity()
         
         if CLI.PowerState and CLI.StartupTimer < STARTUP_TIME then
-            CLI.update()
+            CLI.redraw()
             
             render.setRenderTargetTexture("main")
             render.drawTexturedRect(sX/2-256,0,512,512)
@@ -342,11 +341,11 @@ if CLIENT then
         
         CLI.setUser( player() )
         
-        CLI.update()
+        CLI.redraw()
     end)
     
     hook.add("huddisconnected", "CLI_HudDisconnect", function()
-        CLI.update()
+        CLI.redraw()
         
         net.start("CLI_exit")
         net.send()
@@ -405,11 +404,11 @@ if CLIENT then
             CLI.runString( player(), CLI.PromptText )
             
             CLI.PromptText = ""
-            CLI.update()
+            CLI.redraw()
             return
         elseif key == KEY.BACKSPACE then
             CLI.PromptText = string.sub(CLI.PromptText, 1, CLI.PromptText:len()-1)
-            CLI.update()
+            CLI.redraw()
             return
         elseif key == KEY.SPACE then
             char = " "
@@ -418,7 +417,7 @@ if CLIENT then
         if char:len() > 1 then return end
         
         CLI.PromptText = CLI.PromptText .. char
-        CLI.update()
+        CLI.redraw()
     end)
     
     
@@ -631,6 +630,10 @@ function CLI.runString( user, msg )
         end
         
         CLI.CommandThread = nil
+        
+        if CLIENT then
+            CLI.redraw()
+        end
     end)
 end
 

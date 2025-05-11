@@ -1,0 +1,97 @@
+--@name Straw Zombie Registry
+--@author shroobloom
+--@shared
+--@include sb/util.txt
+
+
+
+if SERVER then
+    
+    local Util = require("sb/util.txt")
+    
+    
+    return function( NPC )
+        
+        NPC:register("Zambie", {
+            Name = "Zombie",
+            Class = "terminator_nextbot_zambie"
+        })
+        
+        NPC:register("ZambieTorso", {
+            Name = "Zombie Torso",
+            Class = "terminator_nextbot_zambietorso"
+        })
+        
+        NPC:register("AcidZombie", {
+            Name = "Acid Zombie",
+            Class = "terminator_nextbot_zambieacid"
+        })
+        
+        NPC:register("BerserkerZombie", {
+            Name = "Berserker Zombie",
+            Class = "terminator_nextbot_zambieberserk"
+        })
+        
+        NPC:register("FastZambie", {
+            Name = "Fast Zombie",
+            Class = "terminator_nextbot_zambiefast"
+        })
+        
+        NPC:register("FastZambieTorso", {
+            Name = "Fast Zombie Torso",
+            Class = "terminator_nextbot_zambietorsofast"
+        })
+        
+        NPC:register("FastZambieElite", {
+            Name = "Fast Zombie Elite",
+            Class = "terminator_nextbot_zambiefastgrunt"
+        })
+        
+        NPC:register("FireZombie", {
+            Name = "Flaming Zombie",
+            Class = "terminator_nextbot_zambieflame"
+        })
+        
+        NPC:register("GruntZombie", {
+            Name = "Grunt Zombie",
+            Class = "terminator_nextbot_zambiegrunt"
+        })
+        
+        NPC:register("NecromancerZombie", {
+            Name = "Necromancer Zombie",
+            Class = "terminator_nextbot_zambienecro"
+        })
+        
+        NPC:register("SlowZombie", {
+            Name = "Slow Zombie",
+            Class = "terminator_nextbot_zambie_slow"
+        })
+        
+        NPC:register("TankZombie", {
+            Name = "Tank Zombie",
+            Class = "terminator_nextbot_zambietank"
+        })
+        
+        NPC:register("TankZombie", {
+            Name = "Tank Zombie",
+            Class = "terminator_nextbot_zambietank"
+        })
+        
+        NPC:register("WraithZombie", {
+            Name = "Wraith",
+            Class = "terminator_nextbot_zambiewraith"
+        })
+        
+        NPC:register("WraithZombieTorso", {
+            Name = "Wraith Torso",
+            Class = "terminator_nextbot_zambietorsowraith"
+        })
+        
+        NPC:register("WraithZombieElite", {
+            Name = "Elite Wraith",
+            Class = "terminator_nextbot_zambiewraithelite"
+        })
+        
+    end
+
+end

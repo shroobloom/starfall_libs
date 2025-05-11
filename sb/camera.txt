@@ -1,0 +1,169 @@
+--@name Camera
+--@author shrooblooms
+--@shared
+
+
+
+
+local Camera = class("Camera")
+Camera.Instances = {}
+Camera.LerpedZoom = 1
+
+
+function Camera:initialize()
+    
+    -- The entity to follow
+    self.Parent = nil
+    
+    -- The vehicle to use
+    self.Vehicle = nil
+    
+    -- The position, relative to the world
+    self.Position = Vector()
+    
+    -- The position, relative to the entity
+    self.LocalPosition = Vector()
+    
+    -- The offset, relative to the camera angles
+    self.Offset = Vector()
+    
+    -- Whether or not to draw the local client
+    self.DrawViewer = true
+    
+    -- Field of view
+    self.FoV = 90
+    
+    -- The distance multiplier range for scrolling in/out. Leave as nil for no zooming (first person)
+    self.ZoomRange = nil
+    
+    -- The starting zoom, a multiplier of ZoomPosition/ZoomOffset
+    self.CurrentZoom = 0
+    
+    -- The zoom that's applied local to the parent, will be multiplied by a lerped CurrentZoom.
+    self.ZoomPosition = Vector()
+    -- The zoom that's applied local to the camera, will be multiplied by a lerped CurrentZoom.
+    self.ZoomOffset = Vector(-50,0,0)
+    
+end
+
+
+
+function Camera:setVehicle( Seat )
+    self.Vehicle = Seat
+    Camera.Instances[Seat] = self
+end
+
+
+
+-- just calculate this every frame? idk
+function Camera:getPosAndAngles()
+    local Player = CLIENT and player() or self.Vehicle:getDriver()
+    local Ang = self:getAngles()
+    
+    return self:getPos( Ang ), Ang
+end
+
+
+function Camera:getPos( Angles )
+    local Player = CLIENT and player() or self.Vehicle:getDriver()
+    local z = CLIENT and Camera.LerpedZoom or self.CurrentZoom
+    
+    local Off = localToWorld(
+        self.Offset + self.ZoomOffset * z,
+        isValid(self.Parent) and self.Parent:getAngles() or Angle(),
+        self.Position + self.ZoomPosition*z,
+        Angles
+    )
+    
+    
+    return (isValid(self.Parent) and self.Parent:localToWorld(self.LocalPosition) or self.LocalPosition) + Off
+end
+
+
+function Camera:getAngles()
+    --local Player = CLIENT and player() or self.Vehicle:getDriver()
+    --return SERVER and self.Vehicle:worldToLocalAngles(Player:getEyeAngles()) or Player:getEyeAngles()
+    
+    if CLIENT then
+        return player():getEyeAngles()
+    else
+        if isValid(self.Vehicle) then
+            local dr = self.Vehicle:getDriver()
+            return isValid(dr) and self.Vehicle:worldToLocalAngles(dr:getEyeAngles()) or Angle()
+        else
+            return Angle()
+        end
+    end
+    
+end
+
+-- Similar to getAngles(), but this is used in calcView.
+function Camera:getViewAngles()
+    return self:getAngles()
+end
+
+
+if SERVER then
+    
+    net.receive("Camera_SetZoom", function( _, plr )
+        local v = Plr:getVehicle()
+        local self = Camera.Instances[v]
+        if not self then return end
+        
+        local z = net.readFloat()
+        
+        self.CurrentZoom = math.clamp(z, self.ZoomRange[1], self.ZoomRange[2])
+    end)
+    
+end
+
+
+if CLIENT then
+    
+    hook.add("PlayerEnteredVehicle", "Camera_UpdateLerpedZoom", function( ply, Seat )
+        if ply ~= player() then return end
+        
+        local self = Camera.Instances[ Seat ]
+        if not self then return end
+        
+        Camera.LerpedZoom = self.CurrentZoom
+    end)
+    
+    
+    hook.add("calcview", "Camera_Update", function()
+        local VS = player():getVehicle()
+        
+        if VS:isValid() and Camera.Instances[VS] then
+            local self = Camera.Instances[VS]
+            Camera.LerpedZoom = math.lerp( 0.99^(1/timer.frametime()), Camera.LerpedZoom, self.CurrentZoom )
+            local Ang = self:getViewAngles( Pos )
+            local Pos = self:getPos( Ang )
+            
+            return {
+                origin = Pos,
+                angles = Ang,
+                drawviewer = self.DrawViewer,
+                fov = self.FoV
+            }
+        end
+    end)
+    
+    
+    hook.add("mouseWheeled", "Camera_Scroll", function( ds )
+        local VS = player():getVehicle()
+        
+        if VS:isValid() and Camera.Instances[VS] then
+            local self = Camera.Instances[VS]
+            if not self.ZoomRange then return end
+            
+            local Gap = self.ZoomRange[2] - self.ZoomRange[1]
+            
+            self.CurrentZoom = math.clamp(self.CurrentZoom - ds*Gap*0.1, self.ZoomRange[1], self.ZoomRange[2])
+        end
+    end)
+    
+end
+
+
+
+return Camera

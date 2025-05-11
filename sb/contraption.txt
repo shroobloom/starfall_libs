@@ -1,0 +1,132 @@
+--@name Contraption
+--@author shroobloom
+--@server
+
+
+
+
+
+local Contraption = {}
+Contraption.Anchor = nil
+Contraption.ExplosionEffect = "lfs_explosion"
+Contraption.Frozen = true
+Contraption.Dead = false
+
+
+function Contraption:setFrozen( state, dontUnfreeze )
+    Contraption.Frozen = state
+    
+    if not dontUnfreeze then
+        for i,v in pairs(chip():getAllConstrained()) do
+            if not v:isValidPhys() then continue end
+            
+            if v ~= self.Anchor and (not isValid(v:getParent()) or #constraint.getTable(v) > 0) then
+                v:setFrozen( state )
+            else
+                v:setFrozen( true )
+            end
+        end
+    end
+    
+    if state then
+        hook.run("ContraptionFreeze")
+    else
+        hook.run("ContraptionUnfreeze")
+    end
+end
+
+
+
+function Contraption:freeze()
+    self:setFrozen( true )
+end
+
+function Contraption:unfreeze()
+    self:setFrozen( false )
+end
+
+function Contraption:addCriticalEntities( ... )
+    for i,v in pairs {...} do
+        v.Critical = true
+    end
+end
+
+
+-- Plays a self-destruct effect while destroying all constrained props
+function Contraption:explode()
+    
+    if Contraption.Dead then return end
+    Contraption.Dead = true
+    
+    hook.run("ContraptionExplode")
+    
+    local Center = Vector()
+    local Pool = chip():getAllConstrained()
+    local Count = 0
+    
+    for i,v in pairs(Pool) do
+        if v:isValid() and v:getOwner() == owner() and v ~= chip() then
+            Center = Center + v:getPos()
+            Count = Count + 1
+            v:remove()
+        end
+    end
+    
+    Center = Center / Count
+    
+    
+    if EffectName ~= "" then
+        local expl = effect.create()
+        expl:setOrigin(Center)
+        expl:play(EffectName or "lfs_explosion")
+    end
+    
+    chip():remove()
+    
+end
+
+
+
+
+
+hook.add("PlayerEnterPvp", "contraption_unfreeze", function(plr)
+    if plr ~= owner() then return end
+    Contraption:unfreeze()
+end)
+
+
+
+hook.add("DupeFinished", "contraption_unfreeze", function()
+    if owner():isInBuild() then return end
+    Contraption:unfreeze()
+end)
+
+
+
+hook.add("EntityRemoved", "contraption_check_critical_ents", function( e )
+    if e:getOwner() ~= owner() then return end
+    if owner():isInBuild() then return end
+    
+    if e.Critical then
+        Contraption:explode()
+    end
+end)
+
+
+hook.add("Removed", "contraption_shutdown", function()
+    if owner():isInBuild() then return end
+    Contraption:explode()
+end)
+
+
+hook.add("PlayerUnfrozeObject", "contraption_manual_unfreeze", function(ply, ent)
+    if ply ~= owner() or not Contraption.Frozen then return end
+    if not table.hasValue(chip():getAllConstrained(), ent) then return end --TODO: optimize
+    
+    Contraption:setFrozen( false, true )
+end)
+
+
+
+return Contraption
+

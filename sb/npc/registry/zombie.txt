@@ -74,15 +74,26 @@ if SERVER then
             Health = 10
         })
         
+        NPC:register("Zombine", {
+            Name = "Zombine",
+            Class = "npc_zombine",
+            Damage = 3,
+            
+            Squad = {
+                {"Zombine", 0, 2}
+            }
+        })
         
-        NPC:register("Wraith", {
+        
+        --TODO: move to zombie survival event
+        --[[NPC:register("Wraith", {
             Name = "Wraith",
             Class = "npc_fastzombie",
             Health = 500,
             Damage = 20,
             
             Size = 1.2
-        })
+        })]]
         
         
     end

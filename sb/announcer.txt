@@ -1,0 +1,233 @@
+--@name Announcer (VOX v2)
+--@author
+--@shared
+--@include sb/util.txt
+
+local Util = require("sb/util.txt")
+
+
+
+
+local Announcer = {}
+Announcer.Speaker = nil
+Announcer.Queue = {}
+Announcer.SpeakerRange = 3000
+
+
+function Announcer:getSpeaker()
+    return isValid(Announcer.Speaker) and Announcer.Speaker or chip()
+end
+
+
+-- Proxy networking
+function Announcer:setSpeaker( speaker )
+    Announcer.Speaker = speaker
+    
+    if SERVER then
+        net.start("announcer_setSpeaker")
+            net.writeEntity( speaker )
+        net.send()
+    end
+end
+
+
+if CLIENT then
+    net.receive("announcer_setSpeaker", function()
+        net.readEntity(function(e)
+            Announcer:setSpeaker(e)
+        end)
+    end)
+end
+
+
+
+
+function Announcer:say(message)
+    if SERVER then
+        net.start("announcer_say")
+            net.writeString("Notice")
+            net.writeString(message)
+        net.send()
+        
+        Util.fireRemote("announcer_message", "Notice", message)
+        hook.run("announcer_message", "Notice", message)
+    else
+        table.insert(Announcer.Queue, {Type = "Notice", Message = message})
+        
+        if not Announcer.Playing then
+            coroutine.wrap(Announcer.playNextInQueue)(Announcer)
+        end
+    end
+end
+
+function Announcer:alert(message)
+    if SERVER then
+        net.start("announcer_say")
+            net.writeString("Alert")
+            net.writeString(message)
+        net.send()
+        
+        Util.fireRemote("announcer_message", "Alert", message)
+        hook.run("announcer_message", "Alert", message)
+    else
+        table.insert(Announcer.Queue, {Type = "Alert", Message = message})
+        
+        if not Announcer.Playing then
+            coroutine.wrap(Announcer.playNextInQueue)(Announcer)
+        end
+    end
+end
+
+
+
+-- Empties the queue
+function Announcer:clearQueue()
+    if SERVER then
+        net.start("announcer_clearQueue")
+        net.send()
+    else
+        table.empty(Announcer.Queue)
+    end
+end
+
+
+
+if SERVER then
+    
+    hook.add("ClientInitialized", "announcer_initialNetwork", function( p )
+        if not isValid(Announcer.Speaker) then return end
+        
+        net.start("announcer_setSpeaker")
+            net.writeEntity( Announcer.Speaker )
+        net.send( p )
+    end)
+    
+    Util.bindRemote("announcer_say", function( ... )
+        Announcer:say( ... )
+    end)
+    
+    Util.bindRemote("announcer_alert", function( ... )
+        Announcer:alert( ... )
+    end)
+    
+end
+
+
+
+if CLIENT then
+    
+    -- more reliable than isMounted because for some reason you can disable chips checking your mounted games.
+    --if sound.duration("vox/_period.wav") == 0 then error("You must have Half-Life: Source mounted.") end
+    
+    local TypeSounds = {
+        Notice = {
+            Sound = "buttons/bell1.wav",
+            Delay = 1.25
+        },
+        Alert = {
+            Sound = "vox/buzwarn.wav",
+            Delay = 1
+        }
+    }
+    
+    
+    
+    if not hasPermission("bass.loadURL", chip()) then
+        setupPermissionRequest({"bass.loadURL"}, "To hear announcements, you will need this permission enabled.", true)
+    end
+    
+    
+    
+    Announcer.Playing = false
+    
+    function Announcer:playNextInQueue()
+        
+        Announcer.Playing = true
+        
+        local Current = table.remove( Announcer.Queue, 1 )
+        local PingData = TypeSounds[Current.Type]
+        
+        local Ping = sound.create(Announcer:getSpeaker(), PingData.Sound)
+        Ping:setSoundLevel( 90 )
+        Ping:play()
+        
+        Util.fireRemote("announcer_message", Current.Type, Current.Message)
+        hook.run("announcer_message", Current.Type, Current.Message)
+        
+        
+        local lang = "EN-GB"
+        local url = "http://translate.google.com/translate_tts?&ie=utf-8&client=tw-ob&tl=".. lang .."&q=" .. http.urlEncode(Current.Message) 
+        local thread = coroutine.running()
+        local start = timer.curtime()
+        
+        bass.loadURL( url, "3d noblock noplay", function( snd, errno, errname )
+            if errno ~= 0 then error(tostring(errno) .. " " .. tostring(errname)) end
+            
+            snd:setPos(Announcer:getSpeaker():obbCenterW())
+            snd:setFade(250, Announcer.SpeakerRange)
+            
+            coroutine.resume(thread, snd)
+        end)
+        
+        local snd = coroutine.yield()
+        
+        local elapsed = timer.curtime() - start
+        Util.wait( PingData.Delay - elapsed )
+        
+        snd:play()
+        
+        -- a wait less than a frame will crash the game, unsure why.
+        while snd:isPlaying() do Util.wait(0.25) end
+        
+        if Ping:isPlaying() then
+            Ping:stop()
+            Ping:destroy() --TODO: verify this doesnt cancel out the fade-out effect (i dont think there even is one?)
+        end
+        
+        
+        
+        if #Announcer.Queue == 0 or Announcer.Queue[1].Type ~= Current.Type then
+            Announcer:getSpeaker():emitSound("npc/turret_floor/click1.wav", 90)
+            Announcer:getSpeaker():emitSound("buttons/button5.wav", 90)
+        end
+        
+        if #Announcer.Queue > 0 then
+            coroutine.wrap( Announcer.playNextInQueue )( Announcer )
+        else
+            Announcer.Playing = false
+        end
+        
+    end
+    
+    
+    net.receive("announcer_say", function()
+        if not hasPermission("entities.emitSound", chip()) then return end
+        
+        local Type = net.readString()
+        local Message = net.readString()
+        
+        if Type == "Notice" then
+            Announcer:say( Message )
+        else
+            Announcer:alert( Message )
+        end
+    end)
+    
+    net.receive("announcer_clearQueue", Announcer.clearQueue)
+    
+end
+
+
+--[[
+if SERVER then
+    
+    timer.simple(2, function()
+        Announcer:alert( "hello, this is a test." )
+    end)
+    
+end
+]]
+
+return Announcer
+
+

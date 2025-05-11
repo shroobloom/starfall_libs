@@ -1,12 +1,13 @@
 --@name Custom Weapon Library
 --@author shroobloom
 --@server
-
+--@include sb/chat_command.txt
 
 
 local Weapon = class("CustomWeapon")
 Weapon.Info = {}
 Weapon.HideWeapon = true
+Weapon.Types = {}
 
 
 -- TODO LIST
@@ -15,6 +16,157 @@ Weapon.HideWeapon = true
 --      - If used on the server, tells all clients other than the owner to call setAnimation
 --      - Unsure how to make sure weapons are networked properly, can the creation order be trusted so that variants are synced?
 --          - could maybe just Trust:tm:
+
+
+
+
+local ChatCommands = require("sb/chat_command.txt")
+
+ChatCommands:add({
+    Name = "givecustom",
+    Description = "Gives a custom weapon with a certain ID to a player.",
+    Arguments = {
+        {
+            Name = "Target",
+            Type = "player",
+            Optional = true
+        },
+        {
+            Name = "ID",
+            Type = "string",
+            Optional = true,
+            Validator = function(str)
+                if not Weapon.Types[str] then
+                    return ChatCommands.Error("No weapon with ID \"" .. str .. "\" found!")
+                end
+            end
+        }
+    },
+    Run = function( user, target, id )
+        
+        if not id then
+            local wep = Weapon:getHolding( user )
+            if not wep then
+                return ChatCommands.Error("No valid weapon ID found!")
+            end
+            
+            id = wep.class.name
+        end
+        
+        if not target then
+            target = user:getEyeTrace().Entity
+            
+            if not isValid(target) or not target:isPlayer() then
+                return ChatCommands.Error("No valid target found!")
+            end
+        end
+        
+        Weapon.Types[id]:new( target )
+        user:chatPrint(Color(40,255,30), "Gave \"" .. id .. "\" to " .. target:getName() .. "!")
+        
+    end
+})
+
+ChatCommands:add({
+    Name = "stripcustom",
+    Description = "Takes a custom weapon with a certain ID to a player, or all weapons if no ID is specified.",
+    Arguments = {
+        {
+            Name = "Target",
+            Type = "player"
+        },
+        {
+            Name = "ID",
+            Type = "string",
+            Optional = true,
+            Validator = function(str)
+                if not Weapon.Types[str] then
+                    return ChatCommands.Error("No weapon with ID \"" .. str .. "\" found!")
+                end
+            end
+        }
+    },
+    Run = function( user, target, id )
+        
+        local toStrip = {}
+        
+        for clazz,data in pairs(Weapon.Info[target] or {}) do
+            for i,variant in pairs(data.Variants) do
+                if id and variant.class.name ~= id then continue end
+                
+                table.insert(toStrip, variant)
+            end
+        end
+        
+        for i=#toStrip, 1, -1 do
+            toStrip[i]:remove()
+        end
+        
+        
+        if id then
+            if #toStrip == 0 then
+                return ChatCommands.Error("Player does not have that custom weapon!")
+            end
+            
+            user:chatPrint(Color(40,255,30), "Stripped \"" .. id .. "\" from " .. target:getName() .. "!")
+        else
+            if #toStrip == 0 then
+                return ChatCommands.Error("Player does not have any custom weapons!")
+            end
+            
+            user:chatPrint(Color(40,255,30), "Stripped all custom weapons from " .. target:getName() .. "!")
+        end
+    end
+})
+
+
+
+ChatCommands:add({
+    Name = "whohas",
+    Description = "Returns who has a certain weapon (or all, if no ID is specified)",
+    Arguments = {
+        {
+            Name = "ID",
+            Type = "string",
+            Optional = true,
+            Validator = function(str)
+                if not Weapon.Types[str] then
+                    return ChatCommands.Error("No weapon with ID \"" .. str .. "\" found!")
+                end
+            end
+        }
+    },
+    Run = function( user, id )
+        
+        local has = {}
+        
+        for plr,v in pairs(Weapon.Info) do
+            for clazz,data in pairs(v) do
+                for i,variant in pairs(data.Variants) do
+                    if id and variant.class.name ~= id then continue end
+                    
+                    if not has[plr] then
+                        has[plr] = {}
+                    end
+                    
+                    if table.hasValue(has[plr], variant.class.name) then continue end
+                    table.insert(has[plr], variant.class.name)
+                end
+            end
+        end
+        
+        user:chatPrint(Color(255,144,0), "All weapons:")
+        
+        for plr,list in pairs(has) do
+            user:chatPrint( ChatCommands.BULLET_COLOR, ChatCommands.BULLET, team.getColor(plr:getTeam()), " " .. plr:getName(), ChatCommands.BULLET_COLOR, " - ", Color(255,255,255), table.concat(list, ", ") )
+        end
+        
+    end
+})
+
+
+
+
 
 
 
@@ -36,13 +188,48 @@ function Weapon:initialize( Wielder )
             }
         end
         
-        print("Added " .. v .. " variant: " .. self.class.name)
+        Wielder:chatPrint("Added " .. v .. " variant: " .. self.class.name)
         table.insert(Weapon.Info[Wielder][v].Variants, self)
+        
+        Wielder:give(v)
+    end
+end
+
+
+
+hook.add("PlayerSpawn", "CustomWeapon_GiveOnSpawn", function( plr )
+    if not Weapon.Info[plr] then return end
+    
+    timer.simple(0, function()
+        if not isValid(plr) or not Weapon.Info[plr] then return end
+        
+        for clazz,v in pairs(Weapon.Info[plr]) do
+            plr:give(clazz)
+        end
+    end)
+end)
+
+
+
+
+-- also remove the holos? call removeModel? idk
+function Weapon:remove()
+    local classes = Weapon.Info[self.Owner]
+    
+    for i,v in pairs(classes) do
+        table.removeByValue(v.Variants, self)
+        
+        if #v.Variants == 0 then
+            classes[i] = nil
+        elseif v.Variant > #v.Variants then
+            v.Variant = #v.Variants
+        end
     end
 end
 
 
 -- Static
+-- If another class is used, it'll only pick up that class
 function Weapon.static:getHolding( Player )
     if not Weapon.Info[Player] then return end
     
@@ -52,13 +239,17 @@ function Weapon.static:getHolding( Player )
     local Info = Weapon.Info[Player][wep:getClass()]
     if not Info then return end
     
-    return Info.Variants[Info.Variant]
+    local wep = Info.Variants[Info.Variant]
+    if wep.class == self or wep.class:isSubclassOf( self ) then return wep end
+    
+    return nil
 end
 
 
---TODO: fix this
-function Weapon:subclassed( child )
+
+function Weapon.static:subclassed( child )
     child.Classes = {}
+    Weapon.Types[child.name] = child
 end
 
 
@@ -143,15 +334,40 @@ end
 
 function Weapon:localToWorld( Pos, Ang )
     --local bonePos, boneAng = self.Owner:getBonePosition( self:getBone() )
-    local Phys = self.Owner:getActiveWeapon()
     
-    return localToWorld( Pos, Ang or Angle(), Phys:getPos(), Phys:getAngles() )
+    -- this method no longer works
+    --[[local Phys = self.Owner:getActiveWeapon()
+    
+    return localToWorld( Pos, Ang or Angle(), Phys:getPos(), Phys:getAngles() )]]
+    
+    
+    local bonePos, boneAng = self.Owner:getBonePosition( self:getBone() )
+    return localToWorld( Pos, Ang or Angle(), bonePos, boneAng )
+    
 end
 
 
 function Weapon:addPart( Holo )
     table.insert(self.Parts, Holo)
     Holo:setParent( self.Owner, nil, self:getBone() )
+    Holo:setScale( Holo:getScale() * self.Owner:getModelScale() )
+end
+
+
+
+--TODO: untested
+function Weapon.static:getActiveWeapon( plr )
+    
+    if not Weapon.Info[ply] then return nil end
+    
+    local sourceSwep = ply:getActiveWeapon()
+    if not isValid(sourceSwep) then return nil end
+    
+    local Info = Weapon.Info[ply][sourceSwep:getClass()]
+    if not Info then return nil end
+    
+    return Info.Variants[Info.Variant]
+    
 end
 
 
@@ -171,7 +387,7 @@ hook.add("PlayerSwitchWeapon", "CustomWeapon_SwitchWeapon", function(ply, oldWep
                     oldWep:setNoDraw( false )
                 end)
             end
-            
+            print("Unequip ", oldWep)
             OldInstance:unequip()
         end
     end
@@ -191,7 +407,9 @@ hook.add("PlayerSwitchWeapon", "CustomWeapon_SwitchWeapon", function(ply, oldWep
                 end)
             end
             
-            NewInstance:equip()
+            timer.simple(0, function()
+                NewInstance:equip()
+            end)
         end
     end
     

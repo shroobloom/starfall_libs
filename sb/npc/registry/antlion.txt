@@ -106,10 +106,6 @@ if (Antlion) {
             
             SpawnObscured = false,
             Spawn = antlionUnburrow,
-            
-            Squad = {
-                {"Antlion", 2, 4}
-            }
         })
         
         
@@ -130,10 +126,6 @@ if (Antlion) {
                     NPC.createHealthbar( npc )
                 end)
             end,
-            
-            Squad = {
-                {"Antlion", 0, 4}
-            },
             
             Abilities = {
                 {
@@ -260,25 +252,6 @@ if (Antlion) {
                 }
             }
         })
-        
-        
-        --[[NPC:register("AntlionSwarmer", {
-            Name = "Antlion Swarmer",
-            Class = "npc_antlion",
-            BoxSize = Vector(32, 32, 64),
-            Scale = 0.5,
-            Damage = 0.5,
-            Health = 30,
-            
-            SpawnObscured = false,
-            Spawn = antlionUnburrow,
-            
-            Squad = {
-                {"AntlionSwarmer", 3, 5}
-            }
-        })]]
-        
-        
         
     end
     

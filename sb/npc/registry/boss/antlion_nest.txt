@@ -76,7 +76,7 @@ if SERVER then
             Health = 20000,
             Boss = true,
             
-            Create = function( pos, data )
+            Create = function( self, pos )
                 
                 local yaw = math.random()*360
                 

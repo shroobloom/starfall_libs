@@ -1,0 +1,135 @@
+--@name Prop Precacher
+--@author shroobloom
+--@server
+--@include sb/spawner.txt
+--@include sb/util.txt
+
+
+local Spawner = require("sb/spawner.txt")
+local Util = require("sb/util.txt")
+
+
+local Precacher = class("Precacher")
+Precacher.Instances = {}
+Precacher.ThinkIndex = 0
+
+
+function Precacher:initialize( model, size )
+    self.Props = {}
+    self.Model = model
+    self.Size = size or 0
+    
+    table.insert(Precacher.Instances, self)
+end
+
+
+function Precacher:remove()
+    for i,v in pairs(self.Props) do
+        v:remove()
+    end
+    
+    table.removeByValue(Precacher.Instances, self)
+end
+
+
+
+function Precacher:trySpawn()
+    local spawned
+    
+    pcall(function()
+        spawned = prop.create( Vector(), Angle(), self.Model, true )
+    end)
+    
+    return spawned
+end
+
+
+function Precacher:addProp( ent )
+    assert(ent:getModel() == self.Model, "Incorrect model to add to this prop precacher! (expected \"" .. self.Model .. "\", got \"" .. ent:getModel() .. ")")
+    
+    ent:setNoDraw(true)
+    ent:setSolid(false)
+    ent:setNocollideAll(true)
+    ent:setCollisionGroup(COLLISION_GROUP.IN_VEHICLE)
+    ent:doNotDuplicate() --TODO should this be here
+    
+    table.insert(self.Props, ent)
+    
+    --print("Added ", ent)
+    --print("Count: ", #self.Props, " / ", self.Size)
+end
+
+
+function Precacher:takeProp()
+    return table.remove(self.Props, 1)
+end
+
+
+--TODO: make sure this works for multiple at a time
+--TODO: fix this godawful code (or don't)
+-- Takes a certain number of props from the buffer, while yielding the current thread.
+-- Supply an optional callback to run every time a prop is added to the output list. Return true to stop it early.
+function Precacher:takePropsAsync( count, callback )
+    local out = {}
+    local startSize = self.Size
+    
+    -- to stop it from hanging
+    if self.Size == 0 then
+        self.Size = 1
+    end
+    
+    while #out < count do
+        Util.wait()
+        
+        local ent = self:takeProp()
+        if not ent then continue end
+        
+        table.insert(out, ent)
+        
+        if callback then
+            local interrupt = callback(ent)
+            
+            if interrupt then
+                break
+            end
+        end
+    end
+    
+    -- Restore it back
+    if (startSize == 0 and self.Size == 1) then
+        self.Size = 0
+    end
+    
+    return out
+end
+
+
+
+
+
+timer.create("precacher_spawn", 1/prop.spawnRate(), 0, function()
+    if #Precacher.Instances == 0 or not prop.canSpawn() or #Spawner.Queue > 0 then return end
+    
+    for i=1, #Precacher.Instances do
+        --TODO: cycle through precachers to start on
+        Precacher.ThinkIndex = i
+        local self = Precacher.Instances[Precacher.ThinkIndex]
+        
+        if #self.Props < self.Size then
+            break
+        elseif i == #Precacher.Instances then
+            return
+        end
+    end
+    
+    
+    local self = Precacher.Instances[Precacher.ThinkIndex]
+    local ent = self:trySpawn()
+    if not ent then return end
+    
+    self:addProp( ent )
+end)
+
+
+
+return Precacher

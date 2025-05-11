@@ -9,7 +9,7 @@ Debug.Markers = {}
 Debug.LastPrints = {}
 
 
-function Debug.marker( id, pos, ang, model, scale, color )
+function Debug.marker( id, pos, color )
     if not Debug.Markers[id] then
         local marker = hologram.create( pos or Vector(), ang or Angle(), model or "models/hunter/blocks/cube05x05x05.mdl", scale or Vector(1,1,1) )
         marker:suppressEngineLighting( true )
@@ -84,6 +84,67 @@ end
 
 
 
+
+
+local benchStart = 0
+local benchTimes = {}
+local curBenchmark = ""
+
+
+
+function Debug.startBenchmark( ... )
+    benchStart = timer.systime()
+    
+    local benches = {...}
+    
+    if #benches == 0 then
+        benches[1] = "unassigned"
+    end
+    
+    for i,v in pairs(benches) do
+        benchTimes[v] = 0
+    end
+    
+    curBenchmark = benches[1]
+end
+
+
+function Debug.setBenchmark( id )
+    --Note: systime is not reused here because it can change from line to line, meaning the perf cost of rawset and setting variables would be counted as well.
+    local st = timer.systime()
+    rawset(benchTimes, curBenchmark, st - benchStart)
+    
+    curBenchmark = id
+    benchStart = timer.systime()
+end
+
+
+function Debug.finishBenchmark()
+    Debug.setBenchmark("")
+    print("Benchmark finished, results:")
+    
+    for i,v in pairs(benchTimes) do
+        print(i .. ": \n- " .. string.format("%.7f", v))
+    end
+end
+
+
+--print(string.format("%.18f", math.pi))
+
+--[[
+if SERVER then
+Debug.startBenchmark("trace", "sqrt")
+
+for i=1, 1000 do
+    Debug.setBenchmark("trace")
+    local a = trace.line(chip():getPos(), chip():getPos() + Vector(0,0,100), chip())
+    Debug.setBenchmark("sqrt")
+    local b = math.sqrt(1 + 3)
+end
+
+Debug.finishBenchmark()
+end
+]]
 
 
 return Debug

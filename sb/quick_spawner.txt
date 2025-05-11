@@ -1,0 +1,62 @@
+--@name QuickSpawner
+--@author shroobloom
+--@server
+
+
+-- a less stable alternative to Spawner
+-- technically pvp legal but please do not use this in pvp or i may have to invoke divine intervention.
+
+
+
+local QuickSpawner = {}
+QuickSpawner.Queue = {}
+QuickSpawner.AwaitingSpawn = {}
+
+
+function QuickSpawner:create( model, callback )
+    table.insert(QuickSpawner.Queue, {
+        Model = model,
+        Callback = callback
+    })
+end
+
+
+
+local other = false
+
+hook.add("tick", "quickSpawner_emptyQueue", function()
+    other = not other
+    if other then return end
+    
+    local nextSpawn = table.remove(QuickSpawner.Queue, 1)
+    if not nextSpawn then return end
+    
+    concmd("gm_spawn " .. nextSpawn.Model)
+    
+    if not QuickSpawner.AwaitingSpawn[nextSpawn.Model] then
+        QuickSpawner.AwaitingSpawn[nextSpawn.Model] = {}
+    end
+    
+    table.insert(QuickSpawner.AwaitingSpawn[nextSpawn.Model], nextSpawn.Callback)
+end)
+
+
+
+local WHITE = Color(255,255,255)
+
+hook.add("OnEntityCreated", "quickSpawner_detectGmSpawn", function(ent)
+    if not isValid(ent) or ent:getOwner() ~= owner() then return end
+    if ent:getMaterial() ~= "" or ent:isFrozen() or ent:getColor() ~= WHITE then return end
+    if not QuickSpawner.AwaitingSpawn[ent:getModel()] then return end
+    
+    local cb = table.remove(QuickSpawner.AwaitingSpawn[ent:getModel()], 1)
+    cb( ent )
+    
+    if #QuickSpawner.AwaitingSpawn[ent:getModel()] == 0 then
+        QuickSpawner.AwaitingSpawn[ent:getModel()] = nil
+    end
+end)
+
+
+
+return QuickSpawner

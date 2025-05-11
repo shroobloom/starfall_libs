@@ -1,0 +1,1050 @@
+--@name Base Supercomputer
+--@author shrooblooms
+--@shared
+--@include sb/announcer.txt
+--@include sb/util.txt
+--@include sb/shared_table.txt
+--@include sb/button.txt
+--@model models/props_combine/weaponstripper.mdl
+
+
+
+local Announcer = require("sb/announcer.txt")
+local Util = require("sb/util.txt")
+local SharedTable = require("sb/shared_table.txt")
+
+
+
+--TODO: maybe make functions not replicate by default? or make them call remotely
+local Base = SharedTable:new( "Base" )
+
+
+
+
+
+--[[ MESSAGE MODULE ]]--
+
+Base.Messages = {}
+
+-- Internal on the client
+-- Type is either "Notice" or "Alert"
+-- Message is the message to display
+-- SERVER: Announce (default true) is whether or not to broadcast it over the PA (Announcer.say/Announcer.alert)
+-- SERVER: Lifetime will remove the message after a certain amount of time, if present.
+function Base:addMessage( Type, Message, Announce, Lifetime )
+    local struct = {
+        Type = Type,
+        Message = Message,
+        Announce = Announce, --nil on client
+        Lifetime = Lifetime  --nil on client
+    }
+    
+    table.insert( Base.Messages, 1, struct )
+    
+    if SERVER then
+        if Announce ~= false then
+            if Type == "Notice" then
+                Announcer:say( Message )
+            else
+                Announcer:alert( Message )
+            end
+        end
+        
+        if Lifetime then
+            timer.simple(Lifetime, function()
+                Base:removeMessage( struct )
+            end)
+        end
+        
+        net.start("base_addMessage")
+        net.writeString(Type)
+        net.writeString(Message)
+        net.send()
+        
+        Base:update()
+    end
+    
+    hook.run("base_addMessage", struct)
+    
+    return struct
+end
+
+function Base:removeMessage( structOrId )
+    
+    if type(structOrId) == "table" then
+        structOrId = table.keyFromValue( Base.Messages, structOrId )
+    end
+    
+    if not structOrId then return end
+    
+    local removed = table.remove( Base.Messages, structOrId )
+    
+    if SERVER then
+        net.start("base_removeMessage")
+        net.writeUInt(structOrId, 8)
+        net.send()
+        
+        Base:update()
+    end
+    
+    hook.run("base_removeMessage", removed, structOrId)
+    
+    return structOrId
+end
+
+if SERVER then
+    hook.add("ClientInitialized", "base_initNetwork_messages", function( p )
+        for i,v in pairs(Base.Messages) do
+            net.start("base_addMessage")
+            net.writeString(v.Type)
+            net.writeString(v.Message)
+            net.send( p )
+        end
+    end)
+    
+    Util.bindRemote("base_addMessage", function( Type, Message, Announce, Lifetime )
+        Base:addMessage( Type, Message, Announce, Lifetime )
+    end)
+    
+    -- removeMessage is a bit tricky to use from the frontend, but it's here anyways. Here be dragons.
+    Util.bindRemote("base_removeMessage", function( resolvable )
+        Base:removeMessage( resolvable )
+    end)
+end
+
+
+if CLIENT then
+    net.receive("base_addMessage", function()
+        Base:addMessage( net.readString(), net.readString() )
+    end)
+    
+    net.receive("base_removeMessage", function()
+        Base:removeMessage(net.readUInt(8))
+    end)
+end
+
+
+
+
+
+
+if SERVER then
+    
+    local Button = require("sb/button.txt")
+    
+    
+    wire.adjustInputs({"Intercom", "AlarmButtons", "AlarmShutoff"}, {"ENTITY", "ARRAY", "ARRAY"})
+    wire.adjustOutputs({"Alarm"}, {"NORMAL"})
+    --if not Util.inputsConnected() then return end
+    
+    --chip():emitSound("ambient/levels/labs/equipment_beep_loop1.wav", 60, 80 + math.random(-20,20), 0.75)
+    
+    
+    
+    -- Shared Tables
+    local SentinelNodes = SharedTable:new( "SentinelNodes" )
+    
+    
+    
+    local Intercom = isValid(wire.ports.Intercom) and wire.ports.Intercom or chip()
+    Announcer:setSpeaker( Intercom )
+    
+    local LowAlarm = sound.create(Intercom, "ambient/alarms/combine_bank_alarm_loop4.wav") --1.224s long
+    LowAlarm:setSoundLevel(90)
+    
+    local HighAlarm = sound.create(Intercom, "ambient/alarms/alarm_citizen_loop1.wav") --4.513s long
+    HighAlarm:setSoundLevel(100)
+    
+    local DetonationAlarm = sound.create(Intercom, "ambient/alarms/siren.wav")
+    DetonationAlarm:setSoundLevel(100)
+    
+    
+    
+    local BaseEntities = {}
+    local PropCount = 0
+    local MaxHealth = 0
+    
+    
+    --[[hook.add("DupeFinished", "", function(ents)
+        for i,v in pairs(ents) do
+            table.insert(BaseEntities, v)
+        end
+        
+        PropCount = #BaseEntities
+        regenerateBounds()
+    end)
+    
+    
+    -- Mostly for debugging, aka when working on it live and where dupe wont be available
+    timer.simple(0, function()
+        if #BaseEntities == 0 then
+            local MyProps = find.all(function(e)
+                return e == chip() or (isValid(e) and e:isValidPhys() and e:entIndex() ~= 0 and e:getOwner() == owner() and e:isFrozen() and e:getClass() == "prop_physics")
+            end)
+            
+            for i,v in pairs(MyProps) do
+                table.insert(BaseEntities, v)
+            end
+            
+            PropCount = #BaseEntities
+        end
+        
+        regenerateBounds()
+    end)
+    
+    
+    
+    function regenerateBounds()
+        
+        local BaseBounds = {
+            Min = Vector(math.huge),
+            Max = Vector(-math.huge),
+        }
+        
+        for i,v in pairs(BaseEntities) do
+            if not isValid(v) then continue end
+            
+            BaseBounds.Min = Util.vectorMin( BaseBounds.Min, v:getPos() )
+            BaseBounds.Max = Util.vectorMax( BaseBounds.Max, v:getPos() )
+            
+            v.BaseEntity = true
+        end
+        
+        --TODO: test
+        for i,v in pairs(SentinelNodes.Contents) do
+            BaseBounds.Min = Util.vectorMin( BaseBounds.Min, v.Position )
+            BaseBounds.Max = Util.vectorMax( BaseBounds.Max, v.Position )
+        end
+        
+        BaseBounds.Min = BaseBounds.Min - Vector(250,250,500)
+        BaseBounds.Max = BaseBounds.Max + Vector(250,250,2000)
+        
+        --[[local marker = hologram.create((BaseBounds.Min + BaseBounds.Max)/2, Angle(), "models/holograms/cube.mdl", Vector(1,1,1))
+        marker:setSize( BaseBounds.Max - BaseBounds.Min )
+        marker:setColor(Color(0,255,0,144))
+        
+        local marker = hologram.create((BaseBounds.Min + BaseBounds.Max)/2, Angle(), "models/holograms/cube.mdl", Vector(1,1,1))
+        marker:setSize( -(BaseBounds.Max - BaseBounds.Min) )
+        marker:setColor(Color(0,255,0,144))] ]
+        
+        Base.Bounds = BaseBounds
+        
+    end
+    
+    
+    
+    function isOnSite( Position )
+        return Position.x > Base.Bounds.Min.x and Position.y > Base.Bounds.Min.y and Position.z > Base.Bounds.Min.z
+                and Position.x < Base.Bounds.Max.x and Position.y < Base.Bounds.Max.y and Position.z < Base.Bounds.Max.z
+    end
+    
+    Util.bindRemote("base_isOnSite", isOnSite)]]
+    
+    
+    -- MANUAL BOUND DEF
+    
+    function Base:setBounds( min, max )
+        self.Bounds = {
+            Min = min,
+            Max = max
+        }
+        
+        --[[local marker = hologram.create((self.Bounds.Min + self.Bounds.Max)/2, Angle(), "models/holograms/cube.mdl", Vector(1,1,1))
+        marker:setSize( self.Bounds.Max - self.Bounds.Min )
+        marker:setColor(Color(0,255,0,144))
+        
+        local marker = hologram.create((self.Bounds.Min + self.Bounds.Max)/2, Angle(), "models/holograms/cube.mdl", Vector(1,1,1))
+        marker:setSize( -(self.Bounds.Max - self.Bounds.Min) )
+        marker:setColor(Color(0,255,0,144))]]
+    end
+    
+    function Base.isInBounds( Position )
+        return Position.x > Base.Bounds.Min.x and Position.y > Base.Bounds.Min.y and Position.z > Base.Bounds.Min.z
+                and Position.x < Base.Bounds.Max.x and Position.y < Base.Bounds.Max.y and Position.z < Base.Bounds.Max.z
+    end
+    
+    Util.bindRemote("base_isOnSite", Base.isInBounds) --DEPRECATED
+    Util.bindRemote("base_isInBounds", Base.isInBounds)
+    
+    
+    
+    --[[ REMOTES ]]--
+    
+    --[[Util.bindRemote("jarvis_getBaseInfo", function()
+        return {
+            Origin = BaseOrigin,
+            Size = BaseSize,
+            Bounds = BaseBounds,
+            Entities = BaseEntities,
+            Integrity = getBaseIntegrity(),
+            MaxHealth = MaxHealth
+        }
+    end)]]
+    
+    --[[
+    Util.bindRemote("jarvis_disableAlarm", function()
+        if State == "Alert" then
+            SetState("Idle")
+            
+            vox.announce("INFO", "Administration deactivated alarm.")
+            return true
+        end
+        
+        return false
+    end)]]
+    
+    
+    
+    --[[ THREAT MODULE ]]--
+    Base.ThreatLevels = {
+        -- No active threats.
+        NONE = 0,
+        
+        -- Minor threat, stay alert
+        LOW = 1,
+        
+        -- Medium threat, all hands on deck
+        MEDIUM = 2,
+        
+        -- Major threat, catastrophic failure
+        HIGH = 3,
+        
+        -- Reserved for nuclear detonation
+        TERMINAL = 4
+    }
+    
+    Base.ThreatLevel = Base.ThreatLevels.NONE
+    Base.Threats = {}
+    
+    
+    local voxThreatData = {
+        [Base.ThreatLevels.NONE] = {"Info", "safe", nil},
+        [Base.ThreatLevels.LOW] = {"Important", "alert", LowAlarm},
+        [Base.ThreatLevels.MEDIUM] = {"Important", "alarm", LowAlarm},
+        [Base.ThreatLevels.HIGH] = {"Important", "severe", HighAlarm},
+        [Base.ThreatLevels.TERMINAL] = {"Important", "terminal", DetonationAlarm}
+    }
+    
+    
+    -- Data: 
+    --[[
+        Type: "Player" | "Entity" | "Alarm",
+        ThreatLevel: number,
+        Entity: Entity (if Type is "Player" or "Entity")
+    ]]--
+    function addThreat( data )
+        table.insert(Base.Threats, data)
+        
+        if data.ThreatLevel > Base.ThreatLevel then
+            setThreatLevel( data.ThreatLevel )
+        end
+        
+        Base:update()
+    end
+    
+    Util.bindRemote("base_addThreat", addThreat)
+    
+    
+    function resolveThreat( data )
+        local newLevel = Base.ThreatLevels.NONE
+        table.removeByValue(Base.Threats, data)
+        
+        for i,v in pairs(Base.Threats) do
+            newLevel = math.max(newLevel, v.ThreatLevel)
+        end
+        
+        if data.Resolve then
+            data:Resolve( newLevel )
+        end
+        
+        if newLevel ~= Base.ThreatLevel then
+            setThreatLevel(newLevel)
+        end
+        
+        Base:update()
+    end
+    
+    
+    function resolveEntityThreats( ent )
+        for i=#Base.Threats, 1, -1 do
+            local v = Base.Threats[i]
+            
+            if (v.Type == "Player" or v.Type == "Entity") and v.Entity == ent then
+                resolveThreat(v)
+            end
+        end
+    end
+    
+    Util.bindRemote("base_resolveThreat", resolveEntityThreats)
+    
+    
+    hook.add("PlayerDeath", "base_threatDied", resolveEntityThreats)
+    hook.add("PlayerDisconnected", "base_threatLeft", resolveEntityThreats)
+    
+    timer.create("threat_checkPlayerLeave", 1, 0, function()
+        for i=#Base.Threats, 1, -1 do
+            local v = Base.Threats[i]
+            
+            if v.Type == "Player" and not Base.isInBounds( v.Entity:getPos() ) then
+                resolveThreat(v)
+            end
+        end
+    end)
+    
+    
+    hook.add("EntityRemoved", "resolveThreat", function( e )
+        if not isValid(e) or e:getClass() == "cfc_shaped_charge" then return end
+        
+        resolveEntityThreats( e )
+    end)
+    
+    
+    --[[
+    timer.simple(6, function()
+        print("Simulating owner() death...")
+        hook.run("PlayerDeath", owner())
+    end)
+    ]]
+    
+    
+    local LastSecurityInfraction = 0
+    
+    -- Now internal.
+    function setThreatLevel( level )
+        if level == Base.ThreatLevel then return end
+        
+        local voxInfo = voxThreatData[level]
+        local newAlarm = voxInfo[3]
+        
+        -- so it doesnt collide with the vox ping sound
+        timer.simple(1, function()
+            LowAlarm:stop()
+            HighAlarm:stop()
+            
+            if newAlarm then
+                newAlarm:play()
+                newAlarm:setVolume(2)
+            end
+        end)
+        
+        Base.ThreatLevel = level
+        
+        if level > Base.ThreatLevels.NONE then
+            Announcer:alert("Threat level: " .. voxInfo[2] .. "!")
+        else
+            Announcer:say("Threat level: " .. voxInfo[2] .. ".")
+        end
+        
+        Util.fireRemote( "base_setThreatLevel", level )
+    end
+    
+    
+    --TODO: convert this to the new system allowing messages to be displayed on the heads up boards
+    Util.bindRemote("base_alert", function( level, message )
+        local voxInfo = voxThreatData[level]
+        
+        if level > Base.ThreatLevels.NONE then
+            Announcer:alert( message )
+        else
+            Announcer:say( message )
+        end
+        
+        if Base.ThreatLevel < level then
+            setThreatLevel( level )
+        end
+    end)
+    
+    
+    
+    Util.bindRemote("base_ping", function()
+        return true
+    end)
+    
+    
+    
+    
+    --[[ DEATH MODULE ]]--
+    
+    function selfDestruct()
+        if owner():isInBuild() then return end
+        
+        --vox.announce("Important", "Alert. Reactor breached. All remaining personnel evacuate immediately. Sixty seconds until detonation.")
+        Announcer:alert("Self destruct protocol initiated. All remaining personnel evacuate immediately. T-minus 60 seconds until detonation.")
+        
+        addThreat {
+            Type = "Entity",
+            ThreatLevel = Base.ThreatLevels.TERMINAL,
+            Entity = chip()
+        }
+        
+        timer.simple(30, function()
+            Announcer:alert("Detonation sequence in progress. T-minus 30 seconds until detonation.")
+        end)
+        
+        timer.simple(45, function()
+            Announcer:alert("Detonation sequence in progress. T-minus 15 seconds until detonation.")
+        end)
+        
+        timer.simple(50, function()
+            Announcer:alert("T-minus 10 seconds until detonation.")
+        end)
+        
+        timer.simple(54, function()
+            local i = 6
+            
+            timer.create("DetVoxCountdown", 1, 5, function()
+                i = i - 1
+                
+                Announcer:alert(tostring(i))
+            end)
+        end)
+        
+        timer.simple(3, function()
+            if owner():isInBuild() then return end
+            
+            Util.spawn(function()
+                
+                local maxDist = 0
+                
+                for i,v in pairs(BaseEntities) do
+                    maxDist = math.max(maxDist, v:getPos():getDistance(chip():getPos()))
+                end
+                
+                
+                local function eject( ent )
+                    ent:setFrozen(false)
+                    ent:setNocollideAll(true)
+                    
+                    local blastPercentage = 1 - ent:getPos():getDistance(chip():getPos()) / maxDist
+                    local dir = (ent:getPos() - chip():getPos()) * Vector(1,1,0.5):getNormalized()
+                    ent:applyForceCenter( dir * (blastPercentage + 0.5) * 10 * ent:getMass() )
+                    ent:applyAngForce( Angle(math.random()-0.5, math.random()-0.5, math.random()-0.5) * 300 * ent:getMass() * (blastPercentage + 0.5) )
+                    
+                    table.removeByValue(BaseEntities, ent)
+                    
+                    --TODO: despawn timer? idk could just leave the debris
+                end
+                
+                
+               for i=#BaseEntities, 1, -1 do
+                    local v = BaseEntities[i]
+                    -- 0: directly next to the blast, 1: far from the blast
+                    local blastPercentage = v:getPos():getDistance(chip():getPos()) / maxDist
+                    
+                    if math.random() > blastPercentage then
+                       --[[if math.random() < 0.5 then
+                            eject(v)
+                        end
+                        ]]
+                        v:ignite(300)
+                    end
+                end
+                
+                for i=#BaseEntities, 1, -1 do
+                    local v = BaseEntities[i]
+                    if v == chip() or not isValid(v) then continue end
+                    v:setColor(Color(255,0,0))
+                    
+                    if math.random() < 0.2 then
+                        local size = v:obbSize():getLength()
+                        local ef = effect.create()
+                        ef:setOrigin(v:getPos())
+                        ef:play(size > 100 and "lfs_explosion" or "lfs_missile_explosion")
+                        
+                        if math.random() < 0.5 then
+                            v:remove()
+                        else
+                            eject(v)
+                        end
+                    else
+                        v:remove()
+                    end
+                    
+                    
+                    Util.wait()
+                end
+            end)
+        end)
+    end
+    
+    
+    
+    
+    
+    --[[ NOTORIETY ]]--
+    function addNotoriety( plr )
+        plr.Notoriety = (plr.Notoriety or 0) + 1
+        
+        timer.remove("clear_notoriety_" .. plr:entIndex())
+        timer.create("clear_notoriety_" .. plr:entIndex(), 30, 1, function()
+            clearNotoriety(plr)
+        end)
+    end
+    
+    Util.bindRemote("base_getNotoriety", function( plr )
+        if not plr then return end
+        return plr.Notoriety
+    end)
+    
+    Util.bindRemote("base_addNotoriety", addNotoriety)
+    
+    
+    function clearNotoriety( plr )
+        plr.Notoriety = nil
+        timer.remove("clear_notoriety_" .. plr:entIndex())
+    end
+    
+    Util.bindRemote("base_clearNotoriety", clearNotoriety)
+    
+    
+    hook.add("PlayerDeath", "base_clearNotorietyOnDeath", function( plr, inflictor, attacker )
+        if not plr.Notoriety then return end
+        clearNotoriety(plr)
+    end)
+    
+    
+    hook.add("EntityTakeDamage", "ApplyNotorietyOnHurt", function(victim, attacker, inflictor, amount)
+        if owner():isInBuild() then return end
+        if not isValid(victim) or not isValid(attacker) or victim == attacker then return end
+        
+        if Util.isInMySquad(attacker) then
+            -- we're shooting at them
+            if victim.Notoriety then return end
+            if not victim:isPlayer() then return end
+            if not Base.isInBounds( victim:getPos() ) or victim:getPos():getDistance(attacker:getPos()) > 1000 then return end
+            
+            if not Util.isInMySquad( victim ) then
+                addNotoriety( victim )
+            end
+        else
+            -- they're shooting at us
+            if attacker.Notoriety then return end
+            if not victim:isPlayer() or amount < 85 then return end --no reason to care about vehicles, at least for now
+            
+            if Util.isInMySquad(victim) then
+                addNotoriety( attacker )
+                
+                -- this is a bit of an overreaction for a poke
+                --[[if Base.ThreatLevel <= Base.ThreatLevels.MEDIUM then
+                    Announcer:alert("Hostile operative detected.")
+                end
+                
+                addThreat {
+                    Type = "Player",
+                    ThreatLevel = Base.ThreatLevels.LOW,
+                    Entity = attacker
+                }]]
+            end
+        end
+    end)
+    
+    
+    
+    
+    function isAlarmActive()
+        for i,v in pairs(Base.Threats) do
+            if v.Type == "Alarm" then return true end
+        end
+        
+        return false
+    end
+    
+    
+    for i,v in pairs(wire.ports.AlarmShutoff) do
+        local AlarmShutoff = Button:new( v )
+        
+        function AlarmShutoff.Activate()
+            if not isAlarmActive() then return end
+            
+            vox.announce("Info", "Alarm deactivated.")
+            --setThreatLevel( Jarvis.ThreatLevels.NONE )
+            
+            for i=#Base.Threats, 1, -1 do
+                local v = Base.Threats[i]
+                if v.Type == "Alarm" then
+                    resolveThreat(v)
+                end
+            end
+        end
+    end
+    
+    for i,v in pairs(wire.ports.AlarmButtons) do
+        local Alarm = Button:new( v )
+        
+        function Alarm.Activate()
+            if isAlarmActive() then return end
+            
+            vox.announce("Important", "Alarm activated.")
+            --setThreatLevel( Jarvis.ThreatLevels.LOW )
+            
+            addThreat {
+                Type = "Alarm",
+                ThreatLevel = Base.ThreatLevels.MEDIUM
+            }
+        end
+    end
+    
+    
+    
+    local CARDINAL_DIR = {
+        [0] = "North",
+        [1] = "North-West",
+        [2] = "West",
+        [3] = "South-West",
+        [4] = "South",
+        [5] = "South-East",
+        [6] = "East",
+        [7] = "North-East",
+    }
+    
+    
+    local function getCardinalDirection( Pos )
+        local diff = Intercom:getPos() - (Base.Bounds.Min + Base.Bounds.Max) / 2
+        local bearing = (math.deg(math.atan2(diff.y, diff.x)) - 90) % 360
+        local step = 360/8 -- = 22.5
+        
+        return CARDINAL_DIR[math.round(bearing/step)%8]
+    end
+    
+    
+    
+    function getStuckEnt( shapeCharge )
+        local stuck = trace.line( shapeCharge:obbCenterW(), shapeCharge:localToWorld(Vector(0,0,-4)), shapeCharge )
+        return stuck.Entity
+    end
+    
+    function getClosestBelligerent( pos, range )
+        local BestDist = range or 312
+        local BestMatch = nil
+        
+        for i,v in pairs(find.allPlayers()) do
+            --if v:isInBuild() or Util.isInMySquad(v) then continue end
+            
+            local d = v:getPos():getDistance(pos)
+            
+            if d < BestDist then
+                BestMatch = v
+                BestDist = d
+            end
+        end
+        
+        return BestMatch
+    end
+    
+    
+    
+    hook.add("OnEntityCreated", "CheckForShapeCharges", function( e )
+        if not isValid(e) or e:getClass() ~= "cfc_shaped_charge" then return end
+        if not Base.isInBounds( e:getPos() ) then return end
+        
+        local stuck = getStuckEnt(e)
+        if not isValid(stuck) or stuck:getOwner() ~= owner() then return end
+        
+        -- Give notoriety to someone if anyone's at fault
+        local fault = getClosestBelligerent( e:getPos() )
+        
+        if fault then
+            addNotoriety( fault )
+        end
+        
+        Announcer:alert(getCardinalDirection(e:getPos()) .. " breach in progress. Security personell report immediately.")
+        
+        --[[if Base.ThreatLevel == Jarvis.ThreatLevels.NONE then
+            setThreatLevel( Jarvis.ThreatLevels.LOW )
+        end]]
+        
+        addThreat {
+            Type = "Entity",
+            Entity = e,
+            ThreatLevel = Base.ThreatLevels.MEDIUM
+        }
+    end)
+    
+    
+    
+    hook.add("EntityRemoved", "base_shapeChargeDetection", function( e )
+        if not isValid(e) or e:getClass() ~= "cfc_shaped_charge" then return end
+        if not Base.isInBounds( e:getPos() ) then return end
+        
+        local stuck = getStuckEnt( e )
+        if not stuck.IsBaseEntity then return end
+        
+        if not isValid(stuck) then
+            local dir = getCardinalDirection(e:getPos())
+            
+            Announcer:clearQueue()
+            
+            local msg = Base:addMessage( "Alert", dir .. " breach detected. All available security personell report immediately.", true )
+            --Announcer:alert(dir .. " breach detected. All available security personell report immediately.")
+            
+            addThreat {
+                ThreatLevel = Base.ThreatLevels.HIGH,
+                Type = "Alarm",
+                Resolve = function( self )
+                    Base:removeMessage( msg )
+                end
+            }
+        else
+            Announcer:clearQueue()
+            Announcer:say("Breach denied.")
+        end
+        
+        -- the entity was destroyed, so it can be removed from the threat, though a new threat mightve been created.
+        resolveEntityThreats( e )
+    end)
+    
+    
+    local LastBreachTime = 0
+    
+    hook.add("EntityRemoved", "base_propShotBreachDetection", function( e )
+        if owner():isInBuild() then return end
+        if e:getOwner() ~= owner() or not e:isValidPhys() or not e:isFrozen() or isValid(e:getParent()) then return end
+        if not e.BaseEntity then return end
+        
+        -- just to prevent multiple props being broken stacking net messages/threats
+        if (timer.curtime() - LastBreachTime) < 3 then return end
+        LastBreachTime = timer.curtime()
+        
+        local dir = getCardinalDirection(e:getPos())
+        
+        Announcer:clearQueue()
+        --Announcer:alert(dir .. " breach detected. Heavy structural damage sustained. Security personell and technicians report immediately.")
+        Base:addMessage( "Alert", dir .. " breach detected. All available security personell report immediately.", true, 60 )
+        
+        addThreat {
+            ThreatLevel = Base.ThreatLevels.HIGH,
+            Type = "Alarm"
+        }
+    end)
+    
+    
+    
+    hook.add("PlayerDeath", "PersonnelOnSiteDeath", function( Victim, _, Attacker )
+        -- doesn't need to report every single death, this is like less important than LOW, more of a NOTICE, lol.
+        if Base.ThreatLevel > Base.ThreatLevels.NONE or Victim == Attacker then return end
+        if not isValid(Attacker) or not Attacker:isPlayer() then return end
+        
+        if Util.isInMySquad( Victim ) and not Util.isInMySquad( Attacker ) then
+            if not Base.isInBounds( Victim:getPos() ) then return end
+            
+            --Announcer:alert("Hostile force detected. Intruder alert.")
+            
+            addNotoriety( Attacker )
+            
+            if Base.isInBounds( Victim:getPos() ) and Base.isInBounds( Attacker:getPos() ) then
+                Announcer:clearQueue()
+                local msg = Base:addMessage( "Alert", "Hostile force detected. Intruder spotted on the premises.", true, 60 )
+                
+                addThreat {
+                    ThreatLevel = Base.ThreatLevels.LOW,
+                    Type = "Player",
+                    Entity = Attacker,
+                    Resolve = function( self )
+                        Base:removeMessage( msg )
+                    end
+                }
+            end
+        end
+    end)
+    
+    
+    -- NPCs of interest
+    local NPCoI = {
+        ["terminator_nextbot_zambiebigheadcrab"] = "Demigod Crab",
+        ["terminator_nextbot_zambiebiggerheadcrab"] = "God Crab",
+        ["terminator_nextbot_zambiecop"] = "Fallen Supercop",
+        ["terminator_nextbot_supercop"] = "Supercop"
+    }
+    
+    timer.create("base_search_for_boss_NPCs", 1, 0, function()
+        local NPCs = find.byClass("terminator_*")
+        
+        for i,v in pairs(NPCs) do
+            if v.Flagged then continue end
+            if not NPCoI[v:getClass()] then continue end
+            if v:getPos():getDistance(chip():getPos()) > 5000 then continue end
+            
+            v.Flagged = true
+            
+            --Announcer:alert("WARNING! " .. NPCoI[v:getClass()] .. " spotted! All security personell redirect efforts to eliminating this threat!")
+            local msg = Base:addMessage( "Alert", "WARNING! A " .. NPCoI[v:getClass()] .. " has been spotted near the premises! All security personell on high alert.", true )
+            
+            addThreat {
+                Type = "Entity",
+                ThreatLevel = Base.ThreatLevels.MEDIUM,
+                Entity = v,
+                Resolve = function( self )
+                    Announcer:clearQueue()
+                    Announcer:say(NPCoI[v:getClass()] .. " has been eliminated!")
+                    
+                    Base:removeMessage(msg)
+                end
+            }
+            
+        end
+    end)
+    
+    
+    return Base
+    
+end
+
+
+if CLIENT then
+    
+    local SCREEN_H = 512/852 * 1024
+    local announcerFont = render.createFont( "Coolvetica", 160, 1000, true, false, false, false, 0, false, 0 )
+    local announcerDesc = render.createFont( "Coolvetica", 70 )
+    
+    local stripeW = 150
+    local stripeH = 100
+    local stripeThickness = 50
+    
+    
+    Util.createRenderTarget("announcementBorder", function()
+        render.clear(Color(0,0,0,0))
+        
+        for stripe=0, math.ceil(1024/(stripeThickness*2)) do
+            for x=stripe*stripeThickness*2, stripe*stripeThickness*2 + stripeThickness do
+                render.drawLine( x - stripeW, 0, x, stripeH )
+                render.drawLine( x - stripeW, SCREEN_H-stripeH, x, SCREEN_H )
+            end
+        end
+        
+        
+    end)
+    
+    
+    local prevMessage --TODO
+    
+    local currentMessage
+    local currentType
+    local currentColor
+    local displayStart = 0
+    
+    local voxColor = Color(255,255,255)
+    local voxMessage = ""
+    local voxStart = 0
+    
+    
+    --TODO: how to give different priorities? to make some appear over others
+    
+    
+    
+    local function updateAnnouncementRT()
+        render.setFont(announcerFont)
+        render.setColor(currentColor)
+        render.drawSimpleText( 512, 190, currentType, TEXT_ALIGN.CENTER, TEXT_ALIGN.CENTER )
+    end
+    
+    Util.createRenderTarget("announcementTitle")
+    
+    
+    local function updateAnnouncementBoards()
+        
+        if currentMessage == nil then
+            displayStart = timer.curtime() --power on
+        else
+            prevMessage = currentMessage
+        end
+        
+        
+        local Current = Base.Messages[1]
+        
+        if Current then
+            currentType = "! " .. Current.Type:upper() .. " !"
+            currentColor = Current.Type == "Notice" and Color(220,230,255) or Color(255,100,80)
+            currentMessage = Current.Message
+            
+            --TODO: clear on threat resolved? idk, also maybe make it display the next message on-screen as the new message as it still scrolls the old one?
+            
+            Util.modifyRenderTarget("announcementTitle", updateAnnouncementRT)
+        else
+            --TODO: nil?
+            currentMessage = nil
+            currentType = nil
+            currentColor = nil
+            displayStart = 0
+        end
+    end
+    
+    
+    --hook.run("base_addMessage", struct, Announce, Lifetime)
+    --hook.run("base_removeMessage", removed, structOrId)
+    hook.add("base_addMessage", "announcementUpdate", function( vType, message )
+        updateAnnouncementBoards()
+    end)
+    
+    hook.add("base_removeMessage", "announcementUpdate", function( vType, message )
+        updateAnnouncementBoards()
+    end)
+    
+    
+    --[[
+    hook.add("announcer_message", "announcementUpdate", function( vType, message )
+        voxType = "! " .. vType:upper() .. " !"
+        voxColor = vType == "Notice" and Color(220,230,255) or Color(255,100,80)
+        voxMessage = message
+        voxStart = timer.curtime()
+        
+        --TODO: clear on threat resolved? idk, also maybe make it display the next message on-screen as the new message as it still scrolls the old one?
+        
+        Util.modifyRenderTarget("announcementTitle", updateAnnouncementRT)
+        
+        timer.create("voxClear", 30, 1, function()
+            voxType = nil
+            voxMessage = ""
+        end)
+    end)]]
+    
+    --[[
+    Util.createRenderTarget("announcementScreen", function()
+        
+        render.setColor(Color(255,255,255))
+        local msg = "Test announcement message! Do not be alarmed!"
+        local markup = render.parseMarkup( "<font=" .. announcerDesc .. ">" .. msg .. "</font>", 255 )
+        
+        --:draw(number x, number y, number or nil xAlign, number or nil yAlign, number or nil alpha, number or nil contentAlign)
+        markup:draw( 512, 512+90, TEXT_ALIGN.CENTER, TEXT_ALIGN.CENTER, nil, TEXT_ALIGN.CENTER )
+        
+        --render.setFont(announcerDesc)
+        --render.setColor(Color(255,255,255))
+        --render.drawSimpleText( 512, 512 + 90, "Test announcement message! Do not be alarmed!", TEXT_ALIGN.CENTER, TEXT_ALIGN.CENTER )
+        
+    end)
+    ]]
+    
+    hook.add("render", "draw_announcer_screens", function()
+        if not currentMessage then return end
+        
+        local s = render.getScreenEntity()
+        if s:getModel() ~= "models/props/cs_office/tv_plasma.mdl" then return end
+        
+        local dist = render.getEyePos():getDistance( s:getPos() )
+        if dist > 1000 then return end
+        
+        local w,h = render.getResolution()
+        
+        render.setColor(Color(255,255,255))
+        render.setRenderTargetTexture("announcementTitle")
+        render.drawTexturedRect(0,0,w,w)
+        
+        render.setColor(Color(255,255,255))
+        render.setRenderTargetTexture("announcementBorder")
+        render.drawTexturedRect(-stripeThickness*2 + math.fmod( (timer.curtime() - voxStart)*128, stripeThickness*2 - 6 ),0,w + stripeThickness*2,w)
+        
+        if dist > 600 then return end
+        
+        render.setColor(Color(255,255,255))
+        render.setFont(announcerDesc)
+        local msgWidth = render.getTextSize(currentMessage)
+        local travel = w + msgWidth * 2
+        
+        
+        render.drawSimpleText( w + msgWidth/2 - math.fmod((timer.curtime() - voxStart)*256, travel), h/2 + 50, currentMessage, TEXT_ALIGN.CENTER, TEXT_ALIGN.CENTER )
+        render.drawSimpleText( w + msgWidth/2 - math.fmod((timer.curtime() - voxStart)*256 + travel/2, travel), h/2 + 50, currentMessage, TEXT_ALIGN.CENTER, TEXT_ALIGN.CENTER )
+        
+    end)
+    
+end
+

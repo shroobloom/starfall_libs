@@ -147,8 +147,6 @@ function DeltaOS.drawBootMenu( x, y, h, StartupTime, StartupDuration, Data )
     
     -- table
     
-    --TODO: make the table make sense somehow for other uses
-    
     -- 1.5
     render.drawText(
         x + w*0.025,
@@ -174,14 +172,12 @@ function DeltaOS.drawBootMenu( x, y, h, StartupTime, StartupDuration, Data )
     -- 1.1
     if Prog < 0.3 then return end
     
-    -- funny date :)
     render.drawText( 
         x + w*0.025,
         y + h*0.5,
         "Delta Corp. Boot Application v.1.26.23"
     )
     
-    -- LORE!!! LORE!!!!!!!!!!
     render.drawText( 
         x + w*0.025,
         y + h*0.575,

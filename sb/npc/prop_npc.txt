@@ -7,10 +7,11 @@
 
 
 --TODO: rework this, it should probably be an entity wrapper and stored inside NPC
-
+-- Deprecated. Do not use this for future works. ^^
 
 local PropNPC = class("PropNPC")
 PropNPC.Instances = {}
+PropNPC.Reference = {}
 
 
 

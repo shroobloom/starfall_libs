@@ -85,7 +85,15 @@ if (Pos) {
             Name = "Combine Roof Turret",
             Class = "npc_turret_ceiling",
             Health = 300,
-            Ceiling = true
+            Ceiling = true,
+            
+            --TODO: untested
+            Death = function( self )
+                timer.simple(1, function()
+                    if not isValid(self) then return end
+                    self:remove()
+                end)
+            end
         })
         
         NPC:register("Strider", {
@@ -172,6 +180,14 @@ if (Pos) {
                 {"Manhack", 0, 5}
             }
         })
+        
+        NPC:register("Hunter", {
+            Name = "Hunter",
+            Class = "npc_hunter",
+            Damage = 2,
+            BoxSize = Vector(36, 36, 100),
+        })
+        
         
         
         NPC:register("Captain", {

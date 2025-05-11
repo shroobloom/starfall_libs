@@ -244,19 +244,22 @@ end
 function TargetFinder:setTarget( target )
     if self.Target == target then return end
     
-    if isValid(self.Target) then
+    local oldTarget = self.Target
+    
+    -- Put this to set before the call to fix sentinel drone eye colour
+    self.Target = target
+    
+    if isValid(oldTarget) then
         if isValid(target) then
-            self:onTargetChanged( self.Target, target )
+            self:onTargetChanged( oldTarget, target )
         else
-            self:onTargetLost( self.Target )
+            self:onTargetLost( oldTarget )
         end
     else
         if isValid(target) then
             self:onTargetFound( target )
         end
     end
-    
-    self.Target = target
 end
 
 
