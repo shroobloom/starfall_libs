@@ -11,58 +11,208 @@ local Util = require("sb/util.txt")
 
 local Precacher = class("Precacher")
 Precacher.Instances = {}
+Precacher.ByType = {}
 Precacher.ThinkIndex = 0
+Precacher.SuppressRemotes = false
 
 
 function Precacher:initialize( model, size )
-    self.Props = {}
-    self.Model = model
-    self.Size = size or 0
+    self.Entities = {}
+    self.Type = model
+    self.Size = size or 1
     
     table.insert(Precacher.Instances, self)
+    Precacher.ByType[model] = self
 end
 
 
 function Precacher:remove()
-    for i,v in pairs(self.Props) do
+    for i,v in pairs(self.Entities) do
         v:remove()
+        v.Storage = nil
     end
     
     table.removeByValue(Precacher.Instances, self)
+    Precacher.ByType[self.Type] = nil
 end
 
+
+
+
+
+function Precacher.static:getOrCreate( model, size )
+    if Precacher.ByType[model] then 
+         Precacher.ByType[model].Size = math.max(Precacher.ByType[model].Size, size)
+        return Precacher.ByType[model]
+    else
+        return Precacher:new( model, size )
+    end
+end
 
 
 function Precacher:trySpawn()
     local spawned
     
     pcall(function()
-        spawned = prop.create( Vector(), Angle(), self.Model, true )
+        spawned = prop.create( Vector(), Angle(), self.Type, true )
     end)
     
     return spawned
 end
 
 
-function Precacher:addProp( ent )
-    assert(ent:getModel() == self.Model, "Incorrect model to add to this prop precacher! (expected \"" .. self.Model .. "\", got \"" .. ent:getModel() .. ")")
+
+function Precacher:validateEntity( ent )
+    assert(isValid(ent), "Cannot add prop to precacher: Entity is not valid!")
+    assert(ent:getModel() == self.Type, "Cannot add prop to precacher: Incorrect model to add to this prop precacher! (expected \"" .. self.Type .. "\", got \"" .. ent:getModel() .. ")")
+    assert(not ent.Storage, "Cannot add prop to precacher: Entity " .. tostring(ent) .. " is already in storage!")
+end
+
+
+function Precacher:addEntity( ent )
+    self:validateEntity( ent )
     
+    ent:setPos(Vector())
     ent:setNoDraw(true)
     ent:setSolid(false)
     ent:setNocollideAll(true)
     ent:setCollisionGroup(COLLISION_GROUP.IN_VEHICLE)
-    ent:doNotDuplicate() --TODO should this be here
+    ent:doNotDuplicate()
+    ent:setRenderFX( RENDERFX.NONE )
+    ent:setRenderMode( RENDERMODE.NONE )
+    ent:setColor(Color(255,255,255))
+    ent:removeTrails()
     
-    table.insert(self.Props, ent)
+    table.insert(self.Entities, ent)
     
-    --print("Added ", ent)
-    --print("Count: ", #self.Props, " / ", self.Size)
+    ent.Storage = self
+    
+    hook.run("SB_Precacher_EntityStored", self, ent)
+    
+    if not Precacher.SuppressRemotes then
+        Util.fireRemote( "SB_Precacher_EntityStored", ent )
+    end
+end
+
+Util.bindRemote("SB_Precacher_EntityStored", function(ent)
+    local self = Precacher.ByType[ent:getModel()] or Precacher.ByType[ent:getClass()]
+    
+    if not self then return end
+    
+    --TODO: since its already stored, this is a performance hit to do this for every single chip, just do it manually?
+    --[[Precacher.SuppressRemotes = true
+    self:addEntity( ent )
+    Precacher.SuppressRemotes = false]]
+    
+    table.insert(self.Entities, ent)
+    ent.Storage = self
+    
+    hook.run("SB_Precacher_EntityStored", self, ent)
+end)
+
+
+
+
+
+-- Can be called statically or dynamically
+-- May return nil if there are no props available
+-- If called statically, will look up the associated precacher with that ID/type
+-- TODO: make this an actual static method instead
+function Precacher:takeEntity( typeOptionalOrGhost, ghost )
+    if not self:isInstanceOf( Precacher ) then
+        assert(typeOptional, "Please specify a type for static Precacher::takeEntity call!")
+        assert(Precacher.ByType[typeOptional], "Precacher with type \"" .. typeOptional .. "\" does not exist!")
+        
+        return Precacher.ByType[typeOptional]:takeEntity( ghost )
+    end
+    
+    local ent = table.remove(self.Entities, 1)
+    if not isValid(ent) then return nil end
+    
+    if isValid(ent) then
+        ent:setNoDraw(false)
+        ent:setSolid(true)
+        
+        if not typeOptionalOrGhost then
+            ent:setCollisionGroup(COLLISION_GROUP.NONE)
+        end
+        
+        ent.Storage = nil
+    end
+    
+    hook.run("SB_Precacher_EntityTaken", self, ent)
+    
+    if not Precacher.SuppressRemotes then
+        Util.fireRemote( "SB_Precacher_EntityTaken", ent )
+    end
+    
+    return ent
 end
 
 
-function Precacher:takeProp()
-    return table.remove(self.Props, 1)
+Util.bindRemote("SB_Precacher_EntityTaken", function(ent)
+    local self = Precacher.ByType[ent:getModel()] or Precacher.ByType[ent:getClass()]
+    
+    if not self then return end
+    
+    --[[Precacher.SuppressRemotes = true
+    self:takeEntity()
+    Precacher.SuppressRemotes = false]]
+    
+    table.removeByValue(self.Entities, ent)
+    ent.Storage = nil
+    
+    hook.run("SB_Precacher_EntityTaken", self, ent)
+end)
+
+
+
+
+Util.bindRemote("SB_Precacher_Request", function()
+    local out = {}
+    
+    for i,v in pairs( Precacher.ByType ) do
+        out[i] = v.Entities
+    end
+    
+    return out
+end)
+
+
+do
+    local Responses = hook.runRemote(nil, "SB_Precacher_Request")
+    local Combined = {}
+    
+    for i,v in pairs(Responses) do
+        local modelToEnts = v[1]
+        
+        for mdl,ents in pairs(modelToEnts) do
+            if not Combined[mdl] then
+                Combined[mdl] = ents
+            else
+                for i,v in pairs(ents) do
+                    if table.hasValue( Combined[mdl], v ) then continue end
+                    table.insert(Combined[mdl], v)
+                end
+            end
+        end
+    end
+    
+    for mdl, ents in pairs(Combined) do
+        local pc = Precacher:getOrCreate( mdl, 0 ) --size 0 so it doesnt stock on its own, no point if its not using it
+        
+        for i,v in pairs(ents) do
+            table.insert( pc.Entities, v )
+            v.Storage = pc
+            
+            hook.run("SB_Precacher_EntityStored", pc, v)
+        end
+    end
 end
+
+
+
+
 
 
 --TODO: make sure this works for multiple at a time
@@ -81,7 +231,7 @@ function Precacher:takePropsAsync( count, callback )
     while #out < count do
         Util.wait()
         
-        local ent = self:takeProp()
+        local ent = self:takeEntity()
         if not ent then continue end
         
         table.insert(out, ent)
@@ -105,9 +255,71 @@ end
 
 
 
+function Precacher:ensureSize( size )
+    self.Size = math.max( self.Size, size )
+end
 
 
-timer.create("precacher_spawn", 1/prop.spawnRate(), 0, function()
+function Precacher.static:ensureSize( byType, size )
+    local inst = Precacher.ByType[byType]
+    assert(inst, "Precacher with type \"" .. byType .. "\" does not exist!")
+    inst:ensureSize(size)
+end
+
+
+
+
+
+Precacher.Entity = class("EntityPrecacher", Precacher)
+
+
+function Precacher.Entity:initialize( class, size, properties )
+    Precacher.initialize( self, class, size )
+    self.Properties = properties
+end
+
+
+
+function Precacher.Entity:trySpawn()
+    local spawned
+    
+    pcall(function()
+        spawned = prop.createSent( Vector(), Angle(), self.Type, true, self.Properties )
+    end)
+    
+    return spawned
+end
+
+
+function Precacher.Entity.static:getOrCreate( class, size )
+    if Precacher.ByType[class] then 
+         Precacher.ByType[class].Size = math.max(Precacher.ByType[class].Size, size)
+        return Precacher.ByType[class]
+    else
+        return Precacher.Entity:new( class, size )
+    end
+end
+
+
+function Precacher.Entity:validateEntity( ent )
+    assert(ent:getClass() == self.Type, "Cannot add prop to precacher: Incorrect class to add to this prop precacher! (expected \"" .. self.Type .. "\", got \"" .. ent:getClass() .. ")")
+    assert(not ent.Storage, "Cannot add prop to precacher: Entity " .. tostring(ent) .. " is already in storage!")
+end
+
+
+
+
+
+hook.add("EntityRemoved", "sb_precacher_on_remove", function( ent )
+    if not ent.Storage then return end
+    
+    table.removeByValue(ent.Storage.Entities, ent)
+end)
+
+
+
+
+timer.create("sb_precacher_spawn", 1/prop.spawnRate(), 0, function()
     if #Precacher.Instances == 0 or not prop.canSpawn() or #Spawner.Queue > 0 then return end
     
     for i=1, #Precacher.Instances do
@@ -115,7 +327,7 @@ timer.create("precacher_spawn", 1/prop.spawnRate(), 0, function()
         Precacher.ThinkIndex = i
         local self = Precacher.Instances[Precacher.ThinkIndex]
         
-        if #self.Props < self.Size then
+        if #self.Entities < self.Size then
             break
         elseif i == #Precacher.Instances then
             return
@@ -127,7 +339,7 @@ timer.create("precacher_spawn", 1/prop.spawnRate(), 0, function()
     local ent = self:trySpawn()
     if not ent then return end
     
-    self:addProp( ent )
+    self:addEntity( ent )
 end)
 
 

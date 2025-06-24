@@ -25,6 +25,9 @@ local TargetFinderDataStruct = {
     -- The entity to test LoS from.
     Eye = chip(),
     
+    -- The vector, local to the Eye entity, that LoS will be tested from.
+    EyeOffset = Vector(),
+    
     -- The direction that's considered "forward" when checking FoV.
     EyeDir = Vector(1,0,0)
 }
@@ -112,7 +115,7 @@ end
 
 
 function TargetFinder:bindToPvp()
-    local id = math.random(1,100000)
+    local id = math.random(1,10000000)
     
     self.Enabled = owner():isInPvp()
     
@@ -152,7 +155,9 @@ end
 
 
 function TargetFinder:hasLoS( Target )
-    local tr = trace.line( self.Eye:obbCenterW(), Target:obbCenterW(), function( e )
+    local eyePos = self.Eye:localToWorld( self.EyeOffset )
+    
+    local tr = trace.line( eyePos, Target:obbCenterW(), function( e )
         return isValid(e:getPhysicsObject()) and e:isFrozen() and not isValid(e:getParent()) and e ~= self.Eye and e ~= chip()
     end)
     
@@ -160,7 +165,7 @@ function TargetFinder:hasLoS( Target )
         return true
     end
     
-    local trEyes = trace.line( self.Eye:obbCenterW(), Target:getEyePos(), function( e )
+    local trEyes = trace.line( eyePos, Target:getEyePos(), function( e )
         return isValid(e:getPhysicsObject()) and e:isFrozen() and not isValid(e:getParent()) and e ~= self.Eye and e ~= chip()
     end)
     
@@ -312,9 +317,15 @@ end
 
 
 
+function TargetFinder:isEnabled()
+    return self.Enabled
+end
+
+
+
 
 function TargetFinder:findTarget()
-    if not self.Enabled then
+    if not self:isEnabled() then
         return self:clearTarget()
     end
     
@@ -368,8 +379,23 @@ end
 
 
 
-function TargetFinder:getTargetVelocity()
-    if self.Target:isNPC() or not self.Target:getVehicle():isValid() then
+
+
+function TargetFinder:getTargetPos( target )
+    target = target or self.Target
+    
+    if self.Target:isPlayer() and isValid(self.Target:getVehicle()) then
+        return Util.getGrandparent( self.Target:getVehicle() ):obbCenterW()
+    end
+    
+    return self.Target:obbCenterW()
+end
+
+
+function TargetFinder:getTargetVelocity( target )
+    target = target or self.Target
+    
+    if self.Target:isNPC() or self.Target:isNextBot() or not self.Target:getVehicle():isValid() then
         return self.Target:getVelocity()
     end
     
@@ -396,6 +422,7 @@ hook.add("EntityRemoved", "TargetFinder_ClearTargets", function( e )
     for i,v in pairs(TargetFinder.Instances) do
         if v.Target == e then
             v:clearTarget()
+            v:findTarget()
         end
     end
 end)
@@ -404,9 +431,12 @@ hook.add("PlayerDeath", "TargetFinder_ClearTargets", function( e )
     for i,v in pairs(TargetFinder.Instances) do
         if v.Target == e then
             v:clearTarget()
+            v:findTarget()
         end
     end
 end)
+
+
 
 
 

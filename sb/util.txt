@@ -182,6 +182,16 @@ function Util.getAncestor( Ent )
     return Parent
 end
 
+-- Shallow copies the table
+function Util.shallowCopy( t )
+    local out = {}
+    
+    for i,v in pairs(t) do
+        out[i] = v
+    end
+    
+    return out
+end
 
 
 
@@ -378,6 +388,33 @@ function Util.readDataTable( Callback )
         return Collected
     end]]
 end
+
+
+
+function Util.addRemoveCallback( ent, cb )
+    ent.SB_Util_RemoveCallback = cb
+end
+
+function Util.removeRemoveCallback( ent )
+    ent.SB_Util_RemoveCallback = nil
+end
+
+
+hook.add("EntityRemoved", "sb_util_remove_callback", function( ent, fullupdate )
+    if not ent or not ent.SB_Util_RemoveCallback then return end
+    
+    ent.SB_Util_RemoveCallback( ent, fullupdate )
+    ent.SB_Util_RemoveCallback = nil
+end)
+
+hook.add("SB_Precacher_EntityStored", "sb_util_remove_callback", function( precacher, ent )
+    if not ent.SB_Util_RemoveCallback then return end
+    
+    ent.SB_Util_RemoveCallback = nil
+end)
+
+
+
 
 
 
@@ -664,6 +701,31 @@ function Util.cloneAsHolo( e )
     return h
 end
 
+
+
+-- Fades an ent out and removes it.
+-- Specify a boolean for whether or not it should fade out fast (takes 1s) or slow (takes 2s)
+-- Specify a remove callback to run this instead of removing it after its faded.
+function Util.fadeRemove( ent, removeTime, fast, removeCallback )
+    removeTime = removeTime or 5
+    
+    timer.simple(removeTime - (fast and 1 or 2), function()
+        if not isValid(ent) then return end
+        
+        ent:setRenderMode( RENDERMODE.TRANSALPHA )
+        ent:setRenderFX( fast and RENDERFX.FADEFAST or RENDERFX.FADESLOW )
+    end)
+    
+    timer.simple(removeTime, function()
+        if not isValid(ent) then return end
+        
+        if removeCallback then 
+            removeCallback(ent)
+        else
+            ent:remove()
+        end
+    end)
+end
 
 
 

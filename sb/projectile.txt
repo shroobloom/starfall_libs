@@ -14,7 +14,7 @@ local Precacher = require("sb/precacher.txt")
 
 local Projectile = class("Projectile")
 Projectile.Instances = {}
-Projectile.ExplosivePrecacher = Precacher:new( "models/props_c17/oildrum001_explosive.mdl", 0 ) --Change this object's "Size" variable to precache explosives
+Projectile.ExplosivePrecacher = Precacher:getOrCreate( "models/props_phx/ww2bomb.mdl", 0 ) --Change this object's "Size" variable to precache explosives
 
 
 
@@ -30,10 +30,21 @@ Projectile.ExplosivePrecacher = Precacher:new( "models/props_c17/oildrum001_expl
 
 
 
-local PropertyDefaults = {
-    Model = "models/props_c17/oildrum001_explosive.mdl",
-    ModelAngle = Angle(90,0,0),
+Projectile.PropertyDefaults = {
+    -- The model to spawn (ensure you're able to spawn a prop before running Projectile::new if you're using this!)
+    Model = "models/props_phx/ww2bomb.mdl",
     
+    -- Or supply an already-spawned entity to use instead:
+    Instance = nil,
+    
+    -- The forward vector of the model
+    -- Barrels, for example, you might want the "up" vector to face forward, so you'll use (0,0,1)
+    ModelForward = Vector(1,0,0),
+    
+    -- No longer used
+    --ModelAngle = Angle(90,0,0),
+    
+    -- Whether or not to :fire() the projectile as it's spawned
     Enabled = true,
     
     -- Initial velocity - the projectile will have this velocity on launch
@@ -54,8 +65,10 @@ local PropertyDefaults = {
     
     Gravity = true,
     
+    -- Projectile will explode and play ExplosionEffect on collide if this is true
+    Explosive = true,
+    
     -- Explosion effect
-    -- Change the properties to know
     ExplosionEffect = {
         Name = "glide_explosion",
         Scale = 1,
@@ -88,19 +101,24 @@ local PropertyDefaults = {
         Power = 0
     },
     
-    -- Homing properties (TODO: UNIMPLEMENTED)
-    Homing = {
-        TurnForce = 0 --TODO: implement
+    -- Homing properties
+    Guidance = {
+        -- The max turn rate in degrees/s
+        TurnRate = 45,
+        
+        -- The clamping cone (in degrees) to use for determining force
+        -- Increase it if your rocket is spazzing out. Decrease it if your rocket isn't snappy enough.
+        ClampCone = 5,
+        
+        -- If set, causes the missiles to curve to their target instead of flying directly at them at a specific height.
+        ArcHeight = 0
     },
     
     -- If true, the projectile will turn to face its current velocity
     -- Has no effect on homing projectiles.
     FinStabilized = true,
     
-    -- If set, causes the missiles to curve to their target instead of flying directly at them at a specific height.
-    ArcHeight = nil,
-    
-    -- After this duration, the projectile will self-destruct
+    -- After this duration, the projectile will self-remove
     Lifetime = 30,
     
     -- The number of supplementary explosives to spawn
@@ -108,20 +126,28 @@ local PropertyDefaults = {
     -- You may check if all supplementary explosives are spawned by reading "Ready"
     ExplosionPower = 0,
     
-    -- The number of times this projectile can bounce
-    MaxBounce = 0,
+    -- How long it takes for the projectile to fade out after it hits (only for non-explosive projectiles)
+    FadeOutTime = 5,
     
-    -- The max angle this projectile can bounce from, 0-90, 0 = perpendicular, 90 = parallel
-    -- TODO: Unimplemented
+    -- Override to run this code when the projectile fully fades out (only for non-explosive projectiles)
+    removeCallback = nil,
+    
+    -- The number of times this projectile can bounce
+    MaxBounces = 0,
+    
+    -- The max angle this projectile can bounce from, 0-90, 0 = perpendicular (never bounce), 90 = parallel (always bounce)
     MaxBounceAngle = 90,
     
     -- Override to determine whether or not the projectile should bounce
     shouldBounce = function( self, hit )
         if self.BouncesLeft == 0 then return false end
         
-        local angle = 0 --TODO
+        local dir = hit.OurOldVelocity:getNormalized()
+        local surface = hit.HitNormal
         
-        return true
+        local angle = 90 - math.deg(math.acos( surface:dot(dir) ))
+        
+        return angle < self.MaxBounceAngle
     end,
     
     -- Override to replace the default bounce and impact behaviour.
@@ -131,8 +157,9 @@ local PropertyDefaults = {
             
             local curVel = hit.OurOldVelocity --self.Instance:getVelocity()
             local reflected = curVel - 2 * (curVel:dot(hit.HitNormal)) * hit.HitNormal
+            local _, newAngle = localToWorld( Vector(), -self.ModelAngle, Vector(), reflected:getAngle() )
             
-            self.Instance:setAngles( reflected:getAngle() - self.ModelAngle )
+            self.Instance:setAngles( newAngle ) --reflected:getAngle() - self.ModelAngle
             self.Instance:getPhysicsObject():setVelocity( reflected  )
             self.Instance:setAngleVelocity( Vector() )
             
@@ -140,8 +167,28 @@ local PropertyDefaults = {
         end
         
         --if true then return end
+        self:onHit( hit )
+    end,
+    
+    -- Runs 10 times/s (after every Projectile:think event)
+    onThink = function()
         
-        self:detonate( nil, hit )
+    end,
+    
+    onHit = function( self, hit )
+        self.Hit = true
+        
+        if self.Explosive then
+            self:detonate( nil, hit )
+        else
+            self:remove()
+            --TODO: also clear properties?
+        end
+    end,
+    
+    -- Runs when the explosive is detonated
+    onDetonate = function( self, hitOptional )
+        
     end
 }
 
@@ -149,25 +196,39 @@ local PropertyDefaults = {
 
 function Projectile:initialize( pos, ang, properties )
     
-    Util.applyDefaults( properties, PropertyDefaults )
+    Util.applyDefaults( properties, Projectile.PropertyDefaults )
     
     for i,v in pairs(properties) do
         self[i] = v
     end
     
+    self.ModelAngle = self.ModelForward:getAngle()
     
-    local _, effectiveAng = localToWorld( Vector(), self.ModelAngle, Vector(), ang )
+    -- i think it's negative because it's "undoing" that vector?
+    local _, effectiveAng = localToWorld( Vector(), -self.ModelAngle, Vector(), ang )
     
-    self.Instance = prop.create( pos, effectiveAng, properties.Model, false )
+    if not self.Instance then
+        self.Instance = prop.create( pos, effectiveAng, properties.Model, false )
+    else
+        self.Instance:setPos( pos )
+        self.Instance:setAngles( effectiveAng )
+        self.Instance:setFrozen( false )
+    end
+    
     self.Instance:enableDrag( false )
     self.Instance:enableGravity( properties.Gravity )
     self.Instance:doNotDuplicate()
-    self.Instance:setMass(1) --just so impacts dont kill
     
-    self.Instance:setPhysMaterial("gmod_bouncy") --TODO: test
+    if self.Explosive then 
+        --self.Instance:setMass(1) --just so impacts dont kill
+        self.Instance:getPhysicsObject():addGameFlags( FVPHYSICS.NO_IMPACT_DMG + FVPHYSICS.NO_NPC_IMPACT_DMG ) --allegedly works better
+    end
     
-    --local obbSize = self.Instance:obbSize()
-    --self.Instance:enableSphere( true, math.max(obbSize.x, obbSize.y, obbSize.z)/2 )
+    if self.MaxBounces > 0 then
+        self.Instance:setPhysMaterial("gmod_bouncy") --to prevent energy loss on bounce
+    end
+    
+    self.Instance:setCollisionGroup(COLLISION_GROUP.INTERACTIVE_DEBRIS)
     
     self.Instance.Projectile = self
     
@@ -177,9 +238,9 @@ function Projectile:initialize( pos, ang, properties )
     --TODO: configuration
     self.WobbleSeed = math.random()*math.pi
     self.WobbleDir = math.sign(math.random()-0.5)
-    self.Ready = self.ExplosionPower == 0
+    self.Ready = not self.Explosive or self.ExplosionPower == 0
     
-    self.BouncesLeft = properties.MaxBounce
+    self.BouncesLeft = properties.MaxBounces
     
     if properties.Enabled then
         self.Enabled = false
@@ -191,16 +252,19 @@ function Projectile:initialize( pos, ang, properties )
     
     self.SupplementaryExplosives = {}
     
-    if self.ExplosionPower > 0 then
+    --TODO: support for non-explosive projectiles creating explosions on hit if absolutely needed
+    if self.Explosive and self.ExplosionPower > 0 then
         Util.spawn(function()
             Projectile.ExplosivePrecacher:takePropsAsync( self.ExplosionPower, function( ent )
                 if not self:isValid() then return true end
                 table.insert(self.SupplementaryExplosives, ent)
+                
+                ent:setCollisionGroup(COLLISION_GROUP.IN_VEHICLE)
             end)
             
             self.Ready = true
             
-            print("precache async done, total props: ", #self.SupplementaryExplosives)
+            --print("precache async done, total props: ", #self.SupplementaryExplosives)
             
             if self.AwaitingSupplementaryThread then
                 coroutine.resume(self.AwaitingSupplementaryThread)
@@ -243,7 +307,10 @@ function Projectile:fire()
     
     self.LaunchTime = timer.curtime()
     self.LaunchPos = self.Instance:getPos()
-    self.LaunchAngle = self.Instance:getAngles() + self.ModelAngle
+    
+    local _, launchAngle = localToWorld(Vector(), -self.ModelAngle, Vector(), self.Instance:getAngles())
+    
+    self.LaunchAngle = launchAngle --self.Instance:getAngles() + self.ModelAngle
     self.Enabled = true
     
     local dir = self:getForward()
@@ -252,10 +319,11 @@ function Projectile:fire()
         --dir = (dir:getAngle() + Angle(math.random()-0.5, math.random()-0.5, math.random()-0.5) * 2 * self.Spread):getForward()
         local dirAng = dir:getAngle()
         local off = Angle(math.random()-0.5, math.random()-0.5, math.random()-0.5) * 2 * self.Spread
-        local _, newAngle = localToWorld(Vector(), dirAng, Vector(), off)
+        local _, newAngle = localToWorld(Vector(), off, Vector(), dirAng)
         
         dir = newAngle:getForward()
-        self.Instance:setAngles( newAngle - self.ModelAngle )
+        local _, newLaunchAngle = localToWorld(Vector(), -self.ModelAngle, Vector(), newAngle)
+        self.Instance:setAngles( newLaunchAngle )
     end
     
     self.Instance:applyForceCenter( dir * self.Speed * self.Instance:getMass() )
@@ -265,7 +333,8 @@ function Projectile:fire()
     end
     
     self.Instance:addCollisionListener(function( hit )
-        if self.Detonated or hit.HitEntity.Projectile then return end
+        if timer.curtime() == self.LastHit or self.Hit or hit.HitEntity.Projectile then return end
+        self.LastHit = timer.curtime()
         self:onCollide( hit )
     end)
 end
@@ -295,12 +364,14 @@ end
 
 
 function Projectile:getForward()
-    return self.Instance:localToWorldVector( self.ModelAngle:getForward() )
+    return self.Instance:localToWorldVector( self.ModelForward )
 end
 
 
+
 -- Runs 10 times/s to allow for a ton of projectiles and still being performant
-function Projectile:think()
+-- TODO: dynamic rate?
+function Projectile:think( dt )
     if not self.Enabled then return end
     
     if type(self.Target) ~= "Vector" and not isValid(self.Target) then
@@ -314,13 +385,12 @@ function Projectile:think()
     if self.Thrust > 0 then
         local curThrust = self.Thrust
         
-        if self.MaxThrust then
+        if self.ThrustMax then
             local accel = math.clamp((timer.curtime() - self.LaunchTime) / self.ThrustRampupTime, 0, 1)
-            curThrust = math.lerp(accel, self.Thrust, self.MaxThrust or self.Thrust)
+            curThrust = math.lerp(accel, self.Thrust, self.ThrustMax or self.Thrust)
         end
         
-        
-        self.Instance:applyForceCenter( (self:getForward()*curThrust - self.Instance:getVelocity()*1) * self.Instance:getMass() )
+        self.Instance:applyForceCenter( (self:getForward()*curThrust - self.Instance:getVelocity()) * self.Instance:getMass() )
     end
     
     
@@ -330,7 +400,8 @@ function Projectile:think()
     if self.Target then
         local targetPos = self:getTargetPos()
         
-        if self.ArcHeight then
+        --TODO: improve arc, its kind of janky and should probably interpolate the angle based off of launch angle (and impact angle, which is just opposite of launch angle?) rather than specifying a set height and using target position
+        if self.Guidance.ArcHeight > 0 then
             local tpz0 = targetPos:clone():setZ(0)
             local lpz0 = self.LaunchPos:clone():setZ(0)
             
@@ -343,30 +414,65 @@ function Projectile:think()
             targetPos = math.bezierVector( alpha + 0.1, self.LaunchPos, mid, targetPos )
         end
         
+        if self.Target.getVelocity then
+            local dist = targetPos:getDistance(self.Instance:getPos())
+            local ttr = math.min(dist / self.Instance:getVelocity():getLength() - 0.1, 3)
+            targetPos = targetPos + self.Target:getVelocity() * ttr
+        end
+        
         targetAngle = (targetPos - self.Instance:getPos()):getAngle()
     elseif self.FinStabilized then
-        targetAngle = self.Instance:getVelocity():getAngle() - self.ModelAngle
+        local vel = self.Instance:getVelocity()
+        
+        if vel:getLength() > 10 then
+            targetAngle = vel:getAngle()
+        end
     end
     
-    if self.Wobble.Frequency ~= 0 then
-        targetAngle = targetAngle + Angle(
+    if self.Wobble.Speed ~= 0 then
+        
+        local offset = Angle(
             math.sin( timer.curtime()*math.pi*self.Wobble.Speed*self.WobbleDir + self.WobbleSeed )*self.Wobble.Power,
             math.cos( timer.curtime()*math.pi*self.Wobble.Speed*self.WobbleDir + self.WobbleSeed )*self.Wobble.Power,
             0
         ) * math.min( (timer.curtime() - self.LaunchTime), 1 )
+        
+        if self.Target then
+            local targetDistance = self.Instance:getPos():getDistance(self:getTargetPos())
+            local reduce = math.min( targetDistance / self.Instance:getVelocity():getLength() / 2, 1 )
+            offset = offset * reduce
+        end
+        
+        
+        targetAngle = targetAngle + offset
     end
     
     
     if targetAngle ~= self.LaunchAngle then
+        --[[local _, targetAngleFinal = localToWorld( Vector(), -self.ModelAngle, Vector(), targetAngle )
+        
         local inertiaVec = self.Instance:getInertia()
         local inertia = Angle( inertiaVec.y, inertiaVec.z, inertiaVec.x )
         
-        local localAng = self.Instance:worldToLocalAngles(targetAngle)
-        localAng.p = math.clamp(localAng.p, -15, 15)
-        localAng.y = math.clamp(localAng.y, -15, 15)
+        local localAng = self.Instance:worldToLocalAngles(targetAngleFinal)
+        --localAng.p = math.clamp(localAng.p, -15, 15)
+        --localAng.y = math.clamp(localAng.y, -15, 15)
         
-        self.Instance:applyAngForce( (localAng*200 - self.Instance:getAngleVelocityAngle()*30) * inertia )
+        self.Instance:applyAngForce( (localAng*100 - self.Instance:getAngleVelocityAngle()*10) * inertia )]]
+        
+        -- okay, new and improved method:
+        local _, targetAngleFinal = localToWorld( Vector(), -self.ModelAngle, Vector(), targetAngle )
+        local lAng = self.Instance:worldToLocalAngles( targetAngleFinal )
+        lAng.r = 0
+        
+        lAng.p = math.clamp( lAng.p, -self.Guidance.ClampCone, self.Guidance.ClampCone ) * (1 / self.Guidance.ClampCone) * self.Guidance.TurnRate
+        lAng.y = math.clamp( lAng.y, -self.Guidance.ClampCone, self.Guidance.ClampCone ) * (1 / self.Guidance.ClampCone) * self.Guidance.TurnRate
+        
+        self.Instance:setAngleVelocity( Vector( lAng.r, lAng.p, lAng.y ) )
+        
     end
+    
+    self:onThink( dt )
     
 end
 
@@ -390,11 +496,11 @@ end
 
 -- Breaks a prop while tagging you for the kill credit
 -- Also will not explosion ratelimit you, at the cost of not tagging your kills.
-local function taggedBreak( ent, forceTag )
+function Projectile.taggedBreak( ent, forceTag )
     local mdl = ent:getModel()
     local wasTagged = false
     
-    if IS_CFC then
+    --[[if IS_CFC then
         -- Don't tag if the ratelimiter is on cooldown
         if canDetonate( ent ) then
             local actuallyTag = forceTag
@@ -426,10 +532,10 @@ local function taggedBreak( ent, forceTag )
                 wasTagged = true
             end
         end
-    else
+    else]]
         ent:applyDamage(10, owner(), owner(), DAMAGE.BLAST)
         wasTagged = false
-    end
+    --end
     
     ent:breakEnt()
     
@@ -439,6 +545,7 @@ end
 
 
 
+-- Explodes the projectile
 function Projectile:detonate( dontBreak, collision )
     if self.Detonated then return end
     
@@ -473,7 +580,7 @@ function Projectile:detonate( dontBreak, collision )
                 v:setParent(nil)
                 v:setPos(p)
                 
-                local tagged = taggedBreak(v, hitUnfrozenProp)
+                local tagged = Projectile.taggedBreak(v, hitUnfrozenProp)
                 
                 -- wait 0.1s for the explosion ratelimiter
                 -- why does this even exist :despair:
@@ -485,12 +592,14 @@ function Projectile:detonate( dontBreak, collision )
     end
     
     if isValid(self.Instance) and not dontBreak then
-        taggedBreak( self.Instance, hitUnfrozenProp )
+        Projectile.taggedBreak( self.Instance, hitUnfrozenProp )
     end
     
     if effect.canCreate() then
         self:playExplosionEffect()
     end
+    
+    self:onDetonate( collision )
     
     table.removeByValue(Projectile.Instances, self)
     hook.run("ProjectileRemoved", self)
@@ -503,9 +612,17 @@ end
 
 
 function Projectile:remove()
-    if isValid(self.Instance) then
-        self.Instance:remove()
-        self.Detonated = true
+    if self:isValid() then
+        if self.Explosive then
+            self.Instance:remove()
+            self.Detonated = true
+        else
+            if FadeOutTime == 0 then
+                self.Instance:remove()
+            else
+                Util.fadeRemove( self.Instance, self.FadeOutTime, false, self.removeCallback )
+            end
+        end
     end
     
     self.Enabled = false
@@ -517,17 +634,27 @@ end
 
 
 
+local lastThink = timer.curtime()
 
 timer.create("Projectile_Think", 0.1, 0, function()
+    local dt = timer.curtime() - lastThink
+    
     for i,v in pairs(Projectile.Instances) do
-        v:think()
+        v:think( dt )
     end
+    
+    lastThink = timer.curtime()
 end)
 
 
 hook.add("EntityRemoved", "Projectile_Removal", function( e )
     if not e.Projectile then return end
-    e.Projectile:detonate( true )
+    
+    if e.Projectile.Explosive then 
+        e.Projectile:detonate( true )
+    else
+        e.Projectile:remove()
+    end
 end)
 
 

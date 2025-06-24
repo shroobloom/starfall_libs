@@ -43,6 +43,29 @@ function Debug.marker( id, pos, color )
 end
 
 
+function Debug.vector( id, pos, dir, color )
+    dir = dir:getNormalized()
+    
+    if not Debug.Markers[id] then
+        local marker = hologram.create( pos, dir:getAngle(), "models/sprops/misc/bone_from_x.mdl", Vector(1,1,1) )
+        marker:suppressEngineLighting( true )
+        marker:setMaterial("models/debug/debugwhite")
+        
+        Debug.Markers[id] = marker
+    else
+        Debug.Markers[id]:setPos( pos )
+        Debug.Markers[id]:setAngles( dir:getAngle() )
+    end
+    
+    if color then
+        Debug.markers[id]:setColor( color )
+    end
+    
+end
+
+
+
+--TODO: fix
 function Debug.line( id, p0, p1, color )
     if not Debug.Markers[id] then
         Debug.marker( id, Vector(), Angle(), "models/sprops/cylinders/size_5/cylinder_12x12.mdl" )

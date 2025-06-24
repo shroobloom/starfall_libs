@@ -74,11 +74,11 @@ function Contraption:explode()
     
     Center = Center / Count
     
-    
-    if EffectName ~= "" then
+    --TODO: set size based on ent count/bounds?
+    if EffectName ~= "" and effect.canCreate() then
         local expl = effect.create()
         expl:setOrigin(Center)
-        expl:play(EffectName or "lfs_explosion")
+        expl:play(EffectName or "glide_explosion")
     end
     
     chip():remove()

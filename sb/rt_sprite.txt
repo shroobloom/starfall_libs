@@ -10,7 +10,7 @@ local Util = require("sb/util.txt")
 local RTSprite = class("RTSprite")
 RTSprite.Instances = {}
 RTSprite.RenderOrder = {}
-RTSprite.MaxRTs = 20 --Lower this number if you need to reserve RTs for yourself, the max is 20 by default.
+RTSprite.MaxRTs = 16 --Lower this number if you need to reserve RTs for yourself, the global max RT count is 20 by default.
 
 RTSprite.ScalingMode = {
     -- Scales relative to the world (3d sprite appearance, appears smaller as you get farther away)
@@ -150,6 +150,22 @@ end
 
 
 if CLIENT then
+    
+    -- leak detector
+    --[[timer.create("asdf", 1, 0, function()
+        local Loaded = 0
+        local Existing = 0
+        
+        for i,v in pairs(RTSprite.Instances) do
+            Existing = Existing + 1
+            
+            if v.Loaded then
+                Loaded = Loaded + 1
+            end
+        end
+        
+        print(Loaded, Existing)
+    end)]]
     
     function RTSprite.Reorder()
         -- if it works it aint stupid

@@ -77,16 +77,54 @@ end
 -- Calculates how long a projectile will stay in the air for, given an initial velocity v0, a direction Dir, and a launch angle Theta.
 -- If Dir is not specified, it will assume the Y difference is 0.
 function PhysicsSolver.getFlightTime( v0, Theta, Dir )
-    local v0z = math.sin(Theta) * v0
+    --[[local v0z = math.sin(Theta) * v0
     
-    if not Dir or math.abs(Dir.y) < PhysicsSolver.Z_THRESHOLD then
+    if not Dir or math.abs(Dir.z) < PhysicsSolver.Z_THRESHOLD then
         return 2*v0z/G()
     else
-        local Root = math.sqrt(v0z^2 + 2*G()*Dir.z)
+        local Root = math.sqrt(v0z^2 + 2*G()*-Dir.z)
         return (-v0z - Root) / -G()
-    end
+    end]]
+    
+    -- better idea, use horizontal motion:
+    local v0h = math.cos( Theta ) * v0
+    return math.sqrt( Dir.x^2 + Dir.y^2 ) / v0h
 end
 
+
+--[[
+if SERVER then
+    local tar = chip():localToWorld( Vector(300,0,150) )
+    local test = prop.create( chip():getPos() + Vector(0,0,50), Angle(), "models/hunter/blocks/cube025x025x025.mdl", false )
+    test:enableDrag(false)
+    
+    local v0 = physenv.getPerformanceSettings().MaxVelocity
+    
+    local p = PhysicsSolver.getLaunchAngle( v0, tar - (chip():getPos() + Vector(0,0,50)), false )
+    print(math.deg(p))
+    
+    test:getPhysicsObject():setVelocity(Angle(-math.deg(p),0,0):getForward() * v0)
+    hologram.create( tar, Angle(), "models/hunter/blocks/cube025x025x025.mdl" )
+    
+    local t = PhysicsSolver.getFlightTime( v0, p, tar - (chip():getPos() + Vector(0,0,50)) )
+    print(t, "seconds")
+    
+    timer.simple(t, function()
+        test:setColor(Color(255,0,0))
+    end)
+    
+    
+    --[[local diff = Vector(0,0,140)
+    
+    local t = PhysicsSolver.getFlightTime( 600, math.rad(45), diff )
+    print(t)
+    
+    hologram.create( chip():getPos() + Vector(0,0,50) + diff, Angle(), "models/hunter/blocks/cube025x025x025.mdl" )
+    
+    timer.simple(t, function()
+        test:setColor(Color(255,0,0))
+    end)] ]
+end]]
 
 
 

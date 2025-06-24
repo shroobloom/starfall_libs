@@ -45,6 +45,7 @@ if SERVER then
         local cb = EntityNetworker.Bindings[ent]
         if not cb then return end --likely it was removed as the client got, and sent it
         
+        print( ent, net.getBytesLeft(), sender )
         cb( sender )
     end)
     
