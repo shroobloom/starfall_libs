@@ -4,14 +4,24 @@
 --@include sb/util.txt
 --@include sb/delta_os.txt
 --@include sb/command_parser.txt
+--@include sb/entity_networker_v2.txt
+
 
 local Util = require("sb/util.txt")
 local CommandParser = require("sb/command_parser.txt")
 local DeltaOS = require("sb/delta_os.txt")
+local EntityNetworker = require("sb/entity_networker_v2.txt")
 
 
 
 --TODO: make sure users cant get on when other users are on
+
+
+
+-- TODO
+-- [ ] Make hud disconnect delayed and have calcview interpolate out as well
+-- [ ] BUG: it's possible to steal someone's connection
+
 
 
 local STARTUP_TIME = 5
@@ -23,7 +33,7 @@ CLI.Commands = CommandParser:new()
 CLI.User = nil
 CLI.LastUser = nil
 CLI.Lines = {}
-CLI.VERSION = "2.2"
+CLI.VERSION = "2.2b"
 CLI.Zoom = 0.75
 
 CLI.MOTDs = {
@@ -44,8 +54,39 @@ CLI.MOTDs = {
     "Ceci n'est pas un MOTD.",
     "sqrt(-1) love you!",
     "Made by shrooblooms!",
-    "Now with multi-threading!"
+    "Now with multi-threading!",
+    "Successfully built with 3,522 errors and 10,502 warnings.",
+    "UwU",
+    "Skynet online.",
+    "(C) Aperture Science, 2022-2025"
 }
+
+
+CLI.ScreenEntity = nil
+
+function CLI:setScreenEntity( ent )
+    if SERVER then
+        if isValid(CLI.ScreenEntity) then
+            EntityNetworker:remove("cli_screen", CLI.ScreenEntity)
+        end
+        
+        if isValid(ent) then
+            EntityNetworker:add( "cli_screen", ent )
+        end
+    end
+    
+    CLI.ScreenEntity = ent
+end
+
+
+if CLIENT then
+    EntityNetworker:add( "cli_screen", function( ent )
+        CLI:setScreenEntity( ent )
+    end)
+end
+
+
+
 
 
 
@@ -187,7 +228,6 @@ if CLIENT then
     
     CLI.PromptText = ""
     local EntryTimer = 0
-    local ScreenEntity = nil
     
     local LINE_HEIGHT = 36
     
@@ -204,11 +244,11 @@ if CLIENT then
         
         render.clear(Color(0,0,0,0))
         
-        if not CLI.PowerState or not isValid(ScreenEntity) then return end
+        if not CLI.PowerState or not isValid(CLI.ScreenEntity) then return end
         
         
         local sX, sY = render.getResolution()
-        sY = sY * render.getScreenInfo( ScreenEntity ).RatioX
+        sY = sY * render.getScreenInfo( CLI.ScreenEntity ).RatioX
         
         local cX, cY = sX/2, sY/2
         
@@ -224,7 +264,7 @@ if CLIENT then
             
             
             if isValid(ScreenEntity) and math.random() < 0.05 then
-                ScreenEntity:emitSound("sb.click")
+                CLI.ScreenEntity:emitSound("sb.click")
             end
             
             
@@ -239,7 +279,7 @@ if CLIENT then
             DeltaOS.drawBootMenu( consoleX, consoleY, consoleH, CLI.StartupTimer, STARTUP_TIME, {
                 SystemName = "CLI Terminal ver." .. CLI.VERSION,
                 RAM = 16777216,
-                Screen = ScreenEntity,
+                Screen = CLI.ScreenEntity,
                 
                 TableMessage = "Device I/O Listening..."
             })
@@ -302,8 +342,13 @@ if CLIENT then
     
     --TODO: should this be a screen + zoom camera in or a hud with darkened background?
     hook.add("render", "CLI_Draw", function()
+        if not isValid(CLI.ScreenEntity) then
+            CLI.ScreenEntity = render.getScreenEntity()
+        elseif render.getScreenEntity() ~= CLI.ScreenEntity then
+            return
+        end
+        
         local sX, sY = render.getResolution()
-        ScreenEntity = render.getScreenEntity()
         
         if CLI.PowerState and CLI.StartupTimer < STARTUP_TIME then
             CLI.redraw()
@@ -428,22 +473,35 @@ if CLIENT then
         end
     end)
     
+    
+    local function disconnect()
+        if not render.isHUDActive() or CLI.User ~= player() then return end
+        
+        CLI.setUser(nil)
+        
+        net.start("CLI_exit")
+        net.send()
+        
+        input.lockControls(false)
+    end
+    
     Util.bindPress("ALT", function()
-        if not render.isHUDActive() then return end
-        enableHud(player(), false)
+        disconnect()
     end)
     
     Util.bindPress("RALT", function()
-        if not render.isHUDActive() then return end
-        enableHud(player(), false)
+        disconnect()
     end)
     
     
     CLI.CameraDelegateProgress = 0
     CLI.CameraDelegated = false
     
+    --@include sb/debug.txt
+    local Debug = require("sb/debug.txt")
+    
     hook.add("calcview", "CLI_camera", function( pos, ang, fov )
-        if not isValid(ScreenEntity) then return end
+        if not isValid(CLI.ScreenEntity) then return end
         
         local cameraTransitionGoal = CLI.CameraDelegated and 1 or 0
         
@@ -453,28 +511,71 @@ if CLIENT then
             if CLI.CameraDelegateProgress == 1 then return end
         end
         
-        EntryTimer = EntryTimer + timer.frametime()
+        EntryTimer = math.clamp(EntryTimer + (CLI.User == player() and 1 or -1)*timer.frametime()/0.4, 0, 1)
         
-        local info = render.getScreenInfo(ScreenEntity)
+        if EntryTimer == 0 and CLI.User ~= player() then
+            enableHud( player(), false )
+        end
+        
+        
+        local info = render.getScreenInfo(CLI.ScreenEntity)
         local validModel = info.y1 ~= 0 or info.y2 ~= 0
         
-        local tilt = math.sin(math.pi*CLI.CameraDelegateProgress) * 10
+        --[[local tilt = math.sin(math.pi*CLI.CameraDelegateProgress) * 10
         
         local a = Util.smoothCurve( EntryTimer/0.35 )
         local goalAng = ScreenEntity:localToWorldAngles(info.rot + (validModel and Angle(0,90,90) or Angle(90,0,90)))
         local verticalSize = validModel and info.y2 - info.y1 or ScreenEntity:obbSize().x
         local dist = math.tan( math.rad(fov/2) ) * verticalSize * 0.75 * (1 - CLI.CameraDelegateProgress^2 * 0.5)
-        local offset = Vector(
+        local offset = info.offset + Vector(
             info.z,
             (info.x2 + info.x1)/2,
             (info.y2 + info.y1)/2
         )
+        
+        Debug.periodicPrintTable( "asdf", 1, info )
         
         local goalPos = ScreenEntity:localToWorld(offset) - goalAng:getForward()*dist
         
         return {
             origin = math.lerpVector( a, pos, goalPos ),
             angles = math.lerpAngle( a, ang, goalAng ) + Angle(0,0,tilt)
+        }]]
+        
+        
+        local tilt = -math.sin(math.pi*EntryTimer) * 20
+        local rotation, translation, translateLocalToScreen, scale = Matrix(), Matrix(), Matrix(), Matrix(), Matrix()
+        rotation:setAngles(info.rot)
+        rotation:rotate(Angle(-90,0,90 + tilt))
+        translation:setTranslation(info.offset)
+        
+        local verticalSize = validModel and info.y2 - info.y1 or CLI.ScreenEntity:obbSize().x
+        
+        --TODO: camera delegate (or maybe don't since we're trying to move away from CLI used for everything)
+        local dist = math.tan( math.rad(fov/2) ) * verticalSize * 0.75 --* (1 - CLI.CameraDelegateProgress^2 * 0.5)
+        translateLocalToScreen:setTranslation( Vector(-dist,0,0) )
+        
+        -- do we even need the scale? its being applied last
+        scale:setScale(Vector(info.RS, info.RS, info.RS))
+        
+        local screenMatrix = translation * rotation * translateLocalToScreen * scale
+        local worldMatrix = CLI.ScreenEntity:getMatrix() * screenMatrix
+        
+        --[[local mk = Debug.marker("view", worldMatrix:getTranslation())
+        mk:setAngles(worldMatrix:getAngles())
+        mk:setModel("models/sprops/misc/bone_from_x.mdl")
+        
+        local mk2 = Debug.marker("view2", worldMatrix:getTranslation())
+        mk2:setAngles(worldMatrix:getAngles())
+        mk2:setModel("models/sprops/misc/bone_from_y.mdl")]]
+        
+        local camGoalPos = worldMatrix:getTranslation()
+        local camGoalAng = worldMatrix:getAngles()
+        local a = math.easeInOutQuad( EntryTimer ) --Util.smoothCurve( EntryTimer )
+        
+        return {
+            origin = math.lerpVector( a, pos, camGoalPos ),
+            angles = math.lerpAngle( a, ang, camGoalAng )
         }
     end)
     
@@ -519,8 +620,9 @@ function CLI.setUser( NewUser, Loopback )
         end
     end
     
+    --TODO: do this only if its received from net
     if CLIENT and render.isHUDActive() and (NewUser ~= player()) then
-        CLI.kickLocalClient()
+        --CLI.kickLocalClient()
     end
     
     --[[if CLIENT and render.isHUDActive() then
@@ -549,6 +651,8 @@ end
 
 
 
+--TODO: if steam friends and in squad then give permission level 2?
+--TODO: make this a base thing?
 function CLI.getPermissionLevel( User )
     if User == owner() then return 3 end
     if Util.isInMySquad( User ) then return 1 end
@@ -584,6 +688,10 @@ function CLI.setPowerState( State )
     
     if CLIENT then
         CLI.StartupTimer = 0
+        
+        if not State and render.isHUDActive() then
+            input.lockControls(false)
+        end
     end
     
     if SERVER then
