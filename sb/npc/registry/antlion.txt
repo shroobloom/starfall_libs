@@ -15,9 +15,9 @@ if SERVER then
     
     local Burrow
     
-    Spawner.Enqueue(function()
+    Spawner.enqueue(function()
         Burrow = E2VM:new([[
-@name [VM] Burrow KV
+@name Expression 2 Virtual Machine
 @inputs Antlion:entity
 @trigger Antlion
 
@@ -108,13 +108,50 @@ if (Antlion) {
             Spawn = antlionUnburrow,
         })
         
+        NPC:register("AntlionWorker", {
+            Name = "Antlion Worker",
+            Class = "npc_antlion_worker",
+            BoxSize = Vector(32, 32, 64),
+            
+            SpawnObscured = false,
+            Spawn = antlionUnburrow,
+        })
+        
         
         NPC:register("AntlionGuard", {
             Name = "Antlion Guard",
             Class = "npc_antlionguard",
             BoxSize = Vector(80, 80, 100),
             
-            Health = 350,
+            Health = 410,
+            
+            SpawnObscured = false,
+            Spawn = function( npc )
+                setupAntlionGuard( npc )
+                antlionUnburrow( npc )
+            end,
+
+            DefaultAsBoss = false,
+            BossVariant = {
+                Health = 2200,
+                Scale = 1.5,
+                DamageMultiplier = 3
+            },
+            
+            Abilities = {
+                {
+                    Cooldown = 0.25,
+                    Use = runAntlionGuardChargeAnticipation
+                }
+            }
+        })
+        
+        NPC:register("AntlionGuardian", {
+            Name = "Antlion Guardian",
+            Class = "npc_antlionguardian",
+            BoxSize = Vector(80, 80, 100),
+            
+            Health = 340,
             
             SpawnObscured = false,
             Spawn = function( npc )
@@ -126,6 +163,13 @@ if (Antlion) {
                     NPC.createHealthbar( npc )
                 end)
             end,
+
+            DefaultAsBoss = false,
+            BossVariant = {
+                Health = 1800,
+                Scale = 1.5,
+                DamageMultiplier = 3
+            },
             
             Abilities = {
                 {
@@ -143,7 +187,7 @@ if (Antlion) {
             
             Scale = 1.5,
             Health = 200,
-            Damage = 10,
+            DamageMultiplier = 10,
             
             Material = "models/combine_advisor/hose",
             
@@ -176,7 +220,14 @@ if (Antlion) {
                     
                     return amount*0.1
                 end
-            end
+            end,
+
+            DefaultAsBoss = false,
+            BossVariant = {
+                Health = 2000,
+                Scale = 3,
+                DamageMultiplier = 30
+            }
         })
         
         
@@ -190,6 +241,13 @@ if (Antlion) {
             
             Material = "models/combine_soldier/combinesoldiersheet_shotgun",
             
+            DefaultAsBoss = false,
+            BossVariant = {
+                Health = 2000,
+                DamageMultiplier = 2,
+                Scale = 1.5
+            },
+
             SpawnObscured = false,
             Spawn = function( npc )
                 setupAntlionGuard( npc )
@@ -236,12 +294,12 @@ if (Antlion) {
                         local hurtBox = Zone:new( aabbMin - Vector(0,0,10), aabbMax + Vector(0,0,100) )
                         
                         function hurtBox:onPlayerEntered( plr )
-                            NPC.applyDamage( plr, 25, isValid(npc) and npc or vis, DAMAGE.BURN )
+                            NPC.applyDamage( plr, 25 * npc.DamageMultiplier, isValid(npc) and npc or vis, DAMAGE.BURN )
                         end
                         
                         function hurtBox:onPlayerLingered( plr, dt )
                             plr:ignite( 1 ) --TODO: remove then enter hurtbox, see if errors
-                            NPC.applyDamage( plr, 25 * dt, isValid(npc) and npc or vis, DAMAGE.BURN )
+                            NPC.applyDamage( plr, 25 * dt * npc.DamageMultiplier, isValid(npc) and npc or vis, DAMAGE.BURN )
                         end
                         
                         timer.simple(7, function()

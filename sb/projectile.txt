@@ -368,6 +368,9 @@ function Projectile:getForward()
 end
 
 
+--@include sb/debug.txt
+local Debug = require("sb/debug.txt")
+
 
 -- Runs 10 times/s to allow for a ton of projectiles and still being performant
 -- TODO: dynamic rate?
@@ -461,8 +464,23 @@ function Projectile:think( dt )
         self.Instance:applyAngForce( (localAng*100 - self.Instance:getAngleVelocityAngle()*10) * inertia )]]
         
         -- okay, new and improved method:
+        
+        --TODO: fix this mess for non-zero modelAngles
+        --print(targetAngle)
         local _, targetAngleFinal = localToWorld( Vector(), -self.ModelAngle, Vector(), targetAngle )
         local lAng = self.Instance:worldToLocalAngles( targetAngleFinal )
+        --[[print(targetAngleFinal)
+        
+        Debug.vector( "to", self.Instance:getPos(), targetAngle:getForward(), Color(255,0,0) )
+        --local targetAngleFinal = self.Instance:worldToLocalAngles( targetAngle )
+        --local _, lAng = localToWorld( Vector(), -self.ModelAngle, Vector(), targetAngleFinal )
+        
+        --local _, targetAngleFinal = localToWorld( Vector(), -self.ModelAngle, Vector(), targetAngle )
+        --local lAng = self.Instance:worldToLocalAngles( targetAngleFinal )
+        Debug.vector( "to2", self.Instance:getPos(), targetAngleFinal:getForward(), Color(0,0,255) )
+        Debug.vector( "to3", self.Instance:getPos(), lAng:getForward(), Color(0,255,0) )
+        ]]
+        
         lAng.r = 0
         
         lAng.p = math.clamp( lAng.p, -self.Guidance.ClampCone, self.Guidance.ClampCone ) * (1 / self.Guidance.ClampCone) * self.Guidance.TurnRate

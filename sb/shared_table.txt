@@ -19,6 +19,11 @@
 
 
 
+-- TODO
+-- [ ] Make functions call remotely if they're replicated?
+
+
+
 local Util = require("sb/util.txt")
 local SharedTable = class("SharedTable")
 SharedTable.Instances = {}

@@ -26,6 +26,10 @@ local SCOUT_SPAWNS = {
     {
         ID = "Antlion",
         Weight = 2
+    },
+    {
+        ID = "AntlionWorker",
+        Weight = 1
     }
 }
 
@@ -42,16 +46,15 @@ NPC.AutoRegisterParticipants = false
 table.insert(NPC.Participants, owner())]]
 
 
-Spawner.Enqueue(function()
+Spawner.enqueue(function()
     
     local Nest = NPC.spawn( chip():getPos(), "AntlionNest" )
     chip():setPos(Vector())
-    chip():setMass(50000)
     chip():setSolid(false)
     
     
     timer.create("spawnAmbush", 5, 0, function()
-        if #NPC.Participants == 0 or not isValid(Nest) or DisableScouts then return end
+        if #NPC.Participants == 0 or #NPC.getAll( "AntlionNest" ) == 0 or DisableScouts then return end
         
         local spawner = table.random(NPC.Participants)
         NPC.attemptSpawns( spawner:getPos(), SCOUT_SPAWNS, {200,600}, 3 )
@@ -108,8 +111,8 @@ NPC.addHints(
     "Explosives and melee weapons deal much more damage to the Nest.",
     "Airborne attacks are not very effective!",
     "Watch out for projectiles from above!",
-    "Armored Antlions take 90% less damage from bullets.",
-    "Watch out for Fire Ants! Their ignition glands allow them to imbue deadly fire into their attacks!"
+    "Armored Antlions take greatly reduced damage from bullets.",
+    "Watch out for Fire Ants! Their ignition glands allow them to turn the battlefield into a hellscape!"
 )
 
 

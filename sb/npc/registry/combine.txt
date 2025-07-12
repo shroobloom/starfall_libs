@@ -16,9 +16,9 @@ if SERVER then
     
     local BullseyeMaker
     
-    Spawner.Enqueue(function()
+    Spawner.enqueue(function()
         BullseyeMaker = E2VM:new([[
-@name [VM] Bullseye Maker
+@name Expression 2 Virtual Machine
 @inputs Pos:vector
 @outputs Bullseye:entity
 @trigger Pos

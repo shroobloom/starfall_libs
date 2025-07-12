@@ -5,8 +5,9 @@
 --@include sb/e2vm.txt
 --@include sb/util.txt
 --@include sb/npc/health_bar.txt
---@include sb/npc/health_bar_v2.txt
+--@in clude sb/npc/health_bar_v2.txt
 --@include sb/chat_command.txt
+--@include sb/entity_networker_v2.txt
 
 --@include sb/npc/client_main.txt
 --@clientmain sb/npc/client_main.txt
@@ -16,27 +17,28 @@
 
 
 --[[ TODO ]]--
--- [ ] Remove collisions between NPCs
--- [ ] Burst limit error?
--- [ ] PropNPC Health error
--- [ ] Verify antlion unburrow sequence didnt break
+-- [ ] Remove collisions between NPCs?
 -- [ ] path_track setpos spam to make helicopters and other flying enemies work
--- [ ] Antlion hill should be able to be damaged from explosive props (maybe at a reduced multiplier?)
+-- [ ] Antlion hill should be able to be damaged from uncredited explosive props
+-- [ ] Make boss data parsing better (its a little annoying having to account for boss variants in other functions, especially with how many just pull from NPC registry data)
+-- [ ] Boss kill credit leaderboard? (can it be done globally tho? in case of multiple nests?)
+-- [ ] Ragdolls are immediately removed on death?
 
 
 
 local HealthBar = require("sb/npc/health_bar.txt")
-dofile "sb/npc/health_bar_v2.txt"
+--dofile "sb/npc/health_bar_v2.txt"
 
 local Spawner = require("sb/spawner.txt")
 local E2VM = require("sb/e2vm.txt")
 local Util = require("sb/util.txt")
 local ChatCommands = require("sb/chat_command.txt")
+local EntityNetworker = require("sb/entity_networker_v2.txt")
 
 
 
 local NPC = {}
-NPC.EventName = "NPC"
+NPC.EventName = "NPC Event"
 NPC.EventColor = Color(255,20,20)
 
 function NPC.appendEventInfo()
@@ -92,9 +94,9 @@ ChatCommands:add({
 })
 
 
-Spawner.Enqueue(function()
+Spawner.enqueue(function()
     OwnershipOverride = E2VM:new([[
-@name [VM] Owner Bypass
+@name Expression 2 Virtual Machine
 @inputs Entity:entity
 @trigger Entity
 
@@ -105,9 +107,9 @@ if (Entity) {
 end)
 
 
-Spawner.Enqueue(function()
+Spawner.enqueue(function()
     Damager = E2VM:new([[
-@name [VM] Damager
+@name Expression 2 Virtual Machine
 @inputs Amount:number DamageType:number Attacker:entity Target:entity
 @trigger Target
 
@@ -156,8 +158,8 @@ NPC.Debug = false
 NPC.BeaconWardDistance = 2000
 
 -- Self-explanatory
-NPC.DamageMultiplier = 1
-NPC.WeaponProficiency = 3
+NPC.GlobalDamageMultiplier = 1
+NPC.GlobalWeaponProficiency = 3
 
 -- Whether or not to automatically register new participants using the builtin timer and NPC.shouldParticipate(plr)
 NPC.AutoRegisterParticipants = true
@@ -278,6 +280,10 @@ function NPC:register( id, data )
     end
     
     Util.applyDefaults( data, Defaults )
+
+    if data.DefaultAsBoss == nil then
+        data.DefaultAsBoss = data.BossVariant ~= nil
+    end
     
     NPC.Types[id] = data
 end
@@ -566,17 +572,29 @@ end
 
 
 
+-- Spawns an NPC with an ID at a certain position.
+-- Optionally, supply a table of CreationData.
+-- CreationData depends on the NPC, but all NPCs can accept the following data:
+-- - boolean Boss - Defaults to true if BossHealth is present. 
+-- - number Health - Override the default spawn health (or boss health) of the NPC to this number.
+
 function NPC.spawn( pos, id, creationData )
-    
     local data = NPC.Types[id]
     assert(data, "NPC of type \"" .. tostring(id) .. "\" does not exist!")
     
-    local ent = data:Create( pos, creationData or {} )
+    -- Default boss to true if there's a specified boss variant
+    creationData = creationData or {}
+    
+    if creationData.Boss == nil then
+        creationData.Boss = data.DefaultAsBoss --data.BossVariant ~= nil
+    end
+
+    local ent = data:Create( pos, creationData )
     
     if ent:isNPC() or ent:isNextBot() then
-        NPC.wrap(ent, id)
+        NPC.wrap(ent, id, creationData)
     else
-        NPC.wrapProp(ent, id)
+        NPC.wrapProp(ent, id, creationData)
     end
     
     return ent
@@ -589,7 +607,13 @@ local PlayerDispositions = {
     Passive = "like"
 }
 
-function NPC.wrap( ent, ID )
+
+-- Wraps an existing NPC.
+-- Used to convert an untouched NPC into a library NPC.
+-- Internally called by NPC.wrapProp.
+-- Internal
+
+function NPC.wrap( ent, ID, creationData )
     assert(not ent.ID, "NPC has already been wrapped!")
     
     if not ID then
@@ -617,36 +641,44 @@ function NPC.wrap( ent, ID )
     for fieldName,field in pairs(data) do
         ent[fieldName] = field
     end
+
+    -- Run boss override injections
+    if creationData and creationData.Boss and ent.BossVariant then
+        for fieldName, field in pairs(ent.BossVariant) do
+            ent[fieldName] = field
+        end
+    end
     
     
     if ent:isNPC() then
-        if data.Weapons and #data.Weapons > 0 then
-            ent:giveWeapon( table.random(data.Weapons) )
+        if ent.Weapons and #ent.Weapons > 0 then
+            ent:giveWeapon( table.random(ent.Weapons) )
         end
         
-        ent:setDamageMultiplier( NPC.DamageMultiplier * (data.Damage or 1) )
-        ent:setWeaponProficiency( data.Proficiency or NPC.WeaponProficiency )
+        ent:setDamageMultiplier( NPC.GlobalDamageMultiplier * (ent.DamageMultiplier or 1) )
+        ent:setWeaponProficiency( ent.WeaponProficiency or NPC.GlobalWeaponProficiency )
         
-        if data.Scale then
+        if ent.Scale then
             timer.simple(0, function()
                 if not isValid(ent) then return end
-                ent:setScale( data.Scale )
+                ent:setScale( ent.Scale )
             end)
         end
     end
     
-    if ent:isNPC() or ent:isNextBot() then
-        if data.Health then
-            ent:setMaxHealth( data.Health )
-            ent:setHealth( data.Health )
+    if ent:isNPC() or ent:isNextBot() or ent.IsPropNPC then
+        if ent.Health then
+            local health = creationData and creationData.Health or ent.Health
+            ent:setMaxHealth( health )
+            ent:setHealth( health )
             
             -- strange bug with antlions in particular, whether they're burrowed or not
             if ent:getClass() == "npc_antlion" or ent:getClass() == "npc_antlionguard" then
                 timer.simple(0.1, function()
                     if not isValid(ent) then return end
                     
-                    ent:setMaxHealth( data.Health )
-                    ent:setHealth( data.Health )
+                    ent:setMaxHealth( health )
+                    ent:setHealth( health )
                 end)
             end
         end
@@ -654,17 +686,16 @@ function NPC.wrap( ent, ID )
         ent:setLagCompensated(true)
     end
     
-    
-    if data.Color then
-        ent:setMaterial(data.Color)
+    if ent.Color then
+        ent:setColor(ent.Color)
     end
     
-    if data.Material then
-        ent:setMaterial(data.Material)
+    if ent.Material then
+        ent:setMaterial(ent.Material)
     end
     
-    if data.Abilities then
-        for i,v in pairs(data.Abilities) do
+    if ent.Abilities then
+        for i,v in pairs(ent.Abilities) do
             timer.simple(math.random()*v.Cooldown, function()
                 if not isValid(ent) then return end
                 
@@ -675,11 +706,10 @@ function NPC.wrap( ent, ID )
         end
     end
     
-    
     if ent:isNPC() then
         for i,v in pairs(find.allPlayers()) do
             local isParticipant = table.hasValue( NPC.Participants, v )
-            ent:addEntityRelationship( v, isParticipant and (data.PlayerDisposition and PlayerDispositions[data.PlayerDisposition] or "hate") or "like", 0 )
+            ent:addEntityRelationship( v, isParticipant and (ent.PlayerDisposition and PlayerDispositions[ent.PlayerDisposition] or "hate") or "like", 0 )
         end
     end
     
@@ -693,8 +723,22 @@ function NPC.wrap( ent, ID )
         end)
     end]]
     
-    if data.Spawn then
-        coroutine.wrap(data.Spawn)( ent )
+    if ent.Spawn then
+        coroutine.wrap(ent.Spawn)( ent )
+    end
+
+    ent.IsBoss = creationData and creationData.Boss
+
+    if ent.IsBoss then
+        EntityNetworker:add("npc_bossbar", ent, function()
+            net.writeString( ent.Name )
+            net.writeFloat( ent:getHealth() )
+            net.writeFloat( ent:getMaxHealth() )
+        end)
+
+        Util.addRemoveCallback( ent, function()
+            EntityNetworker:remove("npc_bossbar", ent)
+        end)
     end
     
 end
@@ -786,13 +830,14 @@ function NPC.attemptSpawns( ... )
 end
 
 
-function NPC.createHealthbar( npc )
+-- Deprecated.
+--[[function NPC.createHealthbar( npc )
     local data = NPC.Types[npc.ID]
     
     npc.HealthBar = HealthBar:new( npc, data.Boss and data.Name or "", data.Boss )
     npc.HealthBar:setHealth( data.Health )
     npc.HealthBar:setMaxHealth( data.Health )
-end
+end]]
 
 
 -- Interact with doors
@@ -870,36 +915,43 @@ NPC.PropNPCs = {}
 local PropNPCMixin = {}
 
 function PropNPCMixin:setHealth( new )
-    self.Health = new
+    self._health = new
 end
 
 function PropNPCMixin:setMaxHealth( new )
-    self.MaxHealth = new
+    self._maxHealth = new
 end
 
 function PropNPCMixin:getHealth()
-    return self.Health
+    return self._health
 end
 
 function PropNPCMixin:getMaxHealth()
-    return self.MaxHealth
+    return self._maxHealth
 end
 
 
-function NPC.wrapProp( ent, id )
+function NPC.wrapProp( ent, id, creationData )
     NPC.PropNPCs[ent] = id
     
+    ent.IsPropNPC = true
+
     local Data = NPC.Types[id]
-    
-    ent.Health = Data.Health
-    ent.MaxHealth = Data.Health
     
     for methodName,method in pairs(PropNPCMixin) do
         ent[methodName] = method
     end
     
-    NPC.wrap( ent, id )
+    NPC.wrap( ent, id, creationData )
+
 end
+
+
+
+hook.add("EntityTakeDamage", "NPC_BlockPropNPCDamage", function( victim )
+    if not victim.IsPropNPC then return end
+    return true
+end)
 
 
 
@@ -910,8 +962,12 @@ local function killNPC( npc, attacker, inflictor )
     npc.IsChipNPC = false
     hook.run("NPCDeath", npc, attacker, inflictor )
     
-    Util.safeSpawn( npc.Death, npc, attacker, inflictor )
-    
+    --Util.safeSpawn( npc.Death, npc, attacker, inflictor )
+    Util.safeSpawn(function()
+        npc:Death( attacker, inflictor )
+        --npc:remove() --was causing issues with removing ragdolls and erroring healthbars
+    end)
+
     if npc.Abilities then
         for i,v in pairs(npc.Abilities) do
             timer.stop("Entity" .. npc:entIndex() .. "_Ability" .. i)
@@ -919,9 +975,6 @@ local function killNPC( npc, attacker, inflictor )
     end
     
     table.removeByValue(NPC.Instances, npc)
-    
-    --TODO: check if it actually can be removed? like what if i remove it and this function fires as a result? does this error?
-    npc:remove()
 end
 
 
@@ -933,44 +986,101 @@ hook.add("EntityTakeDamage", "NPC_onDamage", function( victim, attacker, inflict
     
     local Data = NPC.Types[ victim.ID ]
     
+    if victim.IncomingDamageMultiplier then
+        amount = amount * victim.IncomingDamageMultiplier
+    end
+    
+    --TODO: bit.band?
+    if dmgType == DAMAGE.CRUSH or dmgType == DAMAGE.SLASH or dmgType == DAMAGE.CLUB or (isValid(inflictor) and inflictor:getClass() == "cw_extrema_ratio_official") then
+        if victim.IncomingMeleeDamageMultiplier then
+            mount = amount * victim.IncomingMeleeDamageMultiplier
+        end
+    elseif dmgType == DAMAGE.BLAST then
+        if victim.IncomingExplosiveDamageMultiplier then
+            amount = amount * victim.IncomingExplosiveDamageMultiplier
+        end
+    end
+    
+    
+    local originalAmount = amount
+    local block = nil
+    
     if victim.TakeDamage then
         local result = victim:TakeDamage( attacker, inflictor, amount, dmgType, pos, force )
         
         if type(result) == "boolean" then
-            return result
+            block = result
         elseif type(result) == "number" then
             if victim:isNPC() or victim:isNextBot() then
-                -- surely this won't allow them to heal if another hook blocks the damage...
+                -- Heal the NPC to compensate for the health loss (TODO: test to make sure this doesn't kill antlion slicer early, maybe block the damage?)
                 local compensate = amount - result
                 --print("compensating ", compensate)
                 --print(victim:getHealth())
                 victim:setHealth( victim:getHealth() + compensate )
                 --print(victim:getHealth())
-            else
-                amount = result
             end
+            
+            amount = result
         end
     end
     
     -- TODO: temporary bug fix, antlion guards will randomly take 250 to any ones that are nearby
-    if victim:getClass() == "npc_antlionguard" then
-        if attacker:getClass() == "npc_antlionguard" then return true end
+    if victim:getClass() == "npc_antlionguard" or victim:getClass() == "npc_antlionguardian" then
+        if attacker:getClass() == "npc_antlionguard" or attacker:getClass() == "npc_antlionguardian" then return true end
     end
     
-    -- Moved to OnNPCKilled
-    --[[if victim:getHealth() - amount <= 0 then
-        killNPC( victim, attacker, inflictor, dmgType )
-    end]]
-    
-    if not victim:isNPC() and not victim:isNextBot() then
-        -- prop npc, have to deal damage manually
+    -- deal damage manually if its a prop NPC:
+    if victim.IsPropNPC then
         victim:setHealth( victim:getHealth() - amount )
     end
     
+    
+    -- Damage Modification Flag
+        -- 0: Default
+        -- 1: Damage was reduced
+        -- 2: Damage was nullified
+        -- 3: Unused
+    local flag = block and 2 or (amount ~= originalAmount and 1 or 0)
+    
+    if victim.IsBoss then
+        net.start("npc_bossbar_health")
+        net.writeFloat( victim:getHealth() )
+        net.writeUInt( flag, 2 )
+        net.writeEntity( victim )
+        net.send()
+    elseif isValid(attacker) and attacker:isPlayer() then
+        net.start("npc_damaged")
+        net.writeEntity( victim )
+        
+        local oldHealth = math.clamp(victim:getHealth() / victim:getMaxHealth(), 0, 1)
+        local newHealth = math.clamp((victim:getHealth() - amount) / victim:getMaxHealth(), 0, 1)
+        
+        net.writeUInt( math.round( oldHealth * (2^12 - 1) ), 12 )
+        net.writeUInt( math.round( newHealth * (2^12 - 1) ), 12 )
+        net.writeUInt( flag, 2 )
+        net.send( attacker )
+    end
+    
+    
     --print("damaged NPC, current hp: ", victim:getHealth(), ", og damage: ", amount)
     hook.run("PostNPCTakeDamage", victim, attacker, inflictor, amount, dmgType, pos, force)
+    
+    return block
 end)
 
+
+
+hook.add("PostNPCTakeDamage", "NPC_onPostDamage", function( victim, attacker, inflictor, amount, dmgType, pos, force )
+    --if not victim.IsChipNPC then return end --dont think this is necessary?
+    
+    if victim.PostTakeDamage then
+        victim:PostTakeDamage( attacker, inflictor, amount, dmgType, pos, force )
+    end
+
+    if victim.IsPropNPC and victim:getHealth() <= 0 then
+        killNPC( victim, attacker )
+    end
+end)
 
 
 hook.add("EntityTakeDamage", "NPC_onAttack", function( victim, attacker, inflictor, amount, dmgType, pos, force )

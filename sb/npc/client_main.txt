@@ -1,16 +1,70 @@
 --@name NPC-Client
 --@author shroobloom
 --@client
---@include sb/npc/health_bar.txt
 --@include sb/npc/health_bar_v2.txt
+--@include sb/entity_networker_v2.txt
 
-local HealthBar = require("sb/npc/health_bar.txt")
 
--- TODO: band-aid fix
-hook.add("OnEntityRemoved", "npc_health_bar_removal", function( e )
-    if not e.HealthBar then return end
-    e.HealthBar:remove()
+local EntityNetworker = require("sb/entity_networker_v2.txt")
+local HealthBar = require("sb/npc/health_bar_v2.txt")
+
+
+EntityNetworker:add("npc_bossbar", function( cache )
+    cache.Name = net.readString()
+    cache.Health = net.readFloat()
+    cache.MaxHealth = net.readFloat()
+end, function( ent, cache )
+    local bar = HealthBar:new( ent )
+    bar.Health = cache.Health
+    bar.MaxHealth = cache.MaxHealth
+    bar.Boss = true
+    bar.Name = cache.Name
 end)
 
 
-dofile "sb/npc/health_bar_v2.txt"
+net.receive("npc_bossbar_health", function()
+    local newHealth = net.readFloat()
+    local flags = net.readUInt( 2 )
+    
+    net.readEntity(function(e)
+        if not e or not e.HealthBar then return end
+
+        local dmg = e.HealthBar:getHealth() - newHealth
+        e.HealthBar:takeDamage(dmg)
+        e.HealthBar:flashState( flags )
+    end)
+end)
+
+
+
+-- this net is received before engine NPCs are damaged, usually
+net.receive("npc_damaged", function()
+    local e = net.readEntity()
+    if not isValid(e) then return end
+    
+    if not e.HealthBar then
+        local bar = HealthBar:new( e )
+    end
+    
+    local oldHealth = net.readUInt( 12 ) / (2^12 - 1)
+    local newHealth = net.readUInt( 12 ) / (2^12 - 1)
+    local flags = net.readUInt( 2 )
+    
+    e.HealthBar.Health = oldHealth
+    e.HealthBar.MaxHealth = 1
+    e.HealthBar:flashState( flags )
+    
+    if newHealth > 0 then
+        e.HealthBar:stopFade()
+        e.HealthBar:takeDamage( oldHealth - newHealth )
+    else
+        e.HealthBar:decoupleAndFade()
+    end
+    
+    timer.create("npc_healthbar_fadeout_delay_" .. e:entIndex(), 2, 0, function()
+        if not isValid(e) or not e.HealthBar then return end
+        e.HealthBar:fadeOut( 1 )
+    end)
+end)
+
+
