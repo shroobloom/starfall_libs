@@ -249,10 +249,12 @@ if SERVER then
         local entOwner = ent:getOwner()
         local entClass = ent:getClass()
         
-        timer.simple(0.25, function()
-            if not isValid(entOwner) then return end
+        if ENTS_OF_INTEREST[entClass] then
+            if timer.getTimersLeft() < 50 then return end
             
-            if ENTS_OF_INTEREST[entClass] then
+            timer.simple(0.25, function()
+                if not isValid(entOwner) then return end
+                
                 local payload = {Color(231,220,117), entClass}
                 
                 if entClass == "gmod_wire_expression2" or entClass == "starfall_processor" then
@@ -282,8 +284,8 @@ if SERVER then
                 table.insert(payload, ".")
                 
                 SFMA.consoleLog(getColor(entOwner), getName(entOwner), Color(255,255,255), " spawned ", unpack(payload))
-            end
-        end)
+            end)
+        end
     end)
     
     
