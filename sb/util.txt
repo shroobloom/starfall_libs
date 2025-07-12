@@ -30,6 +30,7 @@ function Util.inputsConnected()
 end
 
 
+
 -- Applies values from Struct into DataTable
 -- Useful for when a function accepts a data table and you want to enforce defaults.
 function Util.applyDefaults( DataTable, Struct )
@@ -558,10 +559,10 @@ end
 -- Shorthand method for the "remote" hook
 -- The callback will only be called if one of your own chips sends a remote with a specific name.
 -- Does not allow loopback.
-function Util.bindRemote( RemoteName, Callback )
+function Util.bindRemote( RemoteName, Callback, AllowLoopback )
     hook.add("remote", RemoteName, function( SendingChip, SendingPlayer, Type, ... )
         if SendingPlayer ~= owner() then return end
-        if SendingChip == chip() then return end -- no loopback
+        if SendingChip == chip() and not AllowLoopback then return end -- no loopback
         if Type ~= RemoteName then return end
         
         return Callback( ... )
