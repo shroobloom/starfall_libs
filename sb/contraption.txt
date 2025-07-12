@@ -8,8 +8,8 @@
 
 local Contraption = {}
 Contraption.Anchor = nil
-Contraption.ExplosionEffect = "lfs_explosion"
-Contraption.Frozen = true
+Contraption.ExplosionEffect = "glide_explosion"
+Contraption.Frozen = chip():isFrozen()
 Contraption.Dead = false
 
 
@@ -75,14 +75,23 @@ function Contraption:explode()
     Center = Center / Count
     
     --TODO: set size based on ent count/bounds?
-    if EffectName ~= "" and effect.canCreate() then
-        local expl = effect.create()
-        expl:setOrigin(Center)
-        expl:play(EffectName or "glide_explosion")
+    if Contraption.ExplosionEffect ~= "" and effect.canCreate() then
+        self:playExplosionEffect( Contraption.ExplosionEffect or "glide_explosion", Center )
     end
     
     chip():remove()
     
+end
+
+
+
+function Contraption:playExplosionEffect( eff, pos )
+    local expl = effect.create()
+    expl:setOrigin(pos)
+    expl:setScale(1)
+    expl:setMagnitude(1)
+    expl:setRadius(1)
+    expl:play(eff)
 end
 
 
