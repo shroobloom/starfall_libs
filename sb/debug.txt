@@ -58,7 +58,7 @@ function Debug.vector( id, pos, dir, color )
     end
     
     if color then
-        Debug.markers[id]:setColor( color )
+        Debug.Markers[id]:setColor( color )
     end
     
 end
