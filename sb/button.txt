@@ -31,7 +31,7 @@ local ButtonData = {
     Toggle = false,
     UseHolo = true,
     
-    Lock = Util.isInMySquad,
+    Lock = function( self, user ) end,
     Activate = function( self ) end,
     Deactivate = function( self ) end,
     StateChanged = function( self, state ) end,
@@ -154,7 +154,7 @@ hook.add("KeyPress", "Button_Interact", function( plr, key )
     
     if plr:getEyeTrace().HitPos:getDistance(plr:getEyePos()) > 100 then return end
     
-    if bt.Lock and not bt.Lock(plr) then
+    if bt.Lock and not bt:Lock(plr) then
         if (timer.curtime() - bt.LastFail) > 0.5 then
             bt:emitSound("Locked")
             bt.LastFail = timer.curtime()
