@@ -1,0 +1,148 @@
+--@name Entity Networker v2
+--@author shroobloom
+--@shared
+--@include sb/util.txt
+
+
+local Util = require("sb/util.txt")
+
+
+
+local EntityNetworker = {}
+
+
+
+if SERVER then
+    
+    EntityNetworker.List = {}
+    
+    function EntityNetworker:add( id, ent, netCallback )
+        EntityNetworker.List[ent] = {
+            Callback = netCallback,
+            Entity = ent,
+            ID = id
+        }
+        
+        Util.addRemoveCallback( ent, function()
+            EntityNetworker:remove(id, ent)
+        end)
+        
+        net.start("sb_entitynetworker_inform")
+            net.writeString(id)
+            net.writeUInt(ent:entIndex(), 13)
+            if netCallback then netCallback( ent ) end
+        net.send( find.allPlayers(function(e)
+            return e.EntityNetworkerInitialized
+        end) )
+    end
+    
+    
+    function EntityNetworker:remove( id, ent )
+        EntityNetworker.List[ent] = nil
+        
+        Util.removeRemoveCallback( ent )
+        
+        net.start("sb_entitynetworker_cancel")
+            net.writeString(id)
+            net.writeUInt(ent:entIndex(), 13)
+        net.send()
+    end
+    
+    
+    
+    local buffer = {}
+    
+    hook.add("ClientInitialized", "sb_entitynetworker_init", function(ply)
+        table.insert(buffer, ply)
+    end)
+    
+    timer.create("sb_entitynetworker_emptyNetBuffer", 2, 0, function()
+        if #buffer == 0 then return end
+        
+        for _,data in pairs(EntityNetworker.List) do
+            net.start("sb_entitynetworker_inform")
+                net.writeString(data.ID)
+                net.writeUInt(data.Entity:entIndex(), 13)
+                if data.Callback then data.Callback( data.Entity ) end
+            net.send( buffer )
+        end
+        
+        for i,v in pairs(buffer) do
+            v.EntityNetworkerInitialized = true
+        end
+        
+        first = false
+        
+        table.empty(buffer)
+    end)
+    
+end
+
+
+
+if CLIENT then
+    
+    EntityNetworker.Readers = {}
+    EntityNetworker.Awaiting = {}
+    
+    net.receive("sb_entitynetworker_inform", function()
+        local id = net.readString()
+        local idx = net.readUInt(13)
+        local ent = entity(idx)
+        local data = EntityNetworker.Readers[id]
+        local payload = {}
+        if data.ReadCallback then data.ReadCallback( payload ) end
+        
+        if isValid(ent) then
+            data.EntityCallback( ent, payload )
+        else
+            EntityNetworker.Awaiting[idx] = {
+                ID = id,
+                Payload = payload
+            }
+        end
+    end)
+    
+    net.receive("sb_entitynetworker_cancel", function()
+        local id = net.readString()
+        local idx = net.readUInt(13)
+        local ent = entity(idx)
+        local data = EntityNetworker.Readers[id]
+        
+        EntityNetworker.Awaiting[idx] = nil
+        
+        if data.RemoveCallback then
+            data.RemoveCallback( ent )
+        end
+    end)
+    
+    
+    function EntityNetworker:add( id, netOrEntCallback, entCallback )
+        EntityNetworker.Readers[id] = {
+            ReadCallback = entCallback and netOrEntCallback or nil,
+            EntityCallback = entCallback or netOrEntCallback
+        }
+    end
+    
+    hook.add("NetworkEntityCreated", "sb_entitynetworker_create", function(ent)
+        local entry = EntityNetworker.Awaiting[ent:entIndex()]
+        if not entry then return end
+        
+        EntityNetworker.Awaiting[ent:entIndex()] = nil
+        EntityNetworker.Readers[entry.ID].EntityCallback( ent, entry.Payload )
+    end)
+    
+    
+    function EntityNetworker:addRemoveCallback( id, callback )
+        EntityNetworker.Readers[id].RemoveCallback = callback
+    end
+    
+end
+
+
+
+
+
+
+return EntityNetworker
+
