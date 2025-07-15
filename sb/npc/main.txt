@@ -683,7 +683,7 @@ function NPC.wrap( ent, ID, creationData )
             end
         end
         
-        ent:setLagCompensated(true)
+        --ent:setLagCompensated(true)
     end
     
     if ent.Color then
