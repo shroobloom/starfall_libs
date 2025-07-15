@@ -157,11 +157,6 @@ if (Antlion) {
             Spawn = function( npc )
                 setupAntlionGuard( npc )
                 antlionUnburrow( npc )
-                
-                timer.simple(2, function()
-                    if not isValid(npc) then return end
-                    NPC.createHealthbar( npc )
-                end)
             end,
 
             DefaultAsBoss = false,
