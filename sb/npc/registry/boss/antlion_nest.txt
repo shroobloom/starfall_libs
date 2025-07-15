@@ -277,7 +277,7 @@ if SERVER then
                     
                     if math.random() < SCOUTS_ON_DAMAGE_CHANCE and attacker:getPos():getDistance(self:getPos()) > SCOUTS_ON_DAMAGE_MIN_DISTANCE and #NPC.Instances < NPC.getMax()*1.15 then
                         self.LastDamageSpawn = timer.curtime()
-                        NPC.attemptSpawns( attacker:getPos(), self.Stage >= 2 and BOSS_SPAWN_POOL_STAGE_2 or BOSS_SPAWN_POOL, {200,600}, 3, nil, true )
+                        NPC.attemptSpawns( attacker:getPos(), self.Phase >= 2 and BOSS_SPAWN_POOL_STAGE_2 or BOSS_SPAWN_POOL, {200,600}, 3, nil, true )
                     end
                 end
                 
