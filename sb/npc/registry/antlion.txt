@@ -289,12 +289,12 @@ if (Antlion) {
                         local hurtBox = Zone:new( aabbMin - Vector(0,0,10), aabbMax + Vector(0,0,100) )
                         
                         function hurtBox:onPlayerEntered( plr )
-                            NPC.applyDamage( plr, 25 * npc.DamageMultiplier, isValid(npc) and npc or vis, DAMAGE.BURN )
+                            NPC.applyDamage( plr, 25 * NPC.GlobalDamageMultiplier * (npc.DamageMultiplier or 1), isValid(npc) and npc or vis, DAMAGE.BURN )
                         end
                         
                         function hurtBox:onPlayerLingered( plr, dt )
                             plr:ignite( 1 ) --TODO: remove then enter hurtbox, see if errors
-                            NPC.applyDamage( plr, 25 * dt * npc.DamageMultiplier, isValid(npc) and npc or vis, DAMAGE.BURN )
+                            NPC.applyDamage( plr, 25 * dt * NPC.GlobalDamageMultiplier * (npc.DamageMultiplier or 1), isValid(npc) and npc or vis, DAMAGE.BURN )
                         end
                         
                         timer.simple(7, function()
