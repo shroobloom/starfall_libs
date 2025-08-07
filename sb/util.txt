@@ -606,6 +606,28 @@ end
 
 
 
+if SERVER then
+    -- Applies damage to an entity using game.bulletDamage, respecting the limit.
+    -- Pass a boolean to make the damage critical (headshot), which will count up to your limit half as fast.
+    -- Crit only works on humanoid entities.
+    function Util.applyBulletDamage( ent, amount, crit, callback )
+        if game.bulletsLeft() < 1 or game.bulletsDPSLeft() < 1 then return end
+        
+        local pos
+        
+        if crit and (ent:isPlayer() or ent:isNPC() or ent:isNextBot()) then
+            local attach = ent:lookupAttachment("eyes")
+            pos = ent:getAttachment(attach)
+        else
+            pos = ent:obbCenterW()
+        end
+        
+        game.bulletDamage(pos, Vector(0,0,-1), math.min(amount * (crit and 0.5 or 1), game.bulletsDPSLeft()), 1, 0, 50, Vector(), 0, nil, callback)
+        
+    end
+end
+
+
 -- Returns angular inertia, for use with applyAngForce
 function Util.getAngularInertia( ent )
     local inertia = ent:getInertia()
