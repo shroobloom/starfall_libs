@@ -68,7 +68,7 @@ function Button:initialize( Prop, Data )
 end
 
 
-function Button:setState( state )
+function Button:setState( state, presser )
     if self.State == state then return end
     
     self.State = state
@@ -85,13 +85,13 @@ function Button:setState( state )
     
     if state then
         self:emitSound( "Hold" )
-        self.Activate()
+        self:Activate( presser )
     else
         self:stopSound( "Hold" )
-        self.Deactivate()
+        self:Deactivate( presser )
     end
     
-    self.StateChanged( state )
+    self:StateChanged( state, presser )
 end
 
 
@@ -164,9 +164,9 @@ hook.add("KeyPress", "Button_Interact", function( plr, key )
     end
     
     if bt.Toggle then
-        bt:setState( not bt.State )
+        bt:setState( not bt.State, plr )
     else
-        bt:setState( true )
+        bt:setState( true, plr )
         plr.Holding = bt
     end
 end)
@@ -176,7 +176,7 @@ hook.add("KeyRelease", "Button_Interact", function( plr, key )
     if key ~= IN_KEY.USE then return end
     if not plr.Holding then return end
     
-    plr.Holding:setState( false )
+    plr.Holding:setState( false, plr )
     plr.Holding = nil
 end)
 
