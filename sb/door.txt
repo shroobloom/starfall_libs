@@ -336,7 +336,7 @@ function Door.advancedSetup( Doors, PropertyByModel )
     Util.spawn(function()
         for i,v in pairs(Doors) do
             if Created[v] then continue end
-            Spawner.Await()
+            Spawner.await()
             
             local properties = PropertyByModel[v:getModel()] or PropertyByModel["*"]
             local adjacent = trace.line( v:getPos() - v:getRight()*40, v:getPos() - v:getRight()*50, v )
@@ -344,7 +344,7 @@ function Door.advancedSetup( Doors, PropertyByModel )
             Created[v] = Door:new( v, properties )
             
             if isValid(adjacent.Entity) and adjacent.Entity:getModel() == v:getModel() then
-                Spawner.Await()
+                Spawner.await()
                 local mirroredProperties = properties and table.copy(properties) or {}
                 mirroredProperties.Flipped = true
                 
