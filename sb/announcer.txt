@@ -169,12 +169,24 @@ if CLIENT then
             coroutine.resume(thread, snd)
         end)
         
+        
+        local Static = sound.create(Announcer:getSpeaker(), "stream_radio/noise.wav")
+        Static:setSoundLevel( 90 )
+        Static:play()
+        Static:setVolume(0.5)
+        
+        
         local snd = coroutine.yield()
         
         local elapsed = timer.curtime() - start
         Util.wait( PingData.Delay - elapsed )
         
         snd:play()
+        
+        --[[timer.simple(0, function()
+            Static:setVolume(0.5, 1)
+        end)]]
+        
         
         -- a wait less than a frame will crash the game, unsure why.
         while snd:isPlaying() do Util.wait(0.25) end
@@ -184,6 +196,8 @@ if CLIENT then
             Ping:destroy() --TODO: verify this doesnt cancel out the fade-out effect (i dont think there even is one?)
         end
         
+        Static:stop()
+        Static:destroy()
         
         
         if #Announcer.Queue == 0 or Announcer.Queue[1].Type ~= Current.Type then
