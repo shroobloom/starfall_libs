@@ -392,26 +392,32 @@ end
 
 
 
-function Util.addRemoveCallback( ent, cb )
-    ent.SB_Util_RemoveCallback = cb
+function Util.addRemoveCallback( ent, cb, id )
+    if not ent.SB_Util_RemoveCallbacks then ent.SB_Util_RemoveCallbacks = {} end
+    ent.SB_Util_RemoveCallbacks[id or ""] = cb
+    
+    return cb
 end
 
-function Util.removeRemoveCallback( ent )
-    ent.SB_Util_RemoveCallback = nil
+function Util.removeRemoveCallback( ent, id )
+    ent.SB_Util_RemoveCallbacks[id or ""] = nil
 end
 
 
 hook.add("EntityRemoved", "sb_util_remove_callback", function( ent, fullupdate )
-    if not ent or not ent.SB_Util_RemoveCallback then return end
+    if not ent or not ent.SB_Util_RemoveCallbacks then return end
     
-    ent.SB_Util_RemoveCallback( ent, fullupdate )
-    ent.SB_Util_RemoveCallback = nil
+    for id,func in pairs(ent.SB_Util_RemoveCallbacks) do
+        func( ent, fullupdate )
+        ent.SB_Util_RemoveCallbacks[id] = nil
+    end
 end)
 
+-- TODO: call the callback here too? why isn't it being called
 hook.add("SB_Precacher_EntityStored", "sb_util_remove_callback", function( precacher, ent )
     if not ent.SB_Util_RemoveCallback then return end
     
-    ent.SB_Util_RemoveCallback = nil
+    ent.SB_Util_RemoveCallbacks = nil
 end)
 
 
