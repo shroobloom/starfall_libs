@@ -52,6 +52,11 @@ function SharedTable:initialize( id, Networked, Crosschip )
 end
 
 
+function SharedTable:getOrCreate( id )
+    return SharedTable.Instances[id] or SharedTable:new( id )
+end
+
+
 
 function SharedTable:__newindex( key, value )
     if SharedTable.DEFAULT_KEYS[key] then
