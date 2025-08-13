@@ -196,7 +196,8 @@ function Weapon:initialize( Wielder )
 end
 
 
-
+-- causes really weird bugs
+--[[
 hook.add("PlayerSpawn", "CustomWeapon_GiveOnSpawn", function( plr )
     if not Weapon.Info[plr] then return end
     
@@ -208,7 +209,7 @@ hook.add("PlayerSpawn", "CustomWeapon_GiveOnSpawn", function( plr )
         end
     end)
 end)
-
+]]
 
 
 
