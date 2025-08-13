@@ -61,6 +61,7 @@ function Debug.vector( id, pos, dir, color )
         Debug.Markers[id]:setColor( color )
     end
     
+    return Debug.Markers[id]
 end
 
 
