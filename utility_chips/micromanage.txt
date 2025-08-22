@@ -156,7 +156,7 @@ Micromanage:addOption({
     Restrict = "Sentinel",
     Icon = "icon16/shield.png",
     Use = function( self, plr )
-        Micromanage.useCommandOn( "awarn_menu", plr )
+        Micromanage.useCommandOn( "audit menuid", plr )
     end
 })
 
