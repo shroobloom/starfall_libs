@@ -19,8 +19,9 @@ local EntityNetworker = require("sb/entity_networker_v2.txt")
 
 
 -- TODO
--- [ ] Make hud disconnect delayed and have calcview interpolate out as well
+-- [X] Make hud disconnect delayed and have calcview interpolate out as well
 -- [ ] BUG: it's possible to steal someone's connection
+-- [ ] Reduce font size and add auto-newline support for :log()?
 
 
 
@@ -83,6 +84,21 @@ if CLIENT then
     EntityNetworker:add( "cli_screen", function( ent )
         CLI:setScreenEntity( ent )
     end)
+end
+
+
+
+function CLI:formatTargets( targets )
+    if #targets == #find.allPlayers() then
+        return "Everyone"
+    end
+    
+    local str = ""
+    for i,v in pairs(targets) do
+        str = str .. v:getName() .. (i < #targets and (i == #targets - 1 and ", and " or ", ") or "")
+    end
+    
+    return str
 end
 
 
