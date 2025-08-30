@@ -400,6 +400,7 @@ function Util.addRemoveCallback( ent, cb, id )
 end
 
 function Util.removeRemoveCallback( ent, id )
+    if not ent.SB_Util_RemoveCallbacks then return end
     ent.SB_Util_RemoveCallbacks[id or ""] = nil
 end
 
