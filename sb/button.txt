@@ -31,7 +31,7 @@ local ButtonData = {
     Toggle = false,
     UseHolo = true,
     
-    Lock = function( self, user ) end,
+    Lock = function( self, user ) return true end,
     Activate = function( self ) end,
     Deactivate = function( self ) end,
     StateChanged = function( self, state ) end,
