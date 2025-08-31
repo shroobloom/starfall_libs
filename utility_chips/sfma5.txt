@@ -289,41 +289,6 @@ if SERVER then
     end)
     
     
-    
-    --TODO: remove, the simfphys limit is only 1 now
-    --TODO: remove, we have glide now
-    local simfphysAlertCooldown = {}
-    
-    local function isSimfphys( ent )
-        return isValid(ent) and ent:getClass() == "gmod_sent_vehicle_fphysics_base"
-    end
-    
-    hook.add("OnEntityCreated", "SFMA_detectSimfphysSpam", function( ent )
-        if not isValid(ent) or not isValid(ent:getOwner()) or simfphysAlertCooldown[ent:getOwner()] then return end
-        if SFMA.isTrusted( ent:getOwner() ) then return end
-        if not isSimfphys(ent) then return end
-        
-        local Min, Max = ent:worldSpaceAABB()
-        
-        local NearbySimfphys = find.inBox(Min, Max, function(e)
-            return isSimfphys(e)
-        end)
-        
-        if #NearbySimfphys > 1 then
-            local carOwner = ent:getOwner()
-            
-            SFMA.chatLog(getColor(carOwner), getName(carOwner), Color(255,255,255), " spawned multiple simfphys cars inside eachother!")
-            SFMA.logOffender( carOwner, true )
-            simfphysAlertCooldown[carOwner] = true
-            
-            timer.simple(5, function()
-                simfphysAlertCooldown[carOwner] = nil
-            end)
-        end
-    end)
-    
-    
-    
     local Keywords = {
         "proppush",
         "propspam",
