@@ -66,7 +66,7 @@ function SFMA.logOffender( plr, ping )
     
     SFMA.lastOffender = plr
     
-    timer.stop("SFMA_clearLastOffender")
+    timer.remove("SFMA_clearLastOffender")
     timer.create("SFMA_clearLastOffender", 30, 1, function()
         SFMA.lastOffender = nil
     end)
@@ -426,7 +426,7 @@ if SERVER then
             table.insert( trackedProppushProps, ent )
         end
         
-        timer.stop("SFMA_propDrop_" .. ent:entIndex())
+        timer.remove("SFMA_propDrop_" .. ent:entIndex())
     end)
     
     hook.add( "PhysgunDrop", "SFMA_propDrop", function( ply, ent )
